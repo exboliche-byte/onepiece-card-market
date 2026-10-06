@@ -458,6 +458,7 @@ function applyAdvancedCollection(list){
     return true;
   });
 }
+async function syncOne(id,n){if(!sb||!user)return;try{if(n<=0)await sb.from("collection_items").delete().eq("user_id",user.id).eq("card_id",id);else await sb.from("collection_items").upsert({user_id:user.id,card_id:id,quantity:n,updated_at:new Date().toISOString()},{onConflict:"user_id,card_id"});}catch(e){console.warn(e)}}
 function setCollectionQuantity(id,value){const n=Math.max(0,Math.min(99,Number(value)||0));if(n===0)delete collection[id];else collection[id]=n;saveLocal();if(sb&&user)syncOne(id,n);render();}
 const originalFilterCollection=filterCollection;
 function filterCollectionEnhanced(){
