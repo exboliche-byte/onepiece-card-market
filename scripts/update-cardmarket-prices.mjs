@@ -102,33 +102,30 @@ function parseSetCodeFromNumber(cardNumber) {
   const m = String(cardNumber).toUpperCase().match(/^((?:OP|EB|ST|PRB)\d{2})-/);
   return m ? m[1] : "";
 }
+function extractTcggoCardBlocks(html) {
+  const matches = [...String(html).matchAll(/<div\\b[^>]*class=["'][^"']*\\bt1-card\\b[^"']*\\bgame-one-piece\\b[^"']*["'][^>]*>/gi)];
+  return matches.map((m, i) => String(html).slice(m.index, i + 1 < matches.length ? matches[i + 1].index : String(html).length));
+}
 function parseCardsFromSetPage(html, fallbackSetCode, setName, sourceUrl) {
   const rows = [];
-  const blocks = String(html).match(/<div[^>]*class=["'][^"']*t1-card[^"']*game-one-piece[^"']*["'][^>]*>[\s\S]*?<\/div>\s*<\/div>/gi) || [];
-  for (const block of blocks) {
-    const hrefMatch = block.match(/<a[^>]+href=["']([^"']+)["'][^>]*class=["'][^"']*font-semibold[^"']*["'][^>]*>([\s\S]*?)<\/a>/i);
+  for (const block of extractTcggoCardBlocks(html)) {
+    const hrefMatch = block.match(/<a[^>]+href=["']([^"']+)["'][^>]*class=["'][^"']*\\bfont-semibold\\b[^"']*["'][^>]*>([\\s\\S]*?)<\\/a>/i)
+      || block.match(/<a[^>]+href=["']([^"']+)["'][^>]*>([\\s\\S]*?)<\\/a>/i);
     if (!hrefMatch) continue;
     const href = absoluteUrl(hrefMatch[1], sourceUrl);
     const name = textContent(hrefMatch[2]);
-    const paragraphs = [...block.matchAll(/<p[^>]*class=["'][^"']*text-xs[^"']*text-slate-400[^"']*["'][^>]*>([\s\S]*?)<\/p>/gi)]
+    if (!href || !name) continue;
+    const paragraphs = [...block.matchAll(/<p[^>]*class=["'][^"']*\\btext-xs\\b[^"']*\\btext-slate-400\\b[^"']*["'][^>]*>([\\s\\S]*?)<\\/p>/gi)]
       .map(m => textContent(m[1]));
-    const codeLine = paragraphs[1] || paragraphs.find(x => /(?:OP|EB|ST|PRB|P|EX|DON)/i.test(x)) || "";
-    const cardNumber = parseCollectorNumber(codeLine || block, fallbackSetCode);
-    if (!cardNumber) continue;
-    const priceMatch = block.match(/<[^>]*class=["'][^"']*font-display[^"']*["'][^>]*>([\s\S]*?)<\//i);
-    const price = parseEurPrice(textContent(priceMatch?.[1] || block));
+    const codeLine = paragraphs[1] || paragraphs.find(x => /(?:OP|EB|ST|PRB)\\d{2}|(?:P|EX|DON)[-_ ]/i.test(x)) || "";
+    const cardNumber = parseCollectorNumber(codeLine || textContent(block), fallbackSetCode);
+    if (!cardNumber || /\\b(?:booster|display|box|deck|case|pack)\\b/i.test(cardNumber)) continue;
+    const priceMatch = block.match(/<[^>]*class=["'][^"']*\\bfont-display\\b[^"']*["'][^>]*>([\\s\\S]*?)<\\//i);
+    const price = parseEurPrice(textContent(priceMatch?.[1] || ""));
     if (price === null) continue;
     const version = parseVersion(textContent(block));
     const resolvedSet = parseSetCodeFromNumber(cardNumber) || String(fallbackSetCode || "").toUpperCase();
-    rows.push({
-      name,
-      cardNumber,
-      version,
-      eur: price,
-      setCode: resolvedSet,
-      setName,
-      sourceUrl: href
-    });
+    rows.push({name, cardNumber, version, eur:price, setCode:resolvedSet, setName, sourceUrl:href});
   }
   return rows;
 }
