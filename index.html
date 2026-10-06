@@ -203,14 +203,18 @@ function groupFiltered(){
   for(const c of arr){const k=groupKey(c);if(!by.has(k))by.set(k,{key:k,card:c,versions:[],sets:[]});const g=by.get(k);g.versions.push(c);if(!g.sets.includes(c.set))g.sets.push(c.set)}
   return [...by.values()];
 }
-async function ensurePrices(ids){
-  const wanted=[...new Set(ids.filter(id=>state.prices[id]===undefined))];
+async function ensurePrices(ids,{refresh=false}={}){
+  const wanted=[...new Set(ids.filter(id=>refresh||state.prices[id]===undefined))];
   if(!wanted.length)return;
-  for(let i=0;i<wanted.length;i+=80){
-    const chunk=wanted.slice(i,i+80);
-    try{const d=await fetchJson("/api/cardmarket?ids="+encodeURIComponent(chunk.join(",")),12000);Object.assign(state.prices,d.prices||{});state.priceDate=d.updatedAt||state.priceDate;localStorage.setItem("mialbumonepiece_prices",JSON.stringify({prices:state.prices,updatedAt:state.priceDate}));}catch{}
+  for(let i=0;i<wanted.length;i+=600){
+    const chunk=wanted.slice(i,i+600);
+    try{
+      const d=await fetchJson("/api/cardmarket?ids="+encodeURIComponent(chunk.join(",")),30000);
+      Object.assign(state.prices,d.prices||{});
+      state.priceDate=d.updatedAt||state.priceDate;
+    }catch{}
   }
-  // Evita desmontar y volver a cargar las imágenes cuando llegan los precios.
+  localStorage.setItem("mialbumonepiece_prices",JSON.stringify({prices:state.prices,updatedAt:state.priceDate}));
 }
 function loadCachedPrices(){try{const d=JSON.parse(localStorage.getItem("mialbumonepiece_prices")||"null");if(d?.prices)state.prices=d.prices;state.priceDate=d?.updatedAt||null}catch{}}
 function cardTile(c,extra=""){
@@ -547,15 +551,12 @@ function bindShell(){
   if(state.tab==="catalog"){
     bindSearch("#catalogSearch",v=>{state.catalog.query=v;state.query=v;state.catalog.page=1;renderCatalogResults()});
     const catalogFieldMap={catSet:"set",catCategory:"category",catColor:"color",catRarity:"rarity",catType:"type",catAttribute:"attribute",catMinCost:"minCost",catMaxCost:"maxCost",catMinPower:"minPower",catMaxPower:"maxPower",catOwnership:"ownership",catSort:"sort",catDir:"dir"};
-    const syncCatalogControl=(target)=>{
+    const syncCatalogControl=async(target)=>{
       const key=catalogFieldMap[target?.id];
       if(!key)return;
       state.catalog[key]=target.value;
       state.catalog.page=1;
-      renderCatalogResults();
-      if(key==="sort"&&state.catalog.sort==="price"){
-        ensurePrices(state.cards.map(c=>c.id)).then(()=>renderCatalogResults());
-      }
+      await renderCatalogResults();
     };
     const catalogToolbar=$("#catalogToolbar");
     catalogToolbar?.addEventListener("change",e=>syncCatalogControl(e.target));
