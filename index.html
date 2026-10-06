@@ -289,7 +289,7 @@ function albumView(){
   }
   return '<div class="wrap"><div class="hero"><div><h1>Expansión '+esc(f.set)+'</h1><p>'+esc(setName(f.set))+' · aquí puedes buscar y ver las cartas de esta expansión.</p></div><button class="secondary btn" id="backToExpansions">← Todas las expansiones</button></div>'+
     '<div class="catalog-controls"><input id="albumSearch" class="field" inputmode="search" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="search" aria-label="Buscar en la expansión" placeholder="🔎 Buscar cartas en '+esc(f.set)+'..." value="'+esc(f.query)+'"><div class="sort-controls">'+
-      filterLabel("Mostrar",'<select id="albumOwn" class="field"><option value="Todas" '+(f.ownership==="Todas"?"selected":"")+'>Todas</option><option value="Tengo" '+(f.ownership==="Tengo"?"selected":"")+'>Tengo</option><option value="Me faltan" '+(f.ownership==="Me faltan"?"selected":"")+'>Me faltan</option></select>')+
+      filterLabel("Mostrar",'<select id="albumOwn" class="field" disabled><option value="Tengo" selected>Solo las que tengo</option></select>')+
       filterLabel("Ordenar por",'<select id="albumSort" class="field"><option value="id" '+(f.sort==="id"?"selected":"")+'>Número de carta</option><option value="name" '+(f.sort==="name"?"selected":"")+'>Nombre</option><option value="rarity" '+(f.sort==="rarity"?"selected":"")+'>Rareza</option><option value="quantity" '+(f.sort==="quantity"?"selected":"")+'>Cantidad que tengo</option><option value="price" '+(f.sort==="price"?"selected":"")+'>Precio</option></select>')+
     '</div></div><div id="albumResults"></div></div>';
 }
