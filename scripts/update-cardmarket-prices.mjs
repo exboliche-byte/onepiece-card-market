@@ -308,7 +308,9 @@ async function main() {
     }
   };
   if (result.mapped < 1000) {
-    throw new Error("Safety check failed: only " + result.mapped + " local cards mapped from TCGGO");
+    const localSample = localCards.slice(0, 8).map(c => c.id).join(",");
+    const sourceSample = uniqueSource.slice(0, 12).map(r => r.cardNumber + ":V" + r.version).join(",");
+    throw new Error("Safety check failed: mapped=" + result.mapped + " local=" + localCards.length + " source=" + uniqueSource.length + " expansions=" + setCandidates.size + " localSample=" + localSample + " sourceSample=" + sourceSample);
   }
   await fs.mkdir(new URL("../data", import.meta.url), {recursive:true});
   await fs.writeFile(new URL("../data/cardmarket-prices.json", import.meta.url), JSON.stringify(payload, null, 2) + "\n", "utf8");
