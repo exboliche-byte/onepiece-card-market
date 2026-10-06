@@ -60,7 +60,8 @@ export default {
         let best=null,bestScore=-1;
         for(const p of productCache){
           const idsIn=extractIds(p);
-          if(!idsIn.some(id=>id===wantedId||baseId(id)===base))continue;
+          const variant=/_P\d+|_R\d+$/i.test(wantedId);
+          if(!idsIn.some(id=>id===wantedId||(!variant&&baseId(id)===base)))continue;
           const pid=p?.idProduct??p?.productId??p?.id;
           const g=pid!=null?guide.get(String(pid)):null;
           if(!g)continue;
