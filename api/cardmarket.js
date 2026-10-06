@@ -14,7 +14,7 @@ function norm(v){return String(v??"").toUpperCase().replace(/\s+/g," ").trim()}
 function baseId(id){return norm(id).replace(/_(?:P\d+|R\d+|C\d+)$/,"")}
 function extractIds(v){
   const text=typeof v==="string"?v:JSON.stringify(v||"");
-  return [...new Set((text.match(/(?:(?:OP|ST|EB)\d{2}-\d{3}|(?:PRB|P|EX|DON)[-_]\d{2,3})(?:_[A-Z0-9]+)?/gi)||[]).map(norm))];
+  return [...new Set((text.match(/(?:(?:OP|ST|EB|PRB)\d{2}-\d{3}|(?:P|EX|DON)[-_]\d{2,3})(?:_[A-Z0-9]+)?/gi)||[]).map(norm))];
 }
 function productVersionKeys(p,id){
   const base=baseId(id);
