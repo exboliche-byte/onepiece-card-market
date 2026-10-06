@@ -1,7 +1,7 @@
 {
-  "name": "One Piece Card Market",
-  "short_name": "OP Card Market",
-  "description": "Catálogo, colección y constructor de mazos de One Piece Card Game.",
+  "name": "MiAlbumOnePiece",
+  "short_name": "MiAlbumOnePiece",
+  "description": "Colección, catálogo y mazos de One Piece Card Game.",
   "lang": "es",
   "start_url": "./",
   "scope": "./",
@@ -11,7 +11,7 @@
   "orientation": "portrait-primary",
   "icons": [
     {
-      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%98%A0%EF%B8%8F%3C/text%3E%3C/svg%3E",
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8F%B4%3C/text%3E%3C/svg%3E",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any maskable"
