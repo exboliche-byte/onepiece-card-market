@@ -104,7 +104,10 @@ function expansionMatches(setCode, expansionName) {
   const wanted = CARDMARKET_SET_NAMES[setCode] || [];
   const target = norm(expansionName);
   if (!target) return false;
-  return wanted.some(name => norm(name) === target);
+  return wanted.some(name => {
+    const candidate = norm(name);
+    return candidate === target || candidate.includes(target) || target.includes(candidate);
+  });
 }
 
 function readProducts(data) {
@@ -296,7 +299,7 @@ async function main() {
     ...card,
     set_name: String(card.set_name || dynamicSetNames.get(card.set) || "")
   }));
-  const products = readProducts(productsRaw).filter(p => norm(p?.categoryName).includes("single"));
+  const products = readProducts(productsRaw);
   const prices = priceGuideIndex(readPrices(pricesRaw));
   if (!cards.length) throw new Error("Local card catalog is empty");
   if (!products.length) throw new Error("Cardmarket product catalog is empty");
