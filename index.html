@@ -177,8 +177,10 @@ function filteredCards(mode){
   }
   if(mode==="album")list=list.filter(c=>qty(c.id)>0);
   if(mode==="album"&&f.ownership==="Me faltan")list=list.filter(c=>qty(c.id)<PLAYSET);
-  const dir=f.dir==="desc"?-1:1,p=c=>Number(state.prices[c.id]||0);
+  const dir=f.dir==="desc"?-1:1;
   const cmp=(av,bv)=>{
+    const am=av===null||av===undefined||Number.isNaN(av),bm=bv===null||bv===undefined||Number.isNaN(bv);
+    if(am||bm){if(am&&bm)return 0;return am?1:-1}
     if(typeof av==="number"&&typeof bv==="number")return av-bv;
     return String(av??"").localeCompare(String(bv??""),"es",{numeric:true,sensitivity:"base"});
   };
@@ -189,7 +191,7 @@ function filteredCards(mode){
       return String(a.id).localeCompare(String(b.id),"es",{numeric:true})*dir;
     }
     let av,bv;
-    switch(f.sort){case"name":av=norm(a.name);bv=norm(b.name);break;case"rarity":av=norm(a.rarity);bv=norm(b.rarity);break;case"quantity":av=qty(a.id);bv=qty(b.id);break;case"price":av=p(a);bv=p(b);break;case"power":av=Number(a.power??-1);bv=Number(b.power??-1);break;case"cost":av=Number(a.cost??-1);bv=Number(b.cost??-1);break;default:av=a.id;bv=b.id}
+    switch(f.sort){case"name":av=norm(a.name);bv=norm(b.name);break;case"rarity":av=norm(a.rarity);bv=norm(b.rarity);break;case"quantity":av=qty(a.id);bv=qty(b.id);break;case"price":av=priceOf(a);bv=priceOf(b);break;case"power":av=Number(a.power??-1);bv=Number(b.power??-1);break;case"cost":av=Number(a.cost??-1);bv=Number(b.cost??-1);break;default:av=a.id;bv=b.id}
     const d=cmp(av,bv);
     return d?d*dir:String(a.id).localeCompare(String(b.id),"es",{numeric:true})*dir;
   });
@@ -201,16 +203,47 @@ function groupFiltered(){
   if(!state.catalog.grouped)return arr.map(c=>({key:c.id,card:c,versions:[c],sets:[c.set]}));
   const by=new Map();
   for(const c of arr){const k=groupKey(c);if(!by.has(k))by.set(k,{key:k,card:c,versions:[],sets:[]});const g=by.get(k);g.versions.push(c);if(!g.sets.includes(c.set))g.sets.push(c.set)}
-  return [...by.values()];
+  const groups=[...by.values()];
+  if(state.catalog.sort==="price"){
+    const groupPrice=g=>{
+      const ps=g.versions.map(priceOf).filter(v=>v!==null);
+      if(!ps.length)return null;
+      return state.catalog.dir==="desc"?Math.max(...ps):Math.min(...ps);
+    };
+    groups.sort((a,b)=>{
+      const d=cmpPrice(groupPrice(a),groupPrice(b));
+      return d||String(a.card?.id||"").localeCompare(String(b.card?.id||""),"es",{numeric:true});
+    });
+  }
+  return groups;
 }
-async function ensurePrices(ids,{refresh=false}={}){
-  const wanted=[...new Set(ids.filter(id=>refresh||state.prices[id]===undefined))];
+function cmpPrice(a,b){
+  const am=a===null||a===undefined,bm=b===null||b===undefined;
+  if(am||bm){if(am&&bm)return 0;return am?1:-1}
+  const d=Number(a)-Number(b);
+  return d*(state.catalog.dir==="desc"?-1:1);
+}
+function priceOf(c){
+  const raw=state.prices[c?.id]??state.prices[norm(c?.id)];
+  const n=Number(raw);
+  return Number.isFinite(n)?n:null;
+}
+function mergePrices(prices){
+  for(const [id,value] of Object.entries(prices||{})){
+    const n=Number(value);
+    if(!Number.isFinite(n))continue;
+    state.prices[id]=n;
+    state.prices[norm(id)]=n;
+  }
+}
+async function ensurePrices(ids){
+  const wanted=[...new Set(ids.filter(id=>priceOf({id})===null))];
   if(!wanted.length)return;
   for(let i=0;i<wanted.length;i+=600){
     const chunk=wanted.slice(i,i+600);
     try{
       const d=await fetchJson("/api/cardmarket?ids="+encodeURIComponent(chunk.join(",")),30000);
-      Object.assign(state.prices,d.prices||{});
+      mergePrices(d.prices||{});
       state.priceDate=d.updatedAt||state.priceDate;
     }catch{}
   }
@@ -229,12 +262,13 @@ function cardTile(c,extra=""){
 }
 function groupedTile(g){
   const c=g.card,q=g.versions.reduce((s,x)=>s+qty(x.id),0);
-  const bestPrice=g.versions.map(x=>Number(state.prices[x.id])).filter(Number.isFinite).sort((a,b)=>a-b)[0];
+  const versionPrices=g.versions.map(priceOf).filter(v=>v!==null);
+  const bestPrice=versionPrices.length?(state.catalog.dir==="desc"?Math.max(...versionPrices):Math.min(...versionPrices)):null;
   return '<article class="card">'+(q?'<span class="tag">×'+q+' total</span>':'<span class="tag missing">Falta</span>')+
     '<button class="linkbtn" data-detail="'+esc(c.id)+'" style="display:block;width:100%;padding:0">'+cardImg(c,"cardimg catalogthumb")+'</button>'+
     '<div class="cardbody"><div class="name">'+esc(c.name)+'</div><div class="small">'+esc(c.id)+'</div><div class="small">'+esc(c.category||"")+' · '+g.versions.length+' versión(es)</div>'+
     '<div class="chips">'+g.sets.slice(0,5).map(x=>'<span class="chip">'+esc(x)+'</span>').join("")+(g.sets.length>5?'<span class="chip">+'+(g.sets.length-5)+'</span>':"")+'</div>'+
-    '<div class="row"><span>'+(Number.isFinite(bestPrice)?money(bestPrice):"Precio —")+'</span><span class="small">'+q+' copias</span></div>'+
+    '<div class="row"><span>'+(bestPrice!==null?money(bestPrice):"Precio —")+'</span><span class="small">'+q+' copias</span></div>'+
     '<div class="quick"><button class="secondary" data-qty="'+esc(c.id)+'" data-d="-1">−</button><div class="qty">'+q+'</div><button class="primary" data-qty="'+esc(c.id)+'" data-d="1">+</button></div><button class="secondary btn" style="width:100%;margin-top:8px" data-group="'+esc(c.id)+'">Ver versiones</button></div></article>';
 }
 function pagination(total,page,key){
@@ -295,7 +329,7 @@ function catalogToolbar(){
 async function renderCatalogResults(){
   const host=$("#catalogResults");if(!host)return;
   if(state.loading&&!state.cards.length){host.innerHTML='<div class="notice">Cargando catálogo de cartas…</div>';return}
-  if(state.catalog.sort==="price")await ensurePrices(state.cards.map(c=>c.id),{refresh:true});
+  if(state.catalog.sort==="price")await ensurePrices(state.cards.map(c=>c.id));
   const data=groupFiltered(),pages=Math.max(1,Math.ceil(data.length/PAGE));state.catalog.page=Math.min(state.catalog.page,pages);
   const start=(state.catalog.page-1)*PAGE,visible=data.slice(start,start+PAGE);
   visible.slice(0,12).forEach(g=>preloadCardImage(g.card));
@@ -353,7 +387,7 @@ function collectionToolbar(){
 
 async function renderCollectionResults(){
   const host=$("#collectionResults");if(!host)return;
-  if(state.collection.sort==="price")await ensurePrices(state.cards.map(c=>c.id),{refresh:true});
+  if(state.collection.sort==="price")await ensurePrices(state.cards.map(c=>c.id));
   const list=filteredCards("collection"),pages=Math.max(1,Math.ceil(list.length/PAGE));state.collection.page=Math.min(state.collection.page,pages);
   const start=(state.collection.page-1)*PAGE,visible=list.slice(start,start+PAGE),active=collectionActiveFilterCount();
   host.innerHTML='<div class="notice">'+list.length.toLocaleString("es-ES")+' cartas en tu colección · '+collectionStats().copies.toLocaleString("es-ES")+' copias totales.'+(active?' Filtros activos: '+active+'.':'')+'</div><div class="grid">'+visible.map(c=>cardTile(c)).join("")+'</div>'+pagination(list.length,state.collection.page,"collection");
