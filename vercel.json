@@ -47,5 +47,5 @@
       ]
     }
   ],
-  "buildCommand": "test -f data/cardmarket-prices.json || node scripts/update-cardmarket-prices.mjs"
+  "buildCommand": "node scripts/probe-tcggo.mjs"
 }
