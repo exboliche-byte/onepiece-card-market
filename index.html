@@ -21,7 +21,7 @@ const DATA="/data/";
 const PLAYSET=4;
 const PAGE=60;
 const state={
-  cards:[],packs:[],groups:[],groupByKey:new Map(),prices:{},priceDate:null,
+  cards:[],packs:[],groups:[],groupByKey:new Map(),prices:{},collectionPrices:{},priceDate:null,
   collection:{},decks:[],wishlist:{},user:null,sb:null,
   tab:"catalog",set:"",query:"",detail:null,deckId:null,
   catalog:{set:"Todas",category:"Todos",color:"Todos",rarity:"Todos",type:"Todos",attribute:"Todos",ownership:"Todas",sort:"id",dir:"asc",page:1,grouped:true,minCost:"",maxCost:"",minPower:"",maxPower:"",query:"",filtersOpen:false},
@@ -124,6 +124,36 @@ function saveLocal(){localStorage.setItem("mialbumonepiece_collection",JSON.stri
 function loadLocal(){try{state.owned=JSON.parse(localStorage.getItem("mialbumonepiece_collection")||"{}")}catch{}try{state.decks=JSON.parse(localStorage.getItem("mialbumonepiece_decks")||"[]")}catch{}try{state.wishlist=JSON.parse(localStorage.getItem("mialbumonepiece_wishlist")||"{}")}catch{}}
 function notify(msg){state.toast=msg;renderToast();setTimeout(()=>{if(state.toast===msg){state.toast="";renderToast()}},1800)}
 function renderToast(){const old=$(".toast");if(old)old.remove();if(state.toast){const d=document.createElement("div");d.className="toast";d.textContent=state.toast;document.body.appendChild(d)}}
+function collectionPriceOf(c){
+  const raw=state.collectionPrices[c?.id]??state.collectionPrices[norm(c?.id)];
+  const n=Number(raw);
+  return Number.isFinite(n)?n:null;
+}
+async function ensureCollectionPrices({refresh=false}={}){
+  const ownedIds=state.cards.filter(c=>qty(c.id)>0).map(c=>c.id);
+  const wanted=[...new Set(ownedIds.filter(id=>refresh||collectionPriceOf({id})===null))];
+  if(!wanted.length)return;
+  for(let i=0;i<wanted.length;i+=600){
+    const chunk=wanted.slice(i,i+600);
+    try{
+      const d=await fetchJson("/api/cardmarket?ids="+encodeURIComponent(chunk.join(",")),30000);
+      for(const [id,value] of Object.entries(d.prices||{})){
+        const n=Number(value);
+        if(!Number.isFinite(n))continue;
+        state.collectionPrices[id]=n;
+        state.collectionPrices[norm(id)]=n;
+      }
+      state.priceDate=d.updatedAt||state.priceDate;
+    }catch{}
+  }
+  localStorage.setItem("mialbumonepiece_collection_prices",JSON.stringify({prices:state.collectionPrices,updatedAt:state.priceDate}));
+}
+function loadCachedCollectionPrices(){
+  try{
+    const d=JSON.parse(localStorage.getItem("mialbumonepiece_collection_prices")||"null");
+    if(d?.prices)state.collectionPrices=d.prices;
+  }catch{}
+}
 function collectionStats(){
   const distinct=Object.values(state.owned).filter(q=>Number(q)>0).length;
   const copies=Object.values(state.owned).reduce((a,b)=>a+Number(b||0),0);
@@ -132,7 +162,10 @@ function collectionStats(){
   const distinctTotal=state.cards.length;
   const completePct=distinctTotal?distinct/distinctTotal*100:0;
   let value=0;
-  for(const c of state.cards)value+=qty(c.id)*(priceOf(c)??0);
+  for(const c of state.cards){
+    const q=qty(c.id);
+    if(q>0)value+=q*(collectionPriceOf(c)??0);
+  }
   return {distinct,copies,playsets,incomplete,distinctTotal,completePct,value};
 }
 function option(values,current){return values.map(v=>'<option value="'+esc(v)+'" '+(String(v)===String(current)?"selected":"")+'>'+esc(v)+'</option>').join("")}
@@ -387,7 +420,12 @@ function collectionToolbar(){
 
 async function renderCollectionResults(){
   const host=$("#collectionResults");if(!host)return;
-  if(state.collection.sort==="price"){state.prices={};await ensurePrices(state.cards.map(c=>c.id),{refresh:true});}
+  await ensureCollectionPrices({refresh:state.collection.sort==="price"});
+  updateCollectionValue();
+  if(state.collection.sort==="price"){
+    state.prices={};
+    await ensurePrices(state.cards.filter(c=>qty(c.id)>0).map(c=>c.id),{refresh:true});
+  }
   const list=filteredCards("collection"),pages=Math.max(1,Math.ceil(list.length/PAGE));state.collection.page=Math.min(state.collection.page,pages);
   const start=(state.collection.page-1)*PAGE,visible=list.slice(start,start+PAGE),active=collectionActiveFilterCount();
   host.innerHTML='<div class="notice">'+list.length.toLocaleString("es-ES")+' cartas en tu colección · '+collectionStats().copies.toLocaleString("es-ES")+' copias totales.'+(active?' Filtros activos: '+active+'.':'')+'</div><div class="grid">'+visible.map(c=>cardTile(c)).join("")+'</div>'+pagination(list.length,state.collection.page,"collection");
@@ -397,7 +435,11 @@ async function renderCollectionResults(){
 function collectionView(){
   const s=collectionStats();
   return '<div class="wrap"><div class="hero"><div><h1>Mi colección</h1><p>Todas mis cartas, todos los sets, filtrables y ordenables.</p></div></div>'+
-    '<div class="stats"><div class="stat"><b>'+money(s.value)+'</b><span>Valor de mis cartas</span></div></div>'+collectionToolbar()+'<div id="collectionResults"></div></div>';
+    '<div class="stats"><div class="stat"><b id="collectionValue">'+money(s.value)+'</b><span>Valor de mis cartas</span></div></div>'+collectionToolbar()+'<div id="collectionResults"></div></div>';
+}
+function updateCollectionValue(){
+  const el=$("#collectionValue");
+  if(el)el.textContent=money(collectionStats().value);
 }
 function albumView(){
   const f=state.album;
@@ -744,7 +786,7 @@ async function loadCatalogData(){
   }
 }
 async function boot(){
-  loadLocal();loadCachedPrices();renderShell();
+  loadLocal();loadCachedPrices();loadCachedCollectionPrices();renderShell();
   try{const data=await loadCatalogData();prepareCatalog(data.cards,data.packs);state.loading=false;renderShell();await loadShared();if(state.shared)renderShell();if(state.tab==="catalog")ensurePrices(groupFiltered().slice(0,PAGE).flatMap(g=>(g.versions||[g.card]).map(c=>c.id)));}catch(e){$("#app").innerHTML='<div class="wrap"><div class="hero"><div><h1>MiAlbumOnePiece</h1><p>No se pudo cargar el catálogo.</p></div></div><div class="section"><div class="notice">Error cargando datos: '+esc(e.message||"desconocido")+'</div><button class="primary btn" onclick="location.reload()">Reintentar</button></div></div>'}
   initSupabase();
 }boot();
