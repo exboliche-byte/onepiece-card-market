@@ -39,8 +39,9 @@ const officialImageUrl=c=>"https://en.onepiece-cardgame.com/images/cardlist/card
 const imageUrl=c=>officialImageUrl(c);
 function preloadCardImage(c){const u=officialImageUrl(c);if(!u||imagePreloadCache.has(u))return;const im=new Image();im.src=u;imagePreloadCache.set(u,im)}
 function cardImg(c,cls="cardimg"){
-  const u=imageUrl(c),official=officialImageUrl(c),proxy="https://images.weserv.nl/?url="+encodeURIComponent(u.replace(/^https?:\/\//,""));
-  return '<img class="'+cls+'" loading="lazy" decoding="async" referrerpolicy="no-referrer" src="'+esc(u)+'" alt="'+esc(c.name||c.id)+'" onerror="if(!this.dataset.fallback){this.dataset.fallback=1;this.src=\''+esc(proxy)+'\';}else if(!this.dataset.official){this.dataset.official=1;this.src=\''+esc(official)+'\';}">';
+  const official=officialImageUrl(c),proxy="https://images.weserv.nl/?url="+encodeURIComponent(official.replace(/^https?:\/\//,""));
+  const loading=cls==="thumb"?"lazy":"eager";
+  return '<img class="'+cls+'" loading="'+loading+'" decoding="async" referrerpolicy="no-referrer" src="'+esc(proxy)+'" alt="'+esc(c.name||c.id)+'" onerror="if(!this.dataset.official){this.dataset.official=1;this.src=\''+esc(official)+'\';}">';
 }
 function qty(id){return Number(state.owned[id]||0)}
 function card(id){return state.cards.find(c=>c.id===id)}
@@ -56,11 +57,15 @@ function packSortKey(code){
   if(m)return [rank[m[1]]||99,Number(m[2]),m[1],s];
   return [99,9999,s,s];
 }
-function comparePacks(a,b){const x=packSortKey(a?.code),y=packSortKey(b?.code);for(let i=0;i<x.length;i++){if(x[i]!==y[i])return typeof x[i]==="number"?x[i]-y[i]:String(x[i]).localeCompare(String(y[i]),"es")}return 0}
+function comparePacks(a,b){
+  const x=packSortKey(a?.code),y=packSortKey(b?.code);
+  for(let i=0;i<x.length;i++){if(x[i]!==y[i])return typeof x[i]==="number"?x[i]-y[i]:String(x[i]).localeCompare(String(y[i]),"es")}
+  return String(a?.code||"").localeCompare(String(b?.code||""),"es", {numeric:true});
+}
 function setName(code){return state.packs.find(p=>p.code===code)?.name||code}
 function packLabel(p){return String(p?.code||"")}
 function prepareCatalog(raw,packs){
-  state.packs=(Array.isArray(packs)?packs:Object.values(packs)).slice().sort(comparePacks);
+  state.packs=(Array.isArray(packs)?packs:Object.values(packs)).filter(p=>!/^EB[-_]?\d+/i.test(String(p?.code||""))).slice().sort(comparePacks);
   state.cards=(Array.isArray(raw)?raw:Object.values(raw)).map(c=>({...c,id:String(c.id||"").trim(),set:String(c.set||"").trim(),set_name:c.set_name||setName(c.set||"")})).filter(c=>c.id);
   const map=new Map();
   for(const c of state.cards){c.search=norm([c.id,c.name,c.set,c.set_name,c.category,c.rarity,...(c.colors||[]),...(c.types||[]),...(c.attributes||[]),c.effect,c.trigger].join(" "));const k=groupKey(c);if(!map.has(k))map.set(k,{key:k,card:c,ids:[],sets:new Set()});const g=map.get(k);g.ids.push(c.id);g.sets.add(c.set)}
@@ -209,7 +214,7 @@ function catalogFilterPanel(){
       filterLabel("Poder mínimo",'<input id="catMinPower" class="field" type="number" min="0" inputmode="numeric" placeholder="Sin mínimo" value="'+esc(f.minPower)+'">')+
       filterLabel("Poder máximo",'<input id="catMaxPower" class="field" type="number" min="0" inputmode="numeric" placeholder="Sin máximo" value="'+esc(f.maxPower)+'">')+
     '</div>'+
-    '<div class="filter-actions"><span class="active-filters-note">'+catalogActiveFilterCount().toLocaleString("es-ES")+' filtro(s) activo(s)</span><button class="secondary btn" id="closeCatalogFilters" type="button">Cerrar filtros</button></div>'+
+    '<div class="filter-actions"><span class="active-filters-note">Selecciona filtros y pulsa APLICAR</span><button class="primary btn" id="applyCatalogFilters2" type="button">APLICAR FILTROS</button><button class="secondary btn" id="closeCatalogFilters" type="button">Cerrar filtros</button></div>'+
   '</div>';
 }
 function catalogToolbar(){
@@ -220,7 +225,7 @@ function catalogToolbar(){
       filterLabel("Ordenar por",'<select id="catSort" class="field"><option value="id" '+(f.sort==="id"?"selected":"")+'>Número de carta</option><option value="name" '+(f.sort==="name"?"selected":"")+'>Nombre</option><option value="set" '+(f.sort==="set"?"selected":"")+'>Expansión</option><option value="rarity" '+(f.sort==="rarity"?"selected":"")+'>Rareza</option><option value="cost" '+(f.sort==="cost"?"selected":"")+'>Coste</option><option value="power" '+(f.sort==="power"?"selected":"")+'>Poder</option><option value="price" '+(f.sort==="price"?"selected":"")+'>Precio</option><option value="quantity" '+(f.sort==="quantity"?"selected":"")+'>Cantidad que tengo</option></select>')+
       filterLabel("Orden",'<select id="catDir" class="field"><option value="asc" '+(f.dir==="asc"?"selected":"")+'>Ascendente</option><option value="desc" '+(f.dir==="desc"?"selected":"")+'>Descendente</option></select>')+
     '</div>'+
-    '<button class="secondary btn filter-toggle" id="catalogFilterToggle" type="button" aria-expanded="'+(f.filtersOpen?"true":"false")+'">🔽 FILTRO'+(n?' ('+n+')':'')+'</button>'+
+    '<button class="primary btn" id="applyCatalogFilters" type="button">APLICAR</button><button class="secondary btn filter-toggle" id="catalogFilterToggle" type="button" aria-expanded="'+(f.filtersOpen?"true":"false")+'">🔽 FILTRO'+(n?' ('+n+')':'')+'</button>'+
   '</div>'+catalogFilterPanel()+
   '<div class="row" style="margin-bottom:10px"><span class="hint">Versiones agrupadas · '+state.cards.length.toLocaleString("es-ES")+' cartas en el catálogo.</span></div>';
 }
@@ -474,8 +479,13 @@ function bindShell(){
   document.querySelectorAll("[data-open-set]").forEach(b=>b.onclick=()=>{state.tab="album";state.album.set=b.dataset.openSet;state.album.page=1;renderShell()});
   if(state.tab==="catalog"){
     bindSearch("#catalogSearch",v=>{state.catalog.query=v;state.query=v;state.catalog.page=1;renderCatalogResults()});
-    const map={catSet:"set",catCategory:"category",catColor:"color",catRarity:"rarity",catType:"type",catAttribute:"attribute",catMinCost:"minCost",catMaxCost:"maxCost",catMinPower:"minPower",catMaxPower:"maxPower",catOwnership:"ownership",catSort:"sort",catDir:"dir"};
-    Object.entries(map).forEach(([id,k])=>$(id)?.addEventListener("change",()=>{state.catalog[k]=$(id).value;state.catalog.page=1;renderCatalogResults()}));
+    const applyCatalog=()=>{
+      const map={catSet:"set",catCategory:"category",catColor:"color",catRarity:"rarity",catType:"type",catAttribute:"attribute",catMinCost:"minCost",catMaxCost:"maxCost",catMinPower:"minPower",catMaxPower:"maxPower",catOwnership:"ownership",catSort:"sort",catDir:"dir"};
+      Object.entries(map).forEach(([id,k])=>{const el=$(id);if(el)state.catalog[k]=el.value});
+      state.catalog.page=1;renderCatalogResults();notify("Filtros y orden aplicados");
+    };
+    $("#applyCatalogFilters")?.addEventListener("click",applyCatalog);
+    $("#applyCatalogFilters2")?.addEventListener("click",applyCatalog);
     $("#catalogFilterToggle")?.addEventListener("click",()=>{state.catalog.filtersOpen=!state.catalog.filtersOpen;renderShell()});
     $("#closeCatalogFilters")?.addEventListener("click",()=>{state.catalog.filtersOpen=false;renderShell()});
     $("#clearCatalogFilters")?.addEventListener("click",()=>{Object.assign(state.catalog,{set:"Todas",category:"Todos",color:"Todos",rarity:"Todos",type:"Todos",attribute:"Todos",ownership:"Todas",minCost:"",maxCost:"",minPower:"",maxPower:"",page:1});renderShell()});
