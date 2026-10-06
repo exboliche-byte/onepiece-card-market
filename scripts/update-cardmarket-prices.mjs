@@ -103,29 +103,37 @@ function parseSetCodeFromNumber(cardNumber) {
   return m ? m[1] : "";
 }
 function extractTcggoCardBlocks(html) {
-  const matches = [...String(html).matchAll(/<div\\b[^>]*class=["'][^"']*\\bt1-card\\b[^"']*\\bgame-one-piece\\b[^"']*["'][^>]*>/gi)];
-  return matches.map((m, i) => String(html).slice(m.index, i + 1 < matches.length ? matches[i + 1].index : String(html).length));
+  const source = String(html);
+  const matches = [...source.matchAll(/<div[^>]*class=["'][^"']*t1-card[^"']*game-one-piece[^"']*["'][^>]*>/gi)];
+  return matches.map((m, i) => source.slice(m.index, i + 1 < matches.length ? matches[i + 1].index : source.length));
 }
 function parseCardsFromSetPage(html, fallbackSetCode, setName, sourceUrl) {
   const rows = [];
   for (const block of extractTcggoCardBlocks(html)) {
-    const hrefMatch = block.match(/<a[^>]+href=["']([^"']+)["'][^>]*class=["'][^"']*\\bfont-semibold\\b[^"']*["'][^>]*>([\\s\\S]*?)<\\/a>/i)
-      || block.match(/<a[^>]+href=["']([^"']+)["'][^>]*>([\\s\\S]*?)<\\/a>/i);
-    if (!hrefMatch) continue;
-    const href = absoluteUrl(hrefMatch[1], sourceUrl);
-    const name = textContent(hrefMatch[2]);
-    if (!href || !name) continue;
-    const paragraphs = [...block.matchAll(/<p[^>]*class=["'][^"']*\\btext-xs\\b[^"']*\\btext-slate-400\\b[^"']*["'][^>]*>([\\s\\S]*?)<\\/p>/gi)]
-      .map(m => textContent(m[1]));
-    const codeLine = paragraphs[1] || paragraphs.find(x => /(?:OP|EB|ST|PRB)\\d{2}|(?:P|EX|DON)[-_ ]/i.test(x)) || "";
-    const cardNumber = parseCollectorNumber(codeLine || textContent(block), fallbackSetCode);
-    if (!cardNumber || /\\b(?:booster|display|box|deck|case|pack)\\b/i.test(cardNumber)) continue;
-    const priceMatch = block.match(/<[^>]*class=["'][^"']*\\bfont-display\\b[^"']*["'][^>]*>([\\s\\S]*?)<\\//i);
-    const price = parseEurPrice(textContent(priceMatch?.[1] || ""));
+    const hrefs = [...block.matchAll(/href=["']([^"']+)["']/gi)].map(m => absoluteUrl(m[1], sourceUrl));
+    const href = hrefs.find(u => {
+      try {
+        const p = new URL(u).pathname.split("/").filter(Boolean);
+        return p.length === 3 && p[0] === "one-piece";
+      } catch { return false; }
+    }) || hrefs.find(Boolean);
+    if (!href) continue;
+    const text = textContent(block);
+    const cardNumber = parseCollectorNumber(text, fallbackSetCode);
+    if (!cardNumber || /booster|display|box|deck|case|pack/i.test(cardNumber)) continue;
+    const price = parseEurPrice(text);
     if (price === null) continue;
-    const version = parseVersion(textContent(block));
+    const version = parseVersion(text);
     const resolvedSet = parseSetCodeFromNumber(cardNumber) || String(fallbackSetCode || "").toUpperCase();
-    rows.push({name, cardNumber, version, eur:price, setCode:resolvedSet, setName, sourceUrl:href});
+    rows.push({
+      name: "",
+      cardNumber,
+      version,
+      eur: price,
+      setCode: resolvedSet,
+      setName,
+      sourceUrl: href
+    });
   }
   return rows;
 }
