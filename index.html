@@ -270,7 +270,7 @@ function setQty(id,n){n=Math.max(0,Math.min(99,Number(n)||0));if(n===0)delete st
 function changeDeckQty(id,d){
   const deck=state.decks.find(x=>x.id===state.deckId);if(!deck)return;const n=Math.max(0,Math.min(4,Number(deck.cards[id]||0)+Number(d||0)));if(n===0)delete deck.cards[id];else deck.cards[id]=n;saveLocal();syncDeck(deck);renderShell();
 }
-function setLeader(id){const d=state.decks.find(x=>x.id===state.deckId);if(!d)return;d.leader=id;saveLocal();syncDeck(d);render()}
+function setLeader(id){const d=state.decks.find(x=>x.id===state.deckId);if(!d)return;d.leader=id;saveLocal();syncDeck(d);renderShell()}
 function addToDeck(id){const d=state.decks.find(x=>x.id===state.deckId);if(!d)return;const c=card(id);if(!c)return;if(c.category==="Leader"){setLeader(id);return}if(Number(d.cards[id]||0)>=4){notify("Máximo 4 copias");return}d.cards[id]=Number(d.cards[id]||0)+1;saveLocal();syncDeck(d);renderShell();notify("Añadida al mazo")}
 function newDeckModal(){
   return '<div class="modalback"><div class="modal"><div class="sectionhead"><h2>Nuevo mazo</h2><button class="close" data-close>×</button></div><input id="newDeckName" class="field" placeholder="Nombre del mazo"><textarea id="newDeckDesc" class="field" style="margin-top:8px" rows="3" placeholder="Descripción (opcional)"></textarea><div class="row" style="margin-top:9px"><button class="secondary btn" data-close>Cancelar</button><button class="primary btn" id="createDeckConfirm">Crear</button></div></div></div>';
