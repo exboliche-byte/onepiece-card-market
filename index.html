@@ -24,7 +24,7 @@ const state={
   cards:[],packs:[],groups:[],groupByKey:new Map(),prices:{},priceDate:null,
   collection:{},decks:[],wishlist:{},user:null,sb:null,
   tab:"home",set:"",query:"",detail:null,deckId:null,
-  catalog:{category:"Todos",color:"Todos",rarity:"Todos",type:"Todos",attribute:"Todos",ownership:"Todas",sort:"id",dir:"asc",page:1,grouped:true},
+  catalog:{category:"Todos",color:"Todos",rarity:"Todos",type:"Todos",attribute:"Todos",ownership:"Todas",sort:"id",dir:"asc",page:1,grouped:true,minCost:"",maxCost:"",minPower:"",maxPower:""},
   owned:{},collection:{query:"",category:"Todos",color:"Todos",rarity:"Todos",type:"Todos",attribute:"Todos",quantity:"Todos",playset:"Todos",sort:"id",dir:"asc",page:1},
   album:{set:"",query:"",ownership:"Todas",sort:"id",dir:"asc",page:1},
   deckQuery:"",deckPage:1,auth:false,toast:"",loading:true
@@ -86,6 +86,12 @@ function filteredCards(mode){
   if(f.rarity&&f.rarity!=="Todos")list=list.filter(c=>c.rarity===f.rarity);
   if(f.type&&f.type!=="Todos")list=list.filter(c=>(c.types||[]).includes(f.type));
   if(f.attribute&&f.attribute!=="Todos")list=list.filter(c=>(c.attributes||[]).includes(f.attribute));
+  if(mode==="catalog"){
+    if(f.minCost!==""&&Number(c.cost??-1)<Number(f.minCost))list=list.filter(c=>Number(c.cost??-1)>=Number(f.minCost));
+    if(f.maxCost!==""&&Number(c.cost??9999)>Number(f.maxCost))list=list.filter(c=>Number(c.cost??9999)<=Number(f.maxCost));
+    if(f.minPower!==""&&Number(c.power??-1)<Number(f.minPower))list=list.filter(c=>Number(c.power??-1)>=Number(f.minPower));
+    if(f.maxPower!==""&&Number(c.power??-1)>Number(f.maxPower))list=list.filter(c=>Number(c.power??-1)<=Number(f.maxPower));
+  }
   if(mode==="catalog"){
     if(f.ownership==="Tengo")list=list.filter(c=>qty(c.id)>0);
     if(f.ownership==="Me faltan")list=list.filter(c=>qty(c.id)<PLAYSET);
@@ -154,10 +160,9 @@ function pagination(total,page,key){
 function catalogToolbar(){
   const f=state.catalog;
   return '<div class="toolbar"><input id="catalogSearch" class="field" inputmode="search" autocomplete="off" placeholder="Buscar nombre, ID, set, tipo, efecto..." value="'+esc(state.query)+'"><select id="catCategory" class="field"><option>Todos</option>'+option(values("category"),f.category)+'</select><select id="catColor" class="field"><option>Todos</option>'+option(values("colors"),f.color)+'</select><select id="catRarity" class="field"><option>Todos</option>'+option(values("rarity"),f.rarity)+'</select></div>'+
-  '<div class="toolbar3"><select id="catOwnership" class="field"><option value="Todas">Todas</option><option '+(f.ownership==="Tengo"?"selected":"")+'>Tengo</option><option '+(f.ownership==="Me faltan"?"selected":"")+'>Me faltan</option></select>'+
-  '<select id="catSort" class="field"><option value="id">Ordenar ID</option><option value="name">Nombre</option><option value="rarity">Rareza</option><option value="cost">Coste</option><option value="power">Poder</option><option value="price">Precio</option><option value="quantity">Cantidad</option></select>'+
-  '<select id="catDir" class="field"><option value="asc" '+(f.dir==="asc"?"selected":"")+'>Ascendente</option><option value="desc" '+(f.dir==="desc"?"selected":"")+'>Descendente</option></select>'+
-  '<button class="secondary btn" id="groupToggle">'+(f.grouped?"Agrupadas por carta":"Todas las versiones")+'</button></div>';
+  '<div class="toolbar"><select id="catType" class="field"><option>Todos</option>'+option(values("types"),f.type)+'</select><select id="catAttribute" class="field"><option>Todos</option>'+option(values("attributes"),f.attribute)+'</select><input id="catMinCost" class="field" type="number" min="0" placeholder="Coste mín." value="'+esc(f.minCost)+'"><input id="catMaxCost" class="field" type="number" min="0" placeholder="Coste máx." value="'+esc(f.maxCost)+'"></div>'+
+  '<div class="toolbar"><input id="catMinPower" class="field" type="number" min="0" placeholder="Poder mín." value="'+esc(f.minPower)+'"><input id="catMaxPower" class="field" type="number" min="0" placeholder="Poder máx." value="'+esc(f.maxPower)+'"><select id="catOwnership" class="field"><option value="Todas">Todas</option><option '+(f.ownership==="Tengo"?"selected":"")+'>Tengo</option><option '+(f.ownership==="Me faltan"?"selected":"")+'>Me faltan</option></select><select id="catSort" class="field"><option value="id">Ordenar ID</option><option value="name">Nombre</option><option value="set">Expansión</option><option value="rarity">Rareza</option><option value="cost">Coste</option><option value="power">Poder</option><option value="price">Precio</option><option value="quantity">Cantidad</option></select></div>'+
+  '<div class="toolbar3"><select id="catDir" class="field"><option value="asc" '+(f.dir==="asc"?"selected":"")+'>Ascendente</option><option value="desc" '+(f.dir==="desc"?"selected":"")+'>Descendente</option><button class="secondary btn" id="groupToggle">'+(f.grouped?"Agrupadas por carta":"Todas las versiones")+'</button></div>';
 }
 function renderCatalogResults(){
   const host=$("#catalogResults");if(!host)return;
@@ -233,8 +238,12 @@ function deckRows(d){
 }
 function deckValidate(d){
   const total=Object.values(d.cards||{}).reduce((s,n)=>s+Number(n||0),0),messages=[],leader=card(d.leader);
+  const banned=new Set(["OP06-047","OP03-040","OP06-086","ST10-001","OP06-116"]);
+  const pairs=[["OP07-115","EB04-058"],["OP11-040","OP11-067"],["OP11-040","OP08-069"]];
   let illegal=0;if(!leader)messages.push("Líder no seleccionado");if(total!==50)messages.push(total+"/50 cartas no líder");
-  for(const [id,n] of Object.entries(d.cards||{})){const c=card(id);if(!c){illegal++;continue}if(c.category==="Leader"){illegal++;continue}if(Number(n)>4){illegal++;messages.push(c.id+">4 copias")}if(leader&&!(c.colors||[]).some(col=>(leader.colors||[]).includes(col))){illegal++;}}
+  const ids=Object.entries(d.cards||{});
+  for(const [id,n] of ids){const c=card(id);const base=baseId(id);if(!c){illegal++;continue}if(c.category==="Leader"){illegal++;continue}if(Number(n)>4){illegal++;messages.push(c.id+">4 copias")}if(banned.has(base)){illegal++;messages.push(base+" prohibida")}if(leader&&!(c.colors||[]).some(col=>(leader.colors||[]).includes(col))){illegal++;}}
+  for(const [a,b] of pairs){if(ids.some(([id,n])=>baseId(id)===a&&Number(n)>0)&&ids.some(([id,n])=>baseId(id)===b&&Number(n)>0)){illegal++;messages.push("pareja prohibida "+a+" + "+b)}}
   if(illegal)messages.push(illegal+" carta(s) ilegales");
   return {total,illegal,valid:!!leader&&total===50&&illegal===0,messages};
 }
@@ -280,7 +289,7 @@ function nav(){
   return '<nav class="nav">'+items.map(([id,label])=>'<button class="'+(state.tab===id?"active":"")+'" data-tab="'+id+'">◈<span>'+label+'</span></button>').join("")+'</nav>';
 }
 function renderShell(){
-  let main=state.tab==="home"?homeView():state.tab==="catalog"?catalogView():state.tab==="collection"?collectionView():state.tab==="album"?albumView():state.tab==="decks"?decksView():accountView();
+  let main=state.shared?sharedDeckView():(state.tab==="home"?homeView():state.tab==="catalog"?catalogView():state.tab==="collection"?collectionView():state.tab==="album"?albumView():state.tab==="decks"?decksView():accountView());
   const account='<button class="account" id="accountBtn">'+(state.user?esc((state.user.email||"").split("@")[0]):"Cuenta")+'</button>';
   $("#app").innerHTML='<div class="app"><header class="top"><div class="brand"><b>ONE PIECE</b><span>MiAlbumOnePiece</span></div>'+account+'</header>'+main+nav()+(state.detail?detailView(state.detail):"")+(state.auth?authModal():"")+(state.newDeck?newDeckModal():"")+'</div>';
   bindShell();
@@ -319,7 +328,7 @@ function bindShell(){
   document.querySelectorAll("[data-open-set]").forEach(b=>b.onclick=()=>{state.tab="album";state.album.set=b.dataset.openSet;state.album.page=1;renderShell()});
   if(state.tab==="catalog"){
     bindSearch("#catalogSearch",v=>{state.query=v;state.catalog.page=1;renderCatalogResults()});
-    ["catCategory","catColor","catRarity","catOwnership","catSort","catDir"].forEach(id=>$(id)?.addEventListener("change",()=>{const m={catCategory:"category",catColor:"color",catRarity:"rarity",catOwnership:"ownership",catSort:"sort",catDir:"dir"};state.catalog[m[id]]=$(id).value;state.catalog.page=1;renderCatalogResults()}));
+    ["catCategory","catColor","catRarity","catType","catAttribute","catMinCost","catMaxCost","catMinPower","catMaxPower","catOwnership","catSort","catDir"].forEach(id=>$(id)?.addEventListener("change",()=>{const m={catCategory:"category",catColor:"color",catRarity:"rarity",catType:"type",catAttribute:"attribute",catMinCost:"minCost",catMaxCost:"maxCost",catMinPower:"minPower",catMaxPower:"maxPower",catOwnership:"ownership",catSort:"sort",catDir:"dir"};state.catalog[m[id]]=$(id).value;state.catalog.page=1;renderCatalogResults()}));
     $("#groupToggle")?.addEventListener("click",()=>{state.catalog.grouped=!state.catalog.grouped;renderShell()});
   }
   if(state.tab==="collection"){
@@ -346,7 +355,11 @@ function bindShell(){
     ["deckCat","deckColor","deckRarity"].forEach(id=>$(id)?.addEventListener("change",()=>{state.deckPage=1;renderDeckResults()}));
   }
   if(state.tab==="account"){bindAccount()}
-  if(state.detail){document.querySelectorAll(".modalback").forEach(m=>m.addEventListener("click",e=>{if(e.target===m){state.detail=null;renderShell()}}))}
+  if(state.detail&&!state.detail.shareUrl){
+    document.querySelectorAll(".modalback").forEach(m=>m.addEventListener("click",e=>{if(e.target===m){state.detail=null;renderShell()}}));
+    document.querySelectorAll(".modalback [data-close]").forEach(b=>b.onclick=()=>{state.detail=null;renderShell()});
+    document.querySelectorAll(".modalback [data-qty]").forEach(b=>b.onclick=()=>changeQty(b.dataset.qty,Number(b.dataset.d)));
+  }
 }
 function bindAccount(){
   $("#login")?.addEventListener("click",()=>loginFrom("#authEmail","#authPassword"));
