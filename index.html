@@ -296,7 +296,7 @@ function renderCatalogResults(){
   visible.slice(0,12).forEach(g=>preloadCardImage(g.card));
   state.catalog.grouped=true;
   const mode="versiones agrupadas",active=catalogActiveFilterCount();
-  host.innerHTML='<div class="notice">'+state.cards.length.toLocaleString("es-ES")+' cartas disponibles · '+data.length.toLocaleString("es-ES")+' resultados · '+mode+'.'+(active?' Filtros activos: '+active+'.':'')+'</div><div class="grid">'+visible.map(g=>state.catalog.grouped?groupedTile(g):cardTile(g.card)).join("")+'</div>'+pagination(data.length,state.catalog.page,"catalog");
+  host.innerHTML='<div class="grid">'+visible.map(g=>state.catalog.grouped?groupedTile(g):cardTile(g.card)).join("")+'</div>'+pagination(data.length,state.catalog.page,"catalog");
   bindResultEvents(host);
   ensurePrices(visible.flatMap(g=>g.versions||[g.card]).map(c=>c.id));
 }
