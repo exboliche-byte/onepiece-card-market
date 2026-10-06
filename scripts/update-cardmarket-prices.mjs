@@ -239,7 +239,7 @@ function allProductsForCard(card, products) {
   const number = numberPart(base);
   for (const product of products) {
     if (!product?.idProduct) continue;
-    if (!expansionMatches(String(card.set || "").toUpperCase(), product.expansionName)) continue;
+    if (!expansionMatches(String(card.set || "").toUpperCase(), product.expansionName, card?.set_name)) continue;
     const pCode = extractCardCode(product.name);
     if (pCode && code) {
       if (pCode !== code) continue;
@@ -280,14 +280,22 @@ async function readPreviousDataset() {
 }
 
 async function main() {
-  const [localRaw, productsRaw, pricesRaw, previous] = await Promise.all([
+  const [localRaw, packsRaw, productsRaw, pricesRaw, previous] = await Promise.all([
     fs.readFile(new URL("../data/cards.json", import.meta.url), "utf8").then(JSON.parse),
+    fs.readFile(new URL("../data/packs.json", import.meta.url), "utf8").then(JSON.parse),
     fetchJson(PRODUCT_URL),
     fetchJson(PRICE_URL),
     readPreviousDataset()
   ]);
 
-  const cards = normalizeCardCatalog(localRaw);
+  const packs = Array.isArray(packsRaw) ? packsRaw : Object.values(packsRaw || {});
+  const dynamicSetNames = new Map(
+    packs.map(p => [String(p?.code || "").trim().toUpperCase(), String(p?.name || "").trim()])
+  );
+  const cards = normalizeCardCatalog(localRaw).map(card => ({
+    ...card,
+    set_name: String(card.set_name || dynamicSetNames.get(card.set) || "")
+  }));
   const products = readProducts(productsRaw).filter(p => norm(p?.categoryName).includes("single"));
   const prices = priceGuideIndex(readPrices(pricesRaw));
   if (!cards.length) throw new Error("Local card catalog is empty");
@@ -368,7 +376,7 @@ async function main() {
   };
 
   if (coverage < MIN_COVERAGE) {
-    throw new Error("Safety check failed: only " + Object.keys(outputCards).length + "/" + cards.length + " cards priced (" + (coverage * 100).toFixed(1) + "%)");
+    throw new Error("Safety check failed: only " + Object.keys(outputCards).length + "/" + cards.length + " cards matched to a Cardmarket product (" + (coverage * 100).toFixed(1) + "%)");
   }
 
   const previousUpdated = String(previous?.updatedAt || "");
