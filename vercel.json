@@ -47,6 +47,5 @@
       ]
     }
   ],
-  "buildCommand": "test -f data/cardmarket-prices.json || node scripts/update-cardmarket-prices.mjs",
-  "nodeVersion": "24.x"
+  "buildCommand": "test -f data/cardmarket-prices.json || node scripts/update-cardmarket-prices.mjs"
 }
