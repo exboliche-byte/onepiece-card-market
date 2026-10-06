@@ -24,7 +24,7 @@ const state={
   cards:[],packs:[],groups:[],groupByKey:new Map(),prices:{},priceDate:null,
   collection:{},decks:[],wishlist:{},user:null,sb:null,
   tab:"catalog",set:"",query:"",detail:null,deckId:null,
-  catalog:{category:"Todos",color:"Todos",rarity:"Todos",type:"Todos",attribute:"Todos",ownership:"Todas",sort:"id",dir:"asc",page:1,grouped:false,minCost:"",maxCost:"",minPower:"",maxPower:"",query:"",filtersOpen:false},
+  catalog:{category:"Todos",color:"Todos",rarity:"Todos",type:"Todos",attribute:"Todos",ownership:"Todas",sort:"id",dir:"asc",page:1,grouped:true,minCost:"",maxCost:"",minPower:"",maxPower:"",query:"",filtersOpen:false},
   owned:{},collection:{query:"",set:"Todas",category:"Todos",color:"Todos",rarity:"Todos",type:"Todos",attribute:"Todos",quantity:"Todas",playset:"Todas",sort:"id",dir:"asc",page:1,filtersOpen:false},
   album:{set:"",query:"",ownership:"Todas",sort:"id",dir:"asc",page:1},
   deckQuery:"",deckPage:1,deckFilters:{category:"Todos",color:"Todos",rarity:"Todos",filtersOpen:false},auth:false,toast:"",loading:true
@@ -34,8 +34,12 @@ const esc=s=>String(s??"").replace(/[&<>'"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&
 const norm=s=>String(s??"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
 const money=n=>Number.isFinite(Number(n))?Number(n).toLocaleString("es-ES",{style:"currency",currency:"EUR"}):"—";
 const safeId=id=>String(id||"");
-const imageUrl=c=>c?.image||c?.img_full_url||c?.img_url||("https://en.onepiece-cardgame.com/images/cardlist/card/"+encodeURIComponent(c?.id||"")+".png");
-function cardImg(c,cls="cardimg"){const u=imageUrl(c);return '<img class="'+cls+'" loading="lazy" decoding="async" referrerpolicy="no-referrer" src="'+esc(u)+'" alt="'+esc(c.name||c.id)+'" onerror="if(this.dataset.fallback)return;this.dataset.fallback=1;this.src=\'https://en.onepiece-cardgame.com/images/cardlist/card/'+encodeURIComponent(c.id)+'.png\';">';}
+const officialImageUrl=c=>"https://en.onepiece-cardgame.com/images/cardlist/card/"+encodeURIComponent(c?.id||"")+".png";
+const imageUrl=c=>c?.image||c?.img_full_url||c?.img_url||officialImageUrl(c);
+function cardImg(c,cls="cardimg"){
+  const u=imageUrl(c),official=officialImageUrl(c),proxy="https://images.weserv.nl/?url="+encodeURIComponent(u.replace(/^https?:\\/\\//,""));
+  return '<img class="'+cls+'" loading="lazy" decoding="async" referrerpolicy="no-referrer" src="'+esc(u)+'" alt="'+esc(c.name||c.id)+'" onerror="if(!this.dataset.fallback){this.dataset.fallback=1;this.src=\''+esc(proxy)+'\';}else if(!this.dataset.official){this.dataset.official=1;this.src=\''+esc(official)+'\';}">';
+}
 function qty(id){return Number(state.owned[id]||0)}
 function card(id){return state.cards.find(c=>c.id===id)}
 function baseId(id){return safeId(id).replace(/_(?:p\\d+|r\\d+)$/i,"")}
@@ -118,6 +122,7 @@ function filteredCards(mode){
 }
 function groupFiltered(){
   const arr=filteredCards("catalog");
+  state.catalog.grouped=true;
   if(!state.catalog.grouped)return arr.map(c=>({key:c.id,card:c,versions:[c],sets:[c.set]}));
   const by=new Map();
   for(const c of arr){const k=groupKey(c);if(!by.has(k))by.set(k,{key:k,card:c,versions:[],sets:[]});const g=by.get(k);g.versions.push(c);if(!g.sets.includes(c.set))g.sets.push(c.set)}
@@ -203,7 +208,7 @@ function catalogToolbar(){
     '</div>'+
     '<button class="secondary btn filter-toggle" id="catalogFilterToggle" type="button" aria-expanded="'+(f.filtersOpen?"true":"false")+'">🔽 FILTRO'+(n?' ('+n+')':'')+'</button>'+
   '</div>'+catalogFilterPanel()+
-  '<div class="row" style="margin-bottom:10px"><span class="hint">'+(f.grouped?"Versiones agrupadas":"Mostrando todas las versiones")+' · '+state.cards.length.toLocaleString("es-ES")+' cartas en el catálogo.</span><button class="secondary btn" id="groupToggle" type="button">'+(f.grouped?"Mostrar todas las versiones":"Agrupar versiones")+'</button></div>';
+  '<div class="row" style="margin-bottom:10px"><span class="hint">Versiones agrupadas · '+state.cards.length.toLocaleString("es-ES")+' cartas en el catálogo.</span></div>';
 }
 
 function renderCatalogResults(){
@@ -211,7 +216,8 @@ function renderCatalogResults(){
   if(state.loading&&!state.cards.length){host.innerHTML='<div class="notice">Cargando catálogo de cartas…</div>';return}
   const data=groupFiltered(),pages=Math.max(1,Math.ceil(data.length/PAGE));state.catalog.page=Math.min(state.catalog.page,pages);
   const start=(state.catalog.page-1)*PAGE,visible=data.slice(start,start+PAGE);
-  const mode=state.catalog.grouped?"versiones agrupadas":"todas las versiones",active=catalogActiveFilterCount();
+  state.catalog.grouped=true;
+  const mode="versiones agrupadas",active=catalogActiveFilterCount();
   host.innerHTML='<div class="notice">'+state.cards.length.toLocaleString("es-ES")+' cartas disponibles · '+data.length.toLocaleString("es-ES")+' resultados · '+mode+'.'+(active?' Filtros activos: '+active+'.':'')+'</div><div class="grid">'+visible.map(g=>state.catalog.grouped?groupedTile(g):cardTile(g.card)).join("")+'</div>'+pagination(data.length,state.catalog.page,"catalog");
   bindResultEvents(host);
   ensurePrices(visible.flatMap(g=>g.versions||[g.card]).map(c=>c.id));
@@ -446,7 +452,6 @@ function bindShell(){
     $("#catalogFilterToggle")?.addEventListener("click",()=>{state.catalog.filtersOpen=!state.catalog.filtersOpen;renderShell()});
     $("#closeCatalogFilters")?.addEventListener("click",()=>{state.catalog.filtersOpen=false;renderShell()});
     $("#clearCatalogFilters")?.addEventListener("click",()=>{Object.assign(state.catalog,{category:"Todos",color:"Todos",rarity:"Todos",type:"Todos",attribute:"Todos",ownership:"Todas",minCost:"",maxCost:"",minPower:"",maxPower:"",page:1});renderShell()});
-    $("#groupToggle")?.addEventListener("click",()=>{state.catalog.grouped=!state.catalog.grouped;renderShell()});
   }
   if(state.tab==="collection"){
     bindSearch("#collectionSearch",v=>{state.collection.query=v;state.collection.page=1;renderCollectionResults()});
