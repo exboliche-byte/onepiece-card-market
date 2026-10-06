@@ -3,10 +3,13 @@
   "short_name":"MiAlbumOnePiece",
   "description":"Colección, catálogo, mazos y estadísticas de One Piece Card Game.",
   "lang":"es",
-  "start_url":"./",
-  "scope":"./",
+  "start_url":"/",
+  "scope":"/",
   "display":"standalone",
   "background_color":"#080a10",
   "theme_color":"#080a10",
-  "orientation":"portrait-primary"
+  "orientation":"portrait-primary",
+  "icons":[
+    {"src":"/icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}
+  ]
 }
