@@ -36,7 +36,7 @@ function buildProductVersionMap(){
   for(const items of groups.values()){
     items.sort((a,b)=>{
       const da=String(a.p?.dateAdded||""),db=String(b.p?.dateAdded||"");
-      return da.localeCompare(db)||Number(a.p?.idProduct??a.p?.productId??a.p?.id||0)-Number(b.p?.idProduct??b.p?.productId??b.p?.id||0);
+      return da.localeCompare(db)||Number(a.p?.idProduct??a.p?.productId??a.p?.id??0)-Number(b.p?.idProduct??b.p?.productId??b.p?.id??0);
     });
     if(items.length===1)map.set(baseId(items[0].id),items[0].p);
     else items.forEach((item,index)=>map.set(baseId(item.id)+"_P"+(index+1),item.p));
