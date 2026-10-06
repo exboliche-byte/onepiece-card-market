@@ -272,7 +272,7 @@ function catalogFilterPanel(){
       filterLabel("Poder mínimo",'<input id="catMinPower" class="field" type="number" min="0" inputmode="numeric" placeholder="Sin mínimo" value="'+esc(f.minPower)+'">')+
       filterLabel("Poder máximo",'<input id="catMaxPower" class="field" type="number" min="0" inputmode="numeric" placeholder="Sin máximo" value="'+esc(f.maxPower)+'">')+
     '</div>'+
-    '<div class="filter-actions"><span class="active-filters-note">Selecciona filtros y pulsa APLICAR</span><button class="primary btn" id="applyCatalogFilters2" type="button">APLICAR FILTROS</button><button class="secondary btn" id="closeCatalogFilters" type="button">Cerrar filtros</button></div>'+
+    '<div class="filter-actions"><span class="active-filters-note">Los cambios se aplican automáticamente</span><button class="secondary btn" id="closeCatalogFilters" type="button">Cerrar filtros</button></div>'+
   '</div>';
 }
 function catalogToolbar(){
@@ -283,7 +283,7 @@ function catalogToolbar(){
       filterLabel("Ordenar por",'<select id="catSort" class="field"><option value="id" '+(f.sort==="id"?"selected":"")+'>Número de carta</option><option value="name" '+(f.sort==="name"?"selected":"")+'>Nombre</option><option value="set" '+(f.sort==="set"?"selected":"")+'>Expansión</option><option value="rarity" '+(f.sort==="rarity"?"selected":"")+'>Rareza</option><option value="cost" '+(f.sort==="cost"?"selected":"")+'>Coste</option><option value="power" '+(f.sort==="power"?"selected":"")+'>Poder</option><option value="price" '+(f.sort==="price"?"selected":"")+'>Precio</option><option value="quantity" '+(f.sort==="quantity"?"selected":"")+'>Cantidad que tengo</option></select>')+
       filterLabel("Orden",'<select id="catDir" class="field"><option value="asc" '+(f.dir==="asc"?"selected":"")+'>Ascendente</option><option value="desc" '+(f.dir==="desc"?"selected":"")+'>Descendente</option></select>')+
     '</div>'+
-    '<button class="primary btn" id="applyCatalogFilters" type="button">APLICAR</button><button class="secondary btn filter-toggle" id="catalogFilterToggle" type="button" aria-expanded="'+(f.filtersOpen?"true":"false")+'">🔽 FILTRO'+(n?' ('+n+')':'')+'</button>'+
+    '<button class="secondary btn filter-toggle" id="catalogFilterToggle" type="button" aria-expanded="'+(f.filtersOpen?"true":"false")+'">🔽 FILTRO'+(n?' ('+n+')':'')+'</button>'+
   '</div>'+catalogFilterPanel()+
   '<div class="row" style="margin-bottom:10px"><span class="hint">Versiones agrupadas · '+state.cards.length.toLocaleString("es-ES")+' cartas en el catálogo.</span></div>';
 }
@@ -544,13 +544,17 @@ function bindShell(){
   document.querySelectorAll("[data-open-set]").forEach(b=>b.onclick=()=>{state.tab="album";state.album.set=b.dataset.openSet;state.album.page=1;renderShell()});
   if(state.tab==="catalog"){
     bindSearch("#catalogSearch",v=>{state.catalog.query=v;state.query=v;state.catalog.page=1;renderCatalogResults()});
-    const applyCatalog=()=>{
+    const applyCatalog=async()=>{
       const map={catSet:"set",catCategory:"category",catColor:"color",catRarity:"rarity",catType:"type",catAttribute:"attribute",catMinCost:"minCost",catMaxCost:"maxCost",catMinPower:"minPower",catMaxPower:"maxPower",catOwnership:"ownership",catSort:"sort",catDir:"dir"};
       Object.entries(map).forEach(([id,k])=>{const el=$("#"+id);if(el)state.catalog[k]=el.value});
-      state.catalog.page=1;state.catalog.filtersOpen=false;renderShell();notify("Filtros y orden aplicados");
+      state.catalog.page=1;
+      if(state.catalog.sort==="price")await ensurePrices(state.cards.map(c=>c.id));
+      renderCatalogResults();
     };
-    $("#applyCatalogFilters")?.addEventListener("click",applyCatalog);
-    $("#applyCatalogFilters2")?.addEventListener("click",applyCatalog);
+    const bindCatalogLive=id=>$("#"+id)?.addEventListener("change",applyCatalog);
+    ["catSet","catCategory","catColor","catRarity","catType","catAttribute","catMinCost","catMaxCost","catMinPower","catMaxPower","catOwnership","catSort","catDir"].forEach(bindCatalogLive);
+    $("#applyCatalogFilters")?.remove();
+    $("#applyCatalogFilters2")?.remove();
     $("#catalogFilterToggle")?.addEventListener("click",()=>{state.catalog.filtersOpen=!state.catalog.filtersOpen;renderShell()});
     $("#closeCatalogFilters")?.addEventListener("click",()=>{state.catalog.filtersOpen=false;renderShell()});
     $("#clearCatalogFilters")?.addEventListener("click",()=>{Object.assign(state.catalog,{set:"Todas",category:"Todos",color:"Todos",rarity:"Todos",type:"Todos",attribute:"Todos",ownership:"Todas",minCost:"",maxCost:"",minPower:"",maxPower:"",page:1});renderShell()});
