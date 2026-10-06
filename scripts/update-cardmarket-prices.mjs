@@ -231,8 +231,8 @@ async function fetchCardPages(urls, setMap) {
       if (i >= urls.length) return;
       const url = urls[i];
       const slug = setSlugFromCardUrl(url);
-      const setCode = setMap.get(slug) || "";
-      if (!setCode) { failures++; continue; }
+      const setInfo = setMap.get(slug);
+      if (!setInfo?.code) { failures++; continue; }
       try {
         const html = await fetchText(url);
         const row = parseCardPage(url, html, setInfo);
@@ -248,14 +248,14 @@ function loadLocalCards(raw) {
   return arr.map(c => ({...c, id: String(c.id || "").trim()})).filter(c => c.id);
 }
 function pageTitle(html) {
-  return entityDecode(html.match(/<title[^>]*>([\\s\\S]*?)<\\/title>/i)?.[1] || "").replace(/\\s*-\\s*TCGGO\\.com\\s*$/i, "").trim();
+  return entityDecode(html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] || "").replace(/\s*-\s*TCGGO\.com\s*$/i, "").trim();
 }
 function marketSlug(value) {
-  return normalize(value).replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  return normalize(value).replace(/[’\'] /g, "").replace(/[’\']/g, "").replace(/\./g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 }
 function cardIdFromSource(row) {
   let base = upper(row.cardNumber);
-  if (/^\\d{3}$/.test(base)) base = normalizeSetCode(row.setCode) + "-" + base;
+  if (/^\d{3}$/.test(base)) base = normalizeSetCode(row.setCode) + "-" + base;
   base = base.replace(/ /g, "-");
   if (!base) return "";
   return row.version <= 1 ? base : base + "_p" + (row.version - 1);
