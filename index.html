@@ -261,18 +261,26 @@ function cmpPrice(a,b){
   return d*(state.catalog.dir==="desc"?-1:1);
 }
 let priceDatasetPromise=null;
-const PRICE_CACHE_VERSION=4;
+const PRICE_CACHE_VERSION=5;
 const MARKET_DATA_URL="/data/cardmarket-prices.json";
 function priceOf(c){const raw=state.prices[c?.id]??state.prices[norm(c?.id)];const n=Number(raw);return Number.isFinite(n)?n:null}
 function mergePriceDataset(d){
   state.prices={};state.collectionPrices={};state.marketMeta={};state.priceDate=d?.updatedAt||null;
   for(const [id,entry] of Object.entries(d?.cards||{})){
-    const n=Number(entry?.eur);if(!Number.isFinite(n))continue;
-    state.prices[id]=n;state.prices[norm(id)]=n;state.collectionPrices[id]=n;state.collectionPrices[norm(id)]=n;
-    const meta={url:String(entry?.url||""),cardmarketId:entry?.cardmarketId||null,version:Number(entry?.version||1),sourceUrl:String(entry?.sourceUrl||"")};
+    const n=Number(entry?.eur);
+    if(Number.isFinite(n)){state.prices[id]=n;state.prices[norm(id)]=n;}
+    const meta={
+      url:String(entry?.url||""),
+      cardmarketId:entry?.cardmarketId||null,
+      version:Number(entry?.version||1),
+      launchPrice:Number.isFinite(Number(entry?.launchPrice))?Number(entry.launchPrice):null,
+      launchPriceDate:entry?.launchPriceDate||null,
+      sourceUrl:String(entry?.sourceUrl||"")
+    };
     state.marketMeta[id]=meta;state.marketMeta[norm(id)]=meta;
   }
 }
+
 async function loadMarketPrices({refresh=false}={}){
   if(!refresh&&priceDatasetPromise)return priceDatasetPromise;
   priceDatasetPromise=(async()=>{
@@ -308,19 +316,19 @@ async function ensureCollectionPrices({refresh=false}={}){await loadMarketPrices
 const COLLECTION_PRICE_CACHE_VERSION=PRICE_CACHE_VERSION;
 function loadCachedCollectionPrices(){}
 function cardmarketVersionLabel(c){
-  const meta=state.marketMeta[c?.id]||state.marketMeta[norm(c?.id)];
+  const meta=priceMeta(c);
   if(Number.isFinite(Number(meta?.version)))return "(V."+Number(meta.version)+")";
   const m=String(c?.id||"").match(/_(?:p|r|c)(\d+)$/i);
   return m?"(V."+(Number(m[1])+1)+")":"(V.1)";
 }
+function priceMeta(c){
+  return state.marketMeta?.[c?.id] || state.marketMeta?.[norm(c?.id)] || {};
+}
 function cardmarketUrl(c){
-  const meta=state.marketMeta[c?.id]||state.marketMeta[norm(c?.id)];
-  if(meta?.url)return meta.url;
-  const version=Number(meta?.version)||Number(cardmarketVersionLabel(c).match(/\d+/)?.[0]||1);
-  const set=String(c?.set_name||c?.set||"").trim();
-  const name=String(c?.name||"").trim().replace(/[^\w. -]+/g," ").trim().replace(/\s+/g,"-");
-  const id=String(c?.id||"").trim().replace(/_(?:p|r|c)\d+$/i,"");
-  return "https://www.cardmarket.com/es/OnePiece/Products/Singles/"+encodeURIComponent(set.replace(/\s+/g,"-"))+"/"+name+"-"+id+"-V"+version;
+  const meta=priceMeta(c);
+  const id=String(meta?.cardmarketId||"").trim();
+  if(id)return "https://www.cardmarket.com/es/OnePiece/Products?idProduct="+encodeURIComponent(id);
+  return "";
 }
 function cardTile(c,extra=""){
   const q=qty(c.id);const p=priceOf(c);
@@ -399,7 +407,7 @@ function catalogToolbar(){
   '<div class="row" style="margin-bottom:10px"><span class="hint">Versiones agrupadas · '+state.cards.length.toLocaleString("es-ES")+' cartas en el catálogo.</span></div>';
 }
 
-async async function renderCatalogResults(){
+async async async function renderCatalogResults(){
   const host=$("#catalogResults");if(!host)return;
   if(state.loading&&!state.cards.length){host.innerHTML='<div class="notice">Cargando catálogo de cartas…</div>';return}
   if(state.catalog.sort==="price"){state.prices={};await ensurePrices(state.cards.map(c=>c.id),{refresh:true});}
@@ -458,7 +466,7 @@ function collectionToolbar(){
   '<div class="row" style="margin-bottom:10px"><span class="hint">Aquí solo aparecen las cartas que tienes.</span><details class="io-details"><summary>Gestionar datos</summary><div class="inline-actions" style="margin-top:8px"><button class="secondary btn" id="exportCsv">Exportar CSV</button><button class="secondary btn" id="importCsv">Importar CSV</button><input id="csvFile" type="file" class="fileinput" accept=".csv,text/csv"></div></details></div>';
 }
 
-async async function renderCollectionResults(){
+async async async function renderCollectionResults(){
   const host=$("#collectionResults");if(!host)return;
   await ensureCollectionPrices({refresh:state.collection.sort==="price"});
   updateCollectionValue();
@@ -614,7 +622,7 @@ function newDeckModal(){
 }
 function detailView(c){
   const versions=state.groups.find(g=>g.ids.includes(c.id))?.versions||[c],q=qty(c.id);
-  return '<div class="modalback"><div class="modal"><div class="sectionhead"><div><b>'+esc(c.id)+'</b><div class="small">'+esc(c.name)+'</div></div><button class="close" data-close>×</button></div><div class="detail"><div>'+cardImg(c,"cardimg detailimg")+'</div><div><h2 style="margin-top:0">'+esc(c.name)+'</h2><div class="small">'+esc(c.set)+' · '+esc(c.rarity||"—")+' · '+esc(c.category||"—")+'</div><div class="chips">'+(c.colors||[]).map(x=>'<span class="chip">'+esc(x)+'</span>').join("")+'</div><p style="white-space:pre-wrap">'+esc(c.effect||"Sin efecto disponible")+'</p><div class="small">Coste '+esc(c.cost??"—")+' · Poder '+esc(c.power??"—")+' · Counter '+esc(c.counter??"—")+'</div><div class="row" style="margin-top:10px"><b>Mi colección: '+q+'</b><b>'+(priceOf(c)!==null?money(priceOf(c)):"Precio —")+'</b></div><div class="quick"><button class="secondary" data-qty="'+esc(c.id)+'" data-d="-1">−</button><div class="qty">'+q+'</div><button class="primary" data-qty="'+esc(c.id)+'" data-d="1">+</button></div><a class="secondary btn" style="display:block;text-align:center;margin-top:8px;text-decoration:none" target="_blank" rel="noopener" href="'+esc(cardmarketUrl(c))+'">Buscar en Cardmarket ↗</a><h3>Versiones / reimpresiones</h3><div class="version-list">'+versions.map(v=>'<button class="version secondary" data-detail="'+esc(v.id)+'">'+cardImg(v,"versionImg")+'<small>'+esc(v.set)+' · '+(priceOf(v)!==null?money(priceOf(v)):"Precio —")+' · ×'+qty(v.id)+'</small></button>').join("")+'</div></div></div></div></div>';
+  return '<div class="modalback"><div class="modal"><div class="sectionhead"><div><b>'+esc(c.id)+'</b><div class="small">'+esc(c.name)+'</div></div><button class="close" data-close>×</button></div><div class="detail"><div>'+cardImg(c,"cardimg detailimg")+'</div><div><h2 style="margin-top:0">'+esc(c.name)+'</h2><div class="small">'+esc(c.set)+' · '+esc(c.rarity||"—")+' · '+esc(c.category||"—")+'</div><div class="chips">'+(c.colors||[]).map(x=>'<span class="chip">'+esc(x)+'</span>').join("")+'</div><p style="white-space:pre-wrap">'+esc(c.effect||"Sin efecto disponible")+'</p><div class="small">Coste '+esc(c.cost??"—")+' · Poder '+esc(c.power??"—")+' · Counter '+esc(c.counter??"—")+'</div><div class="row" style="margin-top:10px"><b>Mi colección: '+q+'</b><b>'+(priceOf(c)!==null?money(priceOf(c)):"Precio —")+'</b></div><div class="small" style="margin-top:5px">Precio de salida: '+(priceMeta(c)?.launchPrice!==null&&priceMeta(c)?.launchPrice!==undefined?money(priceMeta(c).launchPrice):"—")'</div><div class="quick"><button class="secondary" data-qty="'+esc(c.id)+'" data-d="-1">−</button><div class="qty">'+q+'</div><button class="primary" data-qty="'+esc(c.id)+'" data-d="1">+</button></div><a class="secondary btn" style="display:block;text-align:center;margin-top:8px;text-decoration:none" target="_blank" rel="noopener" href="'+esc(cardmarketUrl(c))+'">Buscar en Cardmarket ↗</a><h3>Versiones / reimpresiones</h3><div class="version-list">'+versions.map(v=>'<button class="version secondary" data-detail="'+esc(v.id)+'">'+cardImg(v,"versionImg")+'<small>'+esc(v.set)+' · '+(priceOf(v)!==null?money(priceOf(v)):"Precio —")+' · ×'+qty(v.id)+'</small></button>').join("")+'</div></div></div></div></div>';
 }
 function accountView(){
   return '<div class="wrap"><div class="hero"><div><h1>Cuenta</h1><p>'+(state.user?("Sesión: "+esc(state.user.email||"")):"Usa la app sin cuenta o sincroniza tu colección con Supabase.")+'</p></div></div>'+
