@@ -304,6 +304,11 @@ async function main() {
   if (!cards.length) throw new Error("Local card catalog is empty");
   if (!products.length) throw new Error("Cardmarket product catalog is empty");
   if (!prices.size) throw new Error("Cardmarket price guide is empty");
+  console.log("CM_DIAGNOSTIC", JSON.stringify({
+    productCount: products.length,
+    productSamples: products.slice(0, 5).map(p => ({idProduct:p?.idProduct,name:p?.name,categoryName:p?.categoryName,number:p?.number,expansionName:p?.expansionName})),
+    cardSamples: cards.slice(0, 5).map(c => ({id:c.id,name:c.name,set:c.set,set_name:c.set_name}))
+  }));
 
   const productIndex = buildProductIndex(products);
   const oldCards = previous?.cards || {};
