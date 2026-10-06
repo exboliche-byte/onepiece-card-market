@@ -43,7 +43,7 @@ function buildProductVersionMap(){
   }
   return map;
 }
-function number(function number(v){
+function number(v){
   if(v===null||v===undefined||v==="")return NaN;
   const n=Number(String(v).replace(",","."));return Number.isFinite(n)?n:NaN;
 }
@@ -77,7 +77,7 @@ function buildPriceIndex(){
   }
   priceIndex={exact};
 }
-export defaultexport default {
+export default {
   async fetch(request){
     try{
       const url=new URL(request.url);
