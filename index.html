@@ -133,14 +133,50 @@ function collectionStats(){
   return {distinct,copies,playsets,incomplete,distinctTotal,completePct,value};
 }
 function option(values,current){return values.map(v=>'<option value="'+esc(v)+'" '+(String(v)===String(current)?"selected":"")+'>'+esc(v)+'</option>').join("")}
-function values(key,from=state.cards){return uniqueSorted(from.flatMap(c=>Array.isArray(c[key])?c[key]:[c[key]]))}
-function setCodeKey(v){return String(v||"").toUpperCase().replace(/[_\\s]+/g,"-").replace(/--+/g,"-")}
+function valueTokens(value){
+  if(value===null||value===undefined||String(value)==="")return [];
+  if(Array.isArray(value))return value.flatMap(valueTokens);
+  if(typeof value==="object")return Object.values(value).flatMap(valueTokens);
+  return String(value).split(/\\s*(?:\\/|\\||,)\\s*/).map(v=>v.trim()).filter(Boolean);
+}
+function values(key,from=state.cards){return uniqueSorted(from.flatMap(c=>valueTokens(c[key])))}
+function setCodeKey(v){return norm(v).replace(/[^a-z0-9]+/g,"")}
 function setCodesEqual(a,b){return setCodeKey(a)===setCodeKey(b)}
 function filterValueMatches(value,selected){
-  const target=norm(selected);
+  const target=norm(selected).trim();
   if(!target||target==="todos"||target==="todas")return true;
-  const values=Array.isArray(value)?value:[value];
-  return values.some(v=>norm(v)===target);
+  return valueTokens(value).some(v=>norm(v).trim()===target);
+}
+function catalogSortValue(c,f){
+  switch(f.sort){
+    case "name":return norm(c.name);
+    case "set":return packSortKey(c.set);
+    case "rarity":return norm(c.rarity);
+    case "quantity":return qty(c.id);
+    case "price":return Number(state.prices[c.id]??Number.POSITIVE_INFINITY);
+    case "power":return Number(c.power??-1);
+    case "cost":return Number(c.cost??-1);
+    default:return String(c.id||"");
+  }
+}
+function compareSortValues(a,b,dir){
+  if(Array.isArray(a)&&Array.isArray(b)){
+    for(let i=0;i<Math.max(a.length,b.length);i++){
+      const d=compareSortValues(a[i]??"",b[i]??"",1);
+      if(d)return d*dir;
+    }
+    return 0;
+  }
+  if(typeof a==="number"&&typeof b==="number"){
+    if(a===b)return 0;
+    return (a-b)*dir;
+  }
+  return String(a??"").localeCompare(String(b??""),"es",{numeric:true,sensitivity:"base"})*dir;
+}
+function compareCatalogCards(a,b,f){
+  const dir=f.dir==="desc"?-1:1;
+  const d=compareSortValues(catalogSortValue(a,f),catalogSortValue(b,f),dir);
+  return d||String(a.id||"").localeCompare(String(b.id||""),"es",{numeric:true,sensitivity:"base"})*dir;
 }
 function filteredCards(mode){
   const f=state[mode];
@@ -174,22 +210,7 @@ function filteredCards(mode){
   }
   if(mode==="album")list=list.filter(c=>qty(c.id)>0);
   if(mode==="album"&&f.ownership==="Me faltan")list=list.filter(c=>qty(c.id)<PLAYSET);
-  const dir=f.dir==="desc"?-1:1,p=c=>Number(state.prices[c.id]||0);
-  const cmp=(av,bv)=>{
-    if(typeof av==="number"&&typeof bv==="number")return av-bv;
-    return String(av??"").localeCompare(String(bv??""),"es",{numeric:true,sensitivity:"base"});
-  };
-  list.sort((a,b)=>{
-    if(f.sort==="set"){
-      const av=packSortKey(a.set),bv=packSortKey(b.set);
-      for(let i=0;i<av.length;i++){const d=cmp(av[i],bv[i]);if(d)return d*dir}
-      return String(a.id).localeCompare(String(b.id),"es",{numeric:true})*dir;
-    }
-    let av,bv;
-    switch(f.sort){case"name":av=norm(a.name);bv=norm(b.name);break;case"rarity":av=norm(a.rarity);bv=norm(b.rarity);break;case"quantity":av=qty(a.id);bv=qty(b.id);break;case"price":av=p(a);bv=p(b);break;case"power":av=Number(a.power??-1);bv=Number(b.power??-1);break;case"cost":av=Number(a.cost??-1);bv=Number(b.cost??-1);break;default:av=a.id;bv=b.id}
-    const d=cmp(av,bv);
-    return d?d*dir:String(a.id).localeCompare(String(b.id),"es",{numeric:true})*dir;
-  });
+  list.sort((a,b)=>compareCatalogCards(a,b,f));
   return list;
 }
 function groupFiltered(){
@@ -197,8 +218,16 @@ function groupFiltered(){
   state.catalog.grouped=true;
   if(!state.catalog.grouped)return arr.map(c=>({key:c.id,card:c,versions:[c],sets:[c.set]}));
   const by=new Map();
-  for(const c of arr){const k=groupKey(c);if(!by.has(k))by.set(k,{key:k,card:c,versions:[],sets:[]});const g=by.get(k);g.versions.push(c);if(!g.sets.includes(c.set))g.sets.push(c.set)}
-  return [...by.values()];
+  for(const c of arr){
+    const k=groupKey(c);
+    if(!by.has(k))by.set(k,{key:k,card:c,versions:[],sets:[]});
+    const g=by.get(k);
+    g.versions.push(c);
+    if(!g.sets.includes(c.set))g.sets.push(c.set);
+  }
+  const groups=[...by.values()];
+  groups.sort((a,b)=>compareCatalogCards(a.card,b.card,state.catalog));
+  return groups;
 }
 async function ensurePrices(ids){
   const wanted=[...new Set(ids.filter(id=>state.prices[id]===undefined))];
@@ -543,8 +572,13 @@ function bindShell(){
     bindSearch("#catalogSearch",v=>{state.catalog.query=v;state.query=v;state.catalog.page=1;renderCatalogResults()});
     const applyCatalog=()=>{
       const map={catSet:"set",catCategory:"category",catColor:"color",catRarity:"rarity",catType:"type",catAttribute:"attribute",catMinCost:"minCost",catMaxCost:"maxCost",catMinPower:"minPower",catMaxPower:"maxPower",catOwnership:"ownership",catSort:"sort",catDir:"dir"};
-      Object.entries(map).forEach(([id,k])=>{const el=$(id);if(el)state.catalog[k]=el.value});
-      state.catalog.page=1;renderCatalogResults();notify("Filtros y orden aplicados");
+      Object.entries(map).forEach(([id,k])=>{
+        const el=document.getElementById(id);
+        if(el)state.catalog[k]=typeof el.value==="string"?el.value.trim():el.value;
+      });
+      state.catalog.page=1;
+      renderCatalogResults();
+      notify("Filtros y orden aplicados");
     };
     $("#applyCatalogFilters")?.addEventListener("click",applyCatalog);
     $("#applyCatalogFilters2")?.addEventListener("click",applyCatalog);
