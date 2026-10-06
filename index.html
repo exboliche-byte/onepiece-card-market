@@ -27,7 +27,7 @@ const state={
   catalog:{category:"Todos",color:"Todos",rarity:"Todos",type:"Todos",attribute:"Todos",ownership:"Todas",sort:"id",dir:"asc",page:1,grouped:false,minCost:"",maxCost:"",minPower:"",maxPower:"",query:"",filtersOpen:false},
   owned:{},collection:{query:"",set:"Todas",category:"Todos",color:"Todos",rarity:"Todos",type:"Todos",attribute:"Todos",quantity:"Todas",playset:"Todas",sort:"id",dir:"asc",page:1,filtersOpen:false},
   album:{set:"",query:"",ownership:"Todas",sort:"id",dir:"asc",page:1},
-  deckQuery:"",deckPage:1,auth:false,toast:"",loading:true
+  deckQuery:"",deckPage:1,deckFilters:{category:"Todos",color:"Todos",rarity:"Todos",filtersOpen:false},auth:false,toast:"",loading:true
 };
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??"").replace(/[&<>'"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[c]));
@@ -306,18 +306,42 @@ function homeView(){
     '<div class="section"><div class="sectionhead"><h2>Progreso por expansión</h2><button class="secondary btn" data-tab="album">Abrir álbum</button></div><div class="setgrid">'+ex.map(p=>'<button class="setcard" data-open-set="'+esc(p.code)+'"><div class="settop"><b>'+esc(p.code)+'</b><span>'+p.owned+'/'+p.total+'</span></div><strong>'+esc(p.name||p.code)+'</strong><div class="progress" style="margin:9px 0"><i style="width:'+p.pct+'%"></i></div><div class="small">'+p.pct.toFixed(1)+'% · '+p.playsets+' playsets · '+money(p.value)+'</div></button>').join("")+'</div></div>'+
     '<div class="section"><h2>Herramientas</h2><div class="inline-actions"><button class="primary btn" data-tab="catalog">Buscar cartas</button><button class="secondary btn" data-tab="collection">Gestionar colección</button><button class="secondary btn" data-tab="decks">Construir mazo</button></div></div></div>';
 }
+function deckActiveFilterCount(){
+  const f=state.deckFilters;let n=0;
+  if(f.category!=="Todos")n++;
+  if(f.color!=="Todos")n++;
+  if(f.rarity!=="Todos")n++;
+  return n;
+}
+function deckFilterPanel(){
+  const f=state.deckFilters;
+  if(!f.filtersOpen)return "";
+  return '<div class="filter-panel" id="deckFilterPanel">'+
+    '<div class="filter-heading"><h3>Filtros del catálogo del mazo</h3><button class="secondary btn" id="clearDeckFilters" type="button">Limpiar filtros</button></div>'+
+    '<div class="filter-grid">'+
+      filterLabel("Categoría",'<select id="deckCat" class="field"><option value="Todos" '+(f.category==="Todos"?"selected":"")+'>Todas</option>'+option(values("category"),f.category)+'</select>')+
+      filterLabel("Color",'<select id="deckColor" class="field"><option value="Todos" '+(f.color==="Todos"?"selected":"")+'>Todos</option>'+option(values("colors"),f.color)+'</select>')+
+      filterLabel("Rareza",'<select id="deckRarity" class="field"><option value="Todos" '+(f.rarity==="Todos"?"selected":"")+'>Todas</option>'+option(values("rarity"),f.rarity)+'</select>')+
+    '</div>'+
+    '<div class="filter-actions"><span class="active-filters-note">'+deckActiveFilterCount().toLocaleString("es-ES")+' filtro(s) activo(s)</span><button class="secondary btn" id="closeDeckFilters" type="button">Cerrar filtros</button></div>'+
+  '</div>';
+}
 function decksView(){
   const d=state.decks.find(x=>x.id===state.deckId)||state.decks[0];
   if(!d)return '<div class="wrap"><div class="hero"><div><h1>Mazos</h1><p>Constructor visual con imágenes y control de cartas disponibles.</p></div><button class="primary btn" id="newDeck">Nuevo mazo</button></div><div class="section center"><h2>Aún no tienes mazos</h2><button class="primary btn" id="newDeck2">Crear mi primer mazo</button></div></div>';
   state.deckId=d.id;
-  const v=deckValidate(d),missingCost=deckMissingCost(d);
+  const v=deckValidate(d),missingCost=deckMissingCost(d),n=deckActiveFilterCount();
   return '<div class="wrap"><div class="hero"><div><h1>Mazos</h1><p>'+esc(d.name)+'</p></div><div class="inline-actions"><button class="secondary btn" id="shareDeck">Compartir</button><button class="primary btn" id="newDeck">Nuevo</button></div></div>'+
-    '<div class="deckbuilder"><div><div class="section"><div class="toolbar"><input id="deckSearch" class="field" inputmode="search" autocomplete="off" placeholder="Busca por nombre, ID, personaje, tipo..."><select id="deckCat" class="field"><option>Todos</option>'+option(values("category"),"Todos")+'</select><select id="deckColor" class="field"><option>Todos</option>'+option(values("colors"),"Todos")+'</select><select id="deckRarity" class="field"><option>Todos</option>'+option(values("rarity"),"Todos")+'</select></div><div id="deckResults"></div></div></div>'+
+    '<div class="deckbuilder"><div><div class="section">'+
+      '<div class="catalog-controls"><input id="deckSearch" class="field" inputmode="search" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="search" aria-label="Buscar cartas para el mazo" placeholder="🔎 Buscar cartas por nombre, ID o personaje..." value="'+esc(state.deckQuery)+'"><button class="secondary btn filter-toggle" id="deckFilterToggle" type="button" aria-expanded="'+(state.deckFilters.filtersOpen?"true":"false")+'">🔽 FILTRO'+(n?' ('+n+')':'')+'</button></div>'+
+      deckFilterPanel()+
+      '<div id="deckResults"></div></div></div>'+
     '<div><div class="section"><div class="sectionhead"><div><h2>'+esc(d.name)+'</h2><div class="small">Líder: '+esc(d.leader||"Sin líder")+'</div></div><button class="danger btn" id="deleteDeck">Eliminar</button></div>'+
     '<div class="stats"><div class="stat"><b>'+v.total+'/50</b><span>Cartas no líder</span></div><div class="stat"><b>'+(!d.leader?"NO":"Sí")+'</b><span>Líder</span></div><div class="stat"><b>'+v.illegal+'</b><span>ilegales</span></div><div class="stat"><b>'+money(missingCost)+'</b><span>Coste faltantes</span></div></div>'+
     '<div class="validation '+(v.valid?"ok":"bad")+'"><b>'+ (v.valid?"✓ Mazo válido":"⚠ Mazo no válido")+'</b><div class="small">'+esc(v.messages.join(" · ")||"Cumple reglas básicas.")+'</div></div>'+
     '<div class="list" id="deckRows">'+deckRows(d)+'</div></div></div></div></div>';
 }
+
 function deckRows(d){
   return Object.entries(d.cards||{}).map(([id,n])=>{const c=card(id);if(!c)return "";const have=qty(id),need=Math.max(0,Number(n)-have);return '<div class="listrow"><div style="width:52px">'+cardImg(c,"thumb")+'</div><div class="grow"><b>'+esc(c.id)+' · '+esc(c.name)+'</b><div class="small">'+have+' en colección · '+(need?"faltan "+need:"completa")+' · '+Number(n)+' en mazo</div></div><button class="secondary btn" data-deckqty="'+esc(id)+'" data-d="-1">−</button><b>'+n+'</b><button class="primary btn" data-deckqty="'+esc(id)+'" data-d="1">+</button></div>'}).join("")||'<div class="notice">Mazo vacío.</div>';
 }
@@ -336,7 +360,7 @@ function deckValidate(d){
 function deckMissingCost(d){let x=0;for(const [id,n] of Object.entries(d.cards||{}))x+=Math.max(0,Number(n)-qty(id))*Number(state.prices[id]||0);return x}
 function renderDeckResults(){
   const host=$("#deckResults");if(!host)return;
-  const q=norm(state.deckQuery),f={category:$("#deckCat")?.value||"Todos",color:$("#deckColor")?.value||"Todos",rarity:$("#deckRarity")?.value||"Todos"};
+  const q=norm(state.deckQuery),f=state.deckFilters;
   let list=state.cards.filter(c=>(!q||c.search.includes(q))&&(f.category==="Todos"||c.category===f.category)&&(f.color==="Todos"||(c.colors||[]).includes(f.color))&&(f.rarity==="Todos"||c.rarity===f.rarity));
   const page=Math.max(1,state.deckPage),start=(page-1)*30,vis=list.slice(start,start+30);
   host.innerHTML='<div class="notice">'+list.length.toLocaleString("es-ES")+' resultados. Pulsa + en la carta que quieras añadir.</div><div class="grid">'+vis.map(c=>{
@@ -448,7 +472,11 @@ function bindShell(){
     $("#deleteDeck")?.addEventListener("click",()=>{if(confirm("¿Eliminar este mazo?")){const id=state.deckId;state.decks=state.decks.filter(x=>x.id!==id);state.deckId=state.decks[0]?.id||null;saveLocal();syncDeckDelete(id);renderShell()}});
     $("#shareDeck")?.addEventListener("click",()=>shareDeck());
     bindSearch("#deckSearch",v=>{state.deckQuery=v;state.deckPage=1;renderDeckResults()});
-    ["deckCat","deckColor","deckRarity"].forEach(id=>$(id)?.addEventListener("change",()=>{state.deckPage=1;renderDeckResults()}));
+    const map={deckCat:"category",deckColor:"color",deckRarity:"rarity"};
+    Object.entries(map).forEach(([id,k])=>$(id)?.addEventListener("change",()=>{state.deckFilters[k]=$(id).value;state.deckPage=1;renderDeckResults()}));
+    $("#deckFilterToggle")?.addEventListener("click",()=>{state.deckFilters.filtersOpen=!state.deckFilters.filtersOpen;renderShell()});
+    $("#closeDeckFilters")?.addEventListener("click",()=>{state.deckFilters.filtersOpen=false;renderShell()});
+    $("#clearDeckFilters")?.addEventListener("click",()=>{Object.assign(state.deckFilters,{category:"Todos",color:"Todos",rarity:"Todos"});state.deckPage=1;renderShell()});
   }
   if(state.tab==="account"){bindAccount()}
   if(state.detail&&!state.detail.shareUrl){
