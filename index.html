@@ -51,8 +51,10 @@ function groupKey(c){
 }
 function uniqueSorted(arr){return [...new Set(arr.filter(v=>v!==null&&v!==undefined&&String(v)!==""))].sort((a,b)=>String(a).localeCompare(String(b),"es"))}
 function packSortKey(code){
-  const s=String(code||"").toUpperCase().replace(/\s+/g,"");
-  const m=s.match(/^(OP|ST|EB|PRB|P|DON|PROMO)[-_]?(\d+)/);
+  const s=String(code||"").toUpperCase().replace(/\\s+/g,"");
+  const embedded=s.match(/^OP\\d+-EB(\\d+)/);
+  if(embedded)return [2,Number(embedded[1]),"EB",s];
+  const m=s.match(/^(OP|ST|EB|PRB|P|DON|PROMO)[-_]?(\\d+)/);
   const rank={OP:1,EB:2,ST:3,PRB:4,P:5,PROMO:6,DON:7};
   if(m)return [rank[m[1]]||99,Number(m[2]),m[1],s];
   return [99,9999,s,s];
