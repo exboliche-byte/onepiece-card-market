@@ -88,7 +88,7 @@ function expansionList(){
   let list=state.packs.map(p=>{
     const cards=state.cards.filter(c=>c.set===p.code);
     const owned=cards.filter(c=>qty(c.id)>0);
-    const value=owned.reduce((sum,c)=>sum+qty(c.id)*Number(state.prices[c.id]||0),0);
+    const value=owned.reduce((sum,c)=>sum+qty(c.id)*(priceOf(c)??0),0);
     return {...p,total:cards.length,owned:owned.length,pct:cards.length?owned.length/cards.length*100:0,playsets:cards.filter(c=>qty(c.id)>=PLAYSET).length,value};
   });
   const q=norm(f.query);
@@ -132,7 +132,7 @@ function collectionStats(){
   const distinctTotal=state.cards.length;
   const completePct=distinctTotal?distinct/distinctTotal*100:0;
   let value=0;
-  for(const c of state.cards)value+=qty(c.id)*Number(state.prices[c.id]||0);
+  for(const c of state.cards)value+=qty(c.id)*(priceOf(c)??0);
   return {distinct,copies,playsets,incomplete,distinctTotal,completePct,value};
 }
 function option(values,current){return values.map(v=>'<option value="'+esc(v)+'" '+(String(v)===String(current)?"selected":"")+'>'+esc(v)+'</option>').join("")}
@@ -251,12 +251,12 @@ async function ensurePrices(ids){
 }
 function loadCachedPrices(){try{const d=JSON.parse(localStorage.getItem("mialbumonepiece_prices")||"null");if(d?.prices)state.prices=d.prices;state.priceDate=d?.updatedAt||null}catch{}}
 function cardTile(c,extra=""){
-  const q=qty(c.id);const p=state.prices[c.id];
+  const q=qty(c.id);const p=priceOf(c);
   return '<article class="card">'+(q?'<span class="tag">×'+q+'</span>':'<span class="tag missing">0/4</span>')+
     '<button class="linkbtn" data-detail="'+esc(c.id)+'" style="display:block;width:100%;padding:0">'+cardImg(c,"cardimg catalogthumb")+'</button>'+
     '<div class="cardbody"><div class="name">'+esc(c.name)+'</div><div class="small">'+esc(c.id)+' · '+esc(c.set)+' · '+esc(c.rarity||"—")+'</div>'+
     '<div class="chips">'+(c.colors||[]).map(x=>'<span class="chip">'+esc(x)+'</span>').join("")+'</div>'+
-    '<div class="row"><span>'+ (p!==undefined?money(p):"Precio —")+'</span><span class="small">'+q+'/4</span></div>'+
+    '<div class="row"><span>'+ (p!==null?money(p):"Precio —")+'</span><span class="small">'+q+'/4</span></div>'+
     '<div class="quick"><button class="secondary" data-qty="'+esc(c.id)+'" data-d="-1">−</button><div class="qty">'+q+'</div><button class="primary" data-qty="'+esc(c.id)+'" data-d="1">+</button></div>'+
     extra+'</div></article>';
 }
@@ -428,7 +428,7 @@ function renderAlbumResults(){
   ensurePrices(visible.map(c=>c.id));
 }
 function expansionStats(){
-  return state.packs.slice().sort(comparePacks).map(p=>{const list=state.cards.filter(c=>c.set===p.code),owned=list.filter(c=>qty(c.id)>0),value=owned.reduce((s,c)=>s+qty(c.id)*Number(state.prices[c.id]||0),0),missingCost=list.reduce((s,c)=>s+Math.max(0,4-qty(c.id))*Number(state.prices[c.id]||0),0);return {...p,total:list.length,owned:owned.length,pct:list.length?owned.length/list.length*100:0,playsets:list.filter(c=>qty(c.id)>=4).length,value,missingCost}})
+  return state.packs.slice().sort(comparePacks).map(p=>{const list=state.cards.filter(c=>c.set===p.code),owned=list.filter(c=>qty(c.id)>0),value=owned.reduce((s,c)=>s+qty(c.id)*(priceOf(c)??0),0),missingCost=list.reduce((s,c)=>s+Math.max(0,4-qty(c.id))*(priceOf(c)??0),0);return {...p,total:list.length,owned:owned.length,pct:list.length?owned.length/list.length*100:0,playsets:list.filter(c=>qty(c.id)>=4).length,value,missingCost}})
 }
 function homeView(){
   const s=collectionStats(), ex=expansionStats().slice(0,6);
@@ -498,7 +498,7 @@ function renderDeckResults(){
     const qd=Number(state.decks.find(d=>d.id===state.deckId)?.cards?.[c.id]||0);
     return '<article class="card">'+cardImg(c)+'<div class="cardbody"><div class="name">'+esc(c.name)+'</div><div class="small">'+esc(c.id)+' · tienes '+qty(c.id)+' · mazo '+qd+'</div><div class="chips">'+(c.colors||[]).map(x=>'<span class="chip">'+esc(x)+'</span>').join("")+'</div><div class="row"><span class="small">Coste '+esc(c.cost??"—")+' · '+esc(c.power??"—")+'</span><button class="primary btn" data-adddeck="'+esc(c.id)+'">+</button></div></div></article>';
   }).join("")+'</div>'+pagination(list.length,page,"deck");
-  bindResultEvents(host);vis.forEach(c=>{if(state.prices[c.id]===undefined)ensurePrices([c.id])});
+  bindResultEvents(host);vis.forEach(c=>{if(priceOf(c)===null)ensurePrices([c.id])});
 }
 function createDeck(){
   const name=prompt("Nombre del mazo","Nuevo mazo");if(!name)return;
@@ -532,7 +532,7 @@ function newDeckModal(){
 }
 function detailView(c){
   const versions=state.groups.find(g=>g.ids.includes(c.id))?.versions||[c],q=qty(c.id);
-  return '<div class="modalback"><div class="modal"><div class="sectionhead"><div><b>'+esc(c.id)+'</b><div class="small">'+esc(c.name)+'</div></div><button class="close" data-close>×</button></div><div class="detail"><div>'+cardImg(c,"cardimg detailimg")+'</div><div><h2 style="margin-top:0">'+esc(c.name)+'</h2><div class="small">'+esc(c.set)+' · '+esc(c.rarity||"—")+' · '+esc(c.category||"—")+'</div><div class="chips">'+(c.colors||[]).map(x=>'<span class="chip">'+esc(x)+'</span>').join("")+'</div><p style="white-space:pre-wrap">'+esc(c.effect||"Sin efecto disponible")+'</p><div class="small">Coste '+esc(c.cost??"—")+' · Poder '+esc(c.power??"—")+' · Counter '+esc(c.counter??"—")+'</div><div class="row" style="margin-top:10px"><b>Mi colección: '+q+'</b><b>'+(state.prices[c.id]!==undefined?money(state.prices[c.id]):"Precio —")+'</b></div><div class="quick"><button class="secondary" data-qty="'+esc(c.id)+'" data-d="-1">−</button><div class="qty">'+q+'</div><button class="primary" data-qty="'+esc(c.id)+'" data-d="1">+</button></div><a class="secondary btn" style="display:block;text-align:center;margin-top:8px;text-decoration:none" target="_blank" rel="noopener" href="https://www.cardmarket.com/es/OnePiece/Products/Singles?mode=list&searchString='+encodeURIComponent(c.id)+'">Buscar en Cardmarket ↗</a><h3>Versiones / reimpresiones</h3><div class="version-list">'+versions.map(v=>'<button class="version secondary" data-detail="'+esc(v.id)+'">'+cardImg(v,"versionImg")+'<small>'+esc(v.set)+' · ×'+qty(v.id)+'</small></button>').join("")+'</div></div></div></div></div>';
+  return '<div class="modalback"><div class="modal"><div class="sectionhead"><div><b>'+esc(c.id)+'</b><div class="small">'+esc(c.name)+'</div></div><button class="close" data-close>×</button></div><div class="detail"><div>'+cardImg(c,"cardimg detailimg")+'</div><div><h2 style="margin-top:0">'+esc(c.name)+'</h2><div class="small">'+esc(c.set)+' · '+esc(c.rarity||"—")+' · '+esc(c.category||"—")+'</div><div class="chips">'+(c.colors||[]).map(x=>'<span class="chip">'+esc(x)+'</span>').join("")+'</div><p style="white-space:pre-wrap">'+esc(c.effect||"Sin efecto disponible")+'</p><div class="small">Coste '+esc(c.cost??"—")+' · Poder '+esc(c.power??"—")+' · Counter '+esc(c.counter??"—")+'</div><div class="row" style="margin-top:10px"><b>Mi colección: '+q+'</b><b>'+(priceOf(c)!==null?money(priceOf(c)):"Precio —")+'</b></div><div class="quick"><button class="secondary" data-qty="'+esc(c.id)+'" data-d="-1">−</button><div class="qty">'+q+'</div><button class="primary" data-qty="'+esc(c.id)+'" data-d="1">+</button></div><a class="secondary btn" style="display:block;text-align:center;margin-top:8px;text-decoration:none" target="_blank" rel="noopener" href="https://www.cardmarket.com/es/OnePiece/Products/Singles?mode=list&searchString='+encodeURIComponent(c.id)+'">Buscar en Cardmarket ↗</a><h3>Versiones / reimpresiones</h3><div class="version-list">'+versions.map(v=>'<button class="version secondary" data-detail="'+esc(v.id)+'">'+cardImg(v,"versionImg")+'<small>'+esc(v.set)+' · ×'+qty(v.id)+'</small></button>').join("")+'</div></div></div></div></div>';
 }
 function accountView(){
   return '<div class="wrap"><div class="hero"><div><h1>Cuenta</h1><p>'+(state.user?("Sesión: "+esc(state.user.email||"")):"Usa la app sin cuenta o sincroniza tu colección con Supabase.")+'</p></div></div>'+
