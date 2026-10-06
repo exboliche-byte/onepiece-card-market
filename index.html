@@ -260,44 +260,67 @@ function cmpPrice(a,b){
   const d=Number(a)-Number(b);
   return d*(state.catalog.dir==="desc"?-1:1);
 }
-function priceOf(c){
-  const raw=state.prices[c?.id]??state.prices[norm(c?.id)];
-  const n=Number(raw);
-  return Number.isFinite(n)?n:null;
-}
-function mergePrices(prices){
-  for(const [id,value] of Object.entries(prices||{})){
-    const n=Number(value);
-    if(!Number.isFinite(n))continue;
-    state.prices[id]=n;
-    state.prices[norm(id)]=n;
+let priceDatasetPromise=null;
+const PRICE_CACHE_VERSION=4;
+const MARKET_DATA_URL="/data/cardmarket-prices.json";
+function priceOf(c){const raw=state.prices[c?.id]??state.prices[norm(c?.id)];const n=Number(raw);return Number.isFinite(n)?n:null}
+function mergePriceDataset(d){
+  state.prices={};state.collectionPrices={};state.marketMeta={};state.priceDate=d?.updatedAt||null;
+  for(const [id,entry] of Object.entries(d?.cards||{})){
+    const n=Number(entry?.eur);if(!Number.isFinite(n))continue;
+    state.prices[id]=n;state.prices[norm(id)]=n;state.collectionPrices[id]=n;state.collectionPrices[norm(id)]=n;
+    const meta={url:String(entry?.url||""),cardmarketId:entry?.cardmarketId||null,version:Number(entry?.version||1),sourceUrl:String(entry?.sourceUrl||"")};
+    state.marketMeta[id]=meta;state.marketMeta[norm(id)]=meta;
   }
 }
-async function ensurePrices(ids,{refresh=false}={}){
-  const wanted=[...new Set(ids.filter(id=>refresh||priceOf({id})===null))];
-  if(!wanted.length)return;
-  for(let i=0;i<wanted.length;i+=600){
-    const chunk=wanted.slice(i,i+600);
+async function loadMarketPrices({refresh=false}={}){
+  if(!refresh&&priceDatasetPromise)return priceDatasetPromise;
+  priceDatasetPromise=(async()=>{
     try{
-      const d=await fetchJson("/api/cardmarket?ids="+encodeURIComponent(chunk.join(",")),30000);
-      mergePrices(d.prices||{});
-      state.priceDate=d.updatedAt||state.priceDate;
-    }catch{}
-  }
-  localStorage.setItem("mialbumonepiece_prices",JSON.stringify({version:PRICE_CACHE_VERSION,prices:state.prices,updatedAt:state.priceDate}));
+      const d=await fetchJson(MARKET_DATA_URL+"?v="+Date.now(),30000);
+      if(!d?.cards||d?.schemaVersion===undefined)throw Error("Invalid Cardmarket dataset");
+      mergePriceDataset(d);
+      localStorage.setItem("mialbumonepiece_prices",JSON.stringify({version:PRICE_CACHE_VERSION,prices:state.prices,meta:state.marketMeta,updatedAt:state.priceDate}));
+      return d;
+    }catch(error){
+      try{
+        const cached=JSON.parse(localStorage.getItem("mialbumonepiece_prices")||"null");
+        if(cached?.version===PRICE_CACHE_VERSION&&cached?.prices){
+          state.prices=cached.prices||{};state.collectionPrices=cached.prices||{};state.marketMeta=cached.meta||{};state.priceDate=cached.updatedAt||null;return cached;
+        }
+      }catch{}
+      throw error;
+    }
+  })().catch(error=>{priceDatasetPromise=null;throw error});
+  return priceDatasetPromise;
 }
-const PRICE_CACHE_VERSION=3;
+async function ensurePrices(){await loadMarketPrices()}
 function loadCachedPrices(){
   try{
     const d=JSON.parse(localStorage.getItem("mialbumonepiece_prices")||"null");
-    if(d?.version===PRICE_CACHE_VERSION&&d?.prices)state.prices=d.prices;
-    else localStorage.removeItem("mialbumonepiece_prices");
-    localStorage.removeItem("mialbumonepiece_collection_prices");
-    state.priceDate=d?.updatedAt||null;
-  }catch{
-    localStorage.removeItem("mialbumonepiece_prices");
-    localStorage.removeItem("mialbumonepiece_collection_prices");
-  }
+    if(d?.version===PRICE_CACHE_VERSION&&d?.prices){
+      state.prices=d.prices||{};state.collectionPrices=d.prices||{};state.marketMeta=d.meta||{};state.priceDate=d.updatedAt||null;
+    }else localStorage.removeItem("mialbumonepiece_prices");
+  }catch{localStorage.removeItem("mialbumonepiece_prices")}
+}
+function collectionPriceOf(c){return priceOf(c)}
+async function ensureCollectionPrices({refresh=false}={}){await loadMarketPrices({refresh})}
+const COLLECTION_PRICE_CACHE_VERSION=PRICE_CACHE_VERSION;
+function loadCachedCollectionPrices(){}
+function cardmarketVersionLabel(c){
+  const meta=state.marketMeta[c?.id]||state.marketMeta[norm(c?.id)];
+  if(Number.isFinite(Number(meta?.version)))return "(V."+Number(meta.version)+")";
+  const m=String(c?.id||"").match(/_(?:p|r|c)(\d+)$/i);
+  return m?"(V."+(Number(m[1])+1)+")":"(V.1)";
+}
+function cardmarketUrl(c){
+  const meta=state.marketMeta[c?.id]||state.marketMeta[norm(c?.id)];
+  if(meta?.url)return meta.url;
+  const version=Number(meta?.version)||Number(cardmarketVersionLabel(c).match(/\d+/)?.[0]||1);
+  const set=String(c?.set_name||c?.set||"").trim();
+  const name=String(c?.name||"").trim().replace(/[^\w. -]+/g," ").trim().replace(/\s+/g,"-");
+  const id=String(c?.id||"").trim().replace(/_(?:p|r|c)\d+$/i,"");
+  return "https://www.cardmarket.com/es/OnePiece/Products/Singles/"+encodeURIComponent(set.replace(/\s+/g,"-"))+"/"+name+"-"+id+"-V"+version;
 }
 function cardTile(c,extra=""){
   const q=qty(c.id);const p=priceOf(c);
@@ -805,7 +828,7 @@ async function loadCatalogData(){
 }
 async function boot(){
   loadLocal();loadCachedPrices();renderShell();
-  try{const data=await loadCatalogData();prepareCatalog(data.cards,data.packs);state.loading=false;renderShell();await loadShared();if(state.shared)renderShell();ensurePrices(state.cards.filter(c=>qty(c.id)>0).map(c=>c.id));}catch(e){$("#app").innerHTML='<div class="wrap"><div class="hero"><div><h1>MiAlbumOnePiece</h1><p>No se pudo cargar el catálogo.</p></div></div><div class="section"><div class="notice">Error cargando datos: '+esc(e.message||"desconocido")+'</div><button class="primary btn" onclick="location.reload()">Reintentar</button></div></div>'}
+  try{const data=await loadCatalogData();prepareCatalog(data.cards,data.packs);state.loading=false;try{await loadMarketPrices()}catch{}await loadShared();renderShell();}catch(e){$("#app").innerHTML='<div class="wrap"><div class="hero"><div><h1>MiAlbumOnePiece</h1><p>No se pudo cargar el catálogo.</p></div></div><div class="section"><div class="notice">Error cargando datos: '+esc(e.message||"desconocido")+'</div><button class="primary btn" onclick="location.reload()">Reintentar</button></div></div>'}
   initSupabase();
 }boot();
 </script>
