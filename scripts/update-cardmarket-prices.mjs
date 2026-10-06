@@ -100,13 +100,13 @@ function extractCardCode(text) {
   return m ? m[1] + "-" + m[2] : null;
 }
 
-function expansionMatches(setCode, expansionName) {
-  const wanted = CARDMARKET_SET_NAMES[setCode] || [];
+function expansionMatches(setCode, expansionName, localSetName = "") {
+  const wanted = [...(CARDMARKET_SET_NAMES[setCode] || []), localSetName];
   const target = norm(expansionName);
   if (!target) return false;
   return wanted.some(name => {
     const candidate = norm(name);
-    return candidate === target || candidate.includes(target) || target.includes(candidate);
+    return candidate && (candidate === target || candidate.includes(target) || target.includes(candidate));
   });
 }
 
@@ -200,24 +200,36 @@ function chooseProduct(card, productsBySetAndNumber) {
   const cardCode = extractCardCode(base);
   const cardSet = String(card.set || "").toUpperCase();
   const number = numberPart(base);
+  const desiredVersion = localVersion(card.id);
 
   const pool = [];
   for (const product of productsBySetAndNumber) {
+    if (!product?.idProduct) continue;
     const code = extractCardCode(product?.name);
-    if (code && cardCode && code !== cardCode) continue;
-    if (!code && number) {
-      const pNumber = String(product?.number ?? "").trim().replace(/^0+/, "");
-      const cNumber = number.replace(/^0+/, "");
-      if (pNumber !== cNumber) continue;
+    if (code && cardCode) {
+      if (code !== cardCode) continue;
+    } else {
+      if (number) {
+        const pNumber = String(product.number ?? "").trim().replace(/^0+/, "");
+        const cNumber = number.replace(/^0+/, "");
+        if (pNumber !== cNumber) continue;
+      }
+      if (!expansionMatches(cardSet, product?.expansionName, card?.set_name)) continue;
     }
-    if (!expansionMatches(cardSet, product?.expansionName)) continue;
     const score = candidateScore(card, product);
-    if (score > 0) pool.push({product, score});
+    if (score > 0) pool.push({product, score, explicitVersion: /\(\s*V\.?\s*\d+\s*\)/i.test(String(product.name || ""))});
   }
-  pool.sort((a, b) => b.score - a.score || Number(a.product.idProduct) - Number(b.product.idProduct));
-  return pool[0]?.product || null;
-}
 
+  pool.sort((a, b) => b.score - a.score || Number(a.product.idProduct) - Number(b.product.idProduct));
+  if (!pool.length) return null;
+
+  const explicitVersions = pool.some(x => x.explicitVersion);
+  if (explicitVersions) {
+    return pool.find(x => productVersion(x.product.name) === desiredVersion)?.product || pool[0].product;
+  }
+
+  return pool[Math.min(desiredVersion - 1, pool.length - 1)].product;
+}
 function buildProductIndex(products) {
   const groups = new Map();
   for (const product of products) {
@@ -242,20 +254,21 @@ function allProductsForCard(card, products) {
   const number = numberPart(base);
   for (const product of products) {
     if (!product?.idProduct) continue;
-    if (!expansionMatches(String(card.set || "").toUpperCase(), product.expansionName, card?.set_name)) continue;
     const pCode = extractCardCode(product.name);
     if (pCode && code) {
       if (pCode !== code) continue;
-    } else if (number) {
-      const pNumber = String(product.number ?? "").trim().replace(/^0+/, "");
-      if (pNumber !== number.replace(/^0+/, "")) continue;
+    } else {
+      if (!expansionMatches(String(card.set || "").toUpperCase(), product.expansionName, card?.set_name)) continue;
+      if (number) {
+        const pNumber = String(product.number ?? "").trim().replace(/^0+/, "");
+        if (pNumber !== number.replace(/^0+/, "")) continue;
+      }
     }
     if (cardNameMatches(card, product) <= 0 && !pCode) continue;
     out.push(product);
   }
   return out;
 }
-
 function normalizeCardCatalog(parsed) {
   const values = Array.isArray(parsed) ? parsed : Object.values(parsed || {});
   return values.map(card => ({
@@ -306,8 +319,8 @@ async function main() {
   if (!prices.size) throw new Error("Cardmarket price guide is empty");
   console.log("CM_DIAGNOSTIC", JSON.stringify({
     productCount: products.length,
-    productSamples: products.slice(0, 5).map(p => ({idProduct:p?.idProduct,name:p?.name,categoryName:p?.categoryName,number:p?.number,expansionName:p?.expansionName})),
-    cardSamples: cards.slice(0, 5).map(c => ({id:c.id,name:c.name,set:c.set,set_name:c.set_name}))
+    zoroProducts: products.filter(p => /Roronoa Zoro \(OP01-001\)/i.test(String(p?.name || ""))).slice(0, 10).map(p => ({idProduct:p?.idProduct,name:p?.name,number:p?.number,expansionName:p?.expansionName,keys:Object.keys(p || {})})),
+    zoroCards: cards.filter(c => c.set === "OP-01" && /^Roronoa Zoro$/i.test(String(c.name || ""))).slice(0, 10).map(c => ({id:c.id,name:c.name,set:c.set,set_name:c.set_name}))
   }));
 
   const productIndex = buildProductIndex(products);
