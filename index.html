@@ -357,7 +357,7 @@ function renderCollectionResults(){
 function collectionView(){
   const s=collectionStats();
   return '<div class="wrap"><div class="hero"><div><h1>Mi colección</h1><p>Todas mis cartas, todos los sets, filtrables y ordenables.</p></div></div>'+
-    '<div class="stats"><div class="stat"><b>'+s.distinct.toLocaleString("es-ES")+' / '+s.distinctTotal.toLocaleString("es-ES")+'</b><span>Cartas distintas</span></div><div class="stat"><b>'+s.completePct.toFixed(1)+'%</b><span>Completado</span></div><div class="stat"><b>'+s.copies.toLocaleString("es-ES")+'</b><span>Copias totales</span></div><div class="stat"><b>'+s.playsets.toLocaleString("es-ES")+'</b><span>Playsets</span></div></div>'+collectionToolbar()+'<div id="collectionResults"></div></div>';
+    '<div class="stats"><div class="stat"><b>'+money(s.value)+'</b><span>Valor de mis cartas</span></div></div>'+collectionToolbar()+'<div id="collectionResults"></div></div>';
 }
 function albumView(){
   const f=state.album;
@@ -558,7 +558,7 @@ function bindShell(){
   if(state.tab==="collection"){
     bindSearch("#collectionSearch",v=>{state.collection.query=v;state.collection.page=1;renderCollectionResults()});
     const map={colSet:"set",colCategory:"category",colColor:"color",colRarity:"rarity",colType:"type",colAttribute:"attribute",colQty:"quantity",colPlayset:"playset",colSort:"sort",colDir:"dir"};
-    Object.entries(map).forEach(([id,k])=>$(id)?.addEventListener("change",()=>{state.collection[k]=$(id).value;state.collection.page=1;renderCollectionResults()}));
+    Object.entries(map).forEach(([id,k])=>$("#"+id)?.addEventListener("change",async()=>{state.collection[k]=$("#"+id).value;state.collection.page=1;if(k==="sort"&&state.collection.sort==="price")await ensurePrices(state.cards.map(c=>c.id));renderCollectionResults()}));
     $("#collectionFilterToggle")?.addEventListener("click",()=>{state.collection.filtersOpen=!state.collection.filtersOpen;renderShell()});
     $("#closeCollectionFilters")?.addEventListener("click",()=>{state.collection.filtersOpen=false;renderShell()});
     $("#clearCollectionFilters")?.addEventListener("click",()=>{Object.assign(state.collection,{set:"Todas",category:"Todos",color:"Todos",rarity:"Todos",type:"Todos",attribute:"Todos",quantity:"Todas",playset:"Todas",page:1});renderShell()});
