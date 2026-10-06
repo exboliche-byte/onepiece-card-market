@@ -217,8 +217,11 @@ async function discoverSetCandidates(packs) {
 function loadJsonFile(path) {
   return fs.readFile(path, "utf8").then(JSON.parse);
 }
-function localCardsById(cards) {
-  return new Map(cards.map(c => [String(c.id || "").trim().toUpperCase(), c]));
+function normalizeLocalCards(value) {
+  const arr = Array.isArray(value)
+    ? value
+    : Object.entries(value || {}).map(([id, card]) => ({...(card || {}), id: card?.id || id}));
+  return arr.map(c => ({...c, id: String(c.id || "").trim()})).filter(c => c.id);
 }
 function mapToLocal(localCards, sourceRows) {
   const byBase = new Map();
@@ -260,8 +263,7 @@ async function main() {
   const updatedAt = new Date().toISOString();
   const cards = await loadJsonFile(new URL("../data/cards.json", import.meta.url));
   const packs = await loadJsonFile(new URL("../data/packs.json", import.meta.url));
-  const localCards = (Array.isArray(cards) ? cards : Object.values(cards || {}))
-    .map(c => ({...c, id: String(c?.id || "").trim()})).filter(c => c.id);
+  const localCards = normalizeLocalCards(cards);
   const localPacks = (Array.isArray(packs) ? packs : Object.values(packs || {}))
     .map(p => ({...p, code: String(p?.code || "").trim(), name: String(p?.name || "").trim()}))
     .filter(p => p.code);
