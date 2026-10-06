@@ -25,7 +25,7 @@ const state={
   collection:{},decks:[],wishlist:{},user:null,sb:null,
   tab:"home",set:"",query:"",detail:null,deckId:null,
   catalog:{category:"Todos",color:"Todos",rarity:"Todos",type:"Todos",attribute:"Todos",ownership:"Todas",sort:"id",dir:"asc",page:1,grouped:true},
-  collection:{query:"",category:"Todos",color:"Todos",rarity:"Todos",type:"Todos",attribute:"Todos",quantity:"Todos",playset:"Todos",sort:"id",dir:"asc",page:1},
+  owned:{},collection:{query:"",category:"Todos",color:"Todos",rarity:"Todos",type:"Todos",attribute:"Todos",quantity:"Todos",playset:"Todos",sort:"id",dir:"asc",page:1},
   album:{set:"",query:"",ownership:"Todas",sort:"id",dir:"asc",page:1},
   deckQuery:"",deckPage:1,auth:false,toast:"",loading:true
 };
@@ -36,7 +36,7 @@ const money=n=>Number.isFinite(Number(n))?Number(n).toLocaleString("es-ES",{styl
 const safeId=id=>String(id||"");
 const imageUrl=c=>c?.image||c?.img_full_url||c?.img_url||("https://en.onepiece-cardgame.com/images/cardlist/card/"+encodeURIComponent(c?.id||"")+".png");
 function cardImg(c,cls="cardimg"){const u=imageUrl(c);return '<img class="'+cls+'" loading="lazy" decoding="async" referrerpolicy="no-referrer" src="'+esc(u)+'" alt="'+esc(c.name||c.id)+'" onerror="if(this.dataset.fallback)return;this.dataset.fallback=1;this.src=\'https://en.onepiece-cardgame.com/images/cardlist/card/'+encodeURIComponent(c.id)+'.png\';">';}
-function qty(id){return Number(state.collection[id]||0)}
+function qty(id){return Number(state.owned[id]||0)}
 function card(id){return state.cards.find(c=>c.id===id)}
 function baseId(id){return safeId(id).replace(/_(?:p\\d+|r\\d+)$/i,"")}
 function groupKey(c){
@@ -57,13 +57,13 @@ async function fetchJson(url,timeout=15000){
   const ac=new AbortController(),t=setTimeout(()=>ac.abort(),timeout);
   try{const r=await fetch(url,{cache:"no-store",signal:ac.signal});if(!r.ok)throw Error("HTTP "+r.status);return await r.json()}finally{clearTimeout(t)}
 }
-function saveLocal(){localStorage.setItem("mialbumonepiece_collection",JSON.stringify(state.collection));localStorage.setItem("mialbumonepiece_decks",JSON.stringify(state.decks));localStorage.setItem("mialbumonepiece_wishlist",JSON.stringify(state.wishlist))}
-function loadLocal(){try{state.collection=JSON.parse(localStorage.getItem("mialbumonepiece_collection")||"{}")}catch{}try{state.decks=JSON.parse(localStorage.getItem("mialbumonepiece_decks")||"[]")}catch{}try{state.wishlist=JSON.parse(localStorage.getItem("mialbumonepiece_wishlist")||"{}")}catch{}}
+function saveLocal(){localStorage.setItem("mialbumonepiece_collection",JSON.stringify(state.owned));localStorage.setItem("mialbumonepiece_decks",JSON.stringify(state.decks));localStorage.setItem("mialbumonepiece_wishlist",JSON.stringify(state.wishlist))}
+function loadLocal(){try{state.owned=JSON.parse(localStorage.getItem("mialbumonepiece_collection")||"{}")}catch{}try{state.decks=JSON.parse(localStorage.getItem("mialbumonepiece_decks")||"[]")}catch{}try{state.wishlist=JSON.parse(localStorage.getItem("mialbumonepiece_wishlist")||"{}")}catch{}}
 function notify(msg){state.toast=msg;renderToast();setTimeout(()=>{if(state.toast===msg){state.toast="";renderToast()}},1800)}
 function renderToast(){const old=$(".toast");if(old)old.remove();if(state.toast){const d=document.createElement("div");d.className="toast";d.textContent=state.toast;document.body.appendChild(d)}}
 function collectionStats(){
-  const distinct=Object.values(state.collection).filter(q=>Number(q)>0).length;
-  const copies=Object.values(state.collection).reduce((a,b)=>a+Number(b||0),0);
+  const distinct=Object.values(state.owned).filter(q=>Number(q)>0).length;
+  const copies=Object.values(state.owned).reduce((a,b)=>a+Number(b||0),0);
   const playsets=state.cards.filter(c=>qty(c.id)>=4).length;
   const incomplete=state.cards.filter(c=>qty(c.id)>0&&qty(c.id)<4).length;
   const distinctTotal=state.cards.length;
@@ -255,9 +255,9 @@ function createDeck(){
   const d={id:crypto.randomUUID(),name:name.trim(),leader:"",cards:{},description:"",colors:[]};state.decks.unshift(d);state.deckId=d.id;saveLocal();syncDeck(d);render();
 }
 function changeQty(id,d){
-  const n=Math.max(0,Math.min(99,qty(id)+Number(d||0)));if(n===0)delete state.collection[id];else state.collection[id]=n;saveLocal();syncOne(id,n);renderVisibleOnly();notify(n?"Colección actualizada":"Carta quitada");
+  const n=Math.max(0,Math.min(99,qty(id)+Number(d||0)));if(n===0)delete state.owned[id];else state.owned[id]=n;saveLocal();syncOne(id,n);renderVisibleOnly();notify(n?"Colección actualizada":"Carta quitada");
 }
-function setQty(id,n){n=Math.max(0,Math.min(99,Number(n)||0));if(n===0)delete state.collection[id];else state.collection[id]=n;saveLocal();syncOne(id,n);renderVisibleOnly()}
+function setQty(id,n){n=Math.max(0,Math.min(99,Number(n)||0));if(n===0)delete state.owned[id];else state.owned[id]=n;saveLocal();syncOne(id,n);renderVisibleOnly()}
 function changeDeckQty(id,d){
   const deck=state.decks.find(x=>x.id===state.deckId);if(!deck)return;const n=Math.max(0,Math.min(4,Number(deck.cards[id]||0)+Number(d||0)));if(n===0)delete deck.cards[id];else deck.cards[id]=n;saveLocal();syncDeck(deck);render();
 }
@@ -364,7 +364,7 @@ async function syncCloud(){
   if(!state.sb||!state.user)return;
   try{
     const ci=await state.sb.from("collection_items").select("card_id,quantity,updated_at").eq("user_id",state.user.id);
-    for(const r of ci.data||[])state.collection[r.card_id]=Math.max(qty(r.card_id),Number(r.quantity||0));
+    for(const r of ci.data||[])state.owned[r.card_id]=Math.max(qty(r.card_id),Number(r.quantity||0));
     const ds=await state.sb.from("decks").select("*").eq("user_id",state.user.id);
     const remoteById=new Map((ds.data||[]).map(d=>[d.id,d]));
     const dc=await state.sb.from("deck_cards").select("deck_id,card_id,quantity");
@@ -422,7 +422,7 @@ function parseCSV(text){
   for(let i=0;i<text.length;i++){const ch=text[i],nx=text[i+1];if(ch==='"'&&quote&&nx==='"'){cell+='"';i++;continue}if(ch==='"'){quote=!quote;continue}if(ch===delim&&!quote){row.push(cell);cell="";continue}if((ch==="\\n"||ch==="\\r")&&!quote){if(ch==="\\r"&&nx==="\\n")i++;row.push(cell);rows.push(row);row=[];cell="";continue}cell+=ch}if(cell.length||row.length){row.push(cell);rows.push(row)}return rows.filter(r=>r.some(x=>String(x).trim()!==""));
 }
 function previewImport(text){
-  try{const rows=parseCSV(text);if(rows.length<2)throw Error("CSV vacío");const h=rows[0].map(x=>norm(x).replace(/\\s+/g,"_"));const idI=Math.max(h.indexOf("card_id"),h.indexOf("id"),h.indexOf("numero"),h.indexOf("number"));const qI=Math.max(h.indexOf("quantity"),h.indexOf("cantidad"),h.indexOf("qty"),h.indexOf("copias"));if(idI<0||qI<0)throw Error("Faltan card_id/id y quantity/cantidad");const unknown=[],valid=[];for(const r of rows.slice(1)){const id=String(r[idI]||"").trim().toUpperCase(),q=Math.max(0,Math.min(99,Number(r[qI]||0)));if(card(id))valid.push([id,q]);else unknown.push(id)}const sum=valid.reduce((a,x)=>a+x[1],0);const msg="Filas: "+(rows.length-1)+" · reconocidas: "+valid.length+" · desconocidas: "+unknown.length+" · copias: "+sum+(unknown.length?"\\nIDs no encontrados: "+unknown.slice(0,20).join(", "):"");if(confirm(msg+"\\n\\nAceptar = sumar cantidades. Cancelar = no importar.")){for(const [id,q] of valid){state.collection[id]=qty(id)+q;if(state.collection[id]>99)state.collection[id]=99}saveLocal();if(state.user)syncCloud();renderVisibleOnly();notify("Colección importada")}}catch(e){alert(e.message||"CSV no válido")}
+  try{const rows=parseCSV(text);if(rows.length<2)throw Error("CSV vacío");const h=rows[0].map(x=>norm(x).replace(/\\s+/g,"_"));const idI=Math.max(h.indexOf("card_id"),h.indexOf("id"),h.indexOf("numero"),h.indexOf("number"));const qI=Math.max(h.indexOf("quantity"),h.indexOf("cantidad"),h.indexOf("qty"),h.indexOf("copias"));if(idI<0||qI<0)throw Error("Faltan card_id/id y quantity/cantidad");const unknown=[],valid=[];for(const r of rows.slice(1)){const id=String(r[idI]||"").trim().toUpperCase(),q=Math.max(0,Math.min(99,Number(r[qI]||0)));if(card(id))valid.push([id,q]);else unknown.push(id)}const sum=valid.reduce((a,x)=>a+x[1],0);const msg="Filas: "+(rows.length-1)+" · reconocidas: "+valid.length+" · desconocidas: "+unknown.length+" · copias: "+sum+(unknown.length?"\\nIDs no encontrados: "+unknown.slice(0,20).join(", "):"");if(confirm(msg+"\\n\\nAceptar = sumar cantidades. Cancelar = no importar.")){for(const [id,q] of valid){state.owned[id]=qty(id)+q;if(state.owned[id]>99)state.owned[id]=99}saveLocal();if(state.user)syncCloud();renderVisibleOnly();notify("Colección importada")}}catch(e){alert(e.message||"CSV no válido")}
 }
 async function boot(){
   loadLocal();loadCachedPrices();renderShell();
