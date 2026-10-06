@@ -1,35 +1,62 @@
 import fs from "node:fs/promises";
-import process from "node:process";
 
 const ROOT = "https://www.tcggo.com";
-const OUT = new URL("../data/cardmarket-prices.json", import.meta.url);
-const MAX_SITEMAPS = 60;
-const CONCURRENCY = 12;
+const CONCURRENCY = 8;
 const REQUEST_TIMEOUT = 25000;
 
-const sleep = ms => new Promise(r => setTimeout(r, ms));
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 function normalize(value) {
-  return String(value ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+  return String(value ?? "")
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase().replace(/\s+/g, " ").trim();
 }
-function upper(value) {
-  return String(value ?? "").toUpperCase().replace(/\s+/g, "").trim();
+function ascii(value) {
+  return String(value ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 }
-function entityDecode(value) {
+function cardBaseId(id) {
+  return String(id ?? "").trim().toUpperCase().replace(/_(?:P|R|C)\d+$/i, "");
+}
+function suffixVersion(id) {
+  const m = String(id ?? "").match(/_(?:P|R|C)(\d+)$/i);
+  return m ? Number(m[1]) + 1 : 1;
+}
+function slug(value, punctuationMode = "normal") {
+  let s = ascii(value).replace(/[’']/g, "");
+  if (punctuationMode === "compact") s = s.replace(/[.]/g, "");
+  else s = s.replace(/[.]/g, "");
+  return s.replace(/&/g, " and ")
+    .replace(/[^A-Za-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+function cardmarketSlug(value) {
+  return slug(value, "compact");
+}
+function cardmarketUrl(row) {
+  const setSlug = cardmarketSlug(row.setName);
+  const nameSlug = cardmarketSlug(row.name);
+  const number = String(row.cardNumber || "").toUpperCase();
+  return "https://www.cardmarket.com/es/OnePiece/Products/Singles/" +
+    setSlug + "/" + nameSlug + "-" + number + "-V" + row.version;
+}
+function parseEurPrice(text) {
+  const m = String(text ?? "").match(/([0-9][0-9.,]*)\s*€/);
+  if (!m) return null;
+  const normalized = m[1].replace(/\.(?=\d{3}(?:\D|$))/g, "").replace(",", ".");
+  const n = Number(normalized);
+  return Number.isFinite(n) ? n : null;
+}
+function htmlDecode(value) {
   return String(value ?? "")
     .replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#39;/g, "'")
-    .replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&nbsp;/g, " ");
+    .replace(/&#x27;/gi, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+    .replace(/&nbsp;/g, " ");
 }
-function htmlText(html) {
-  return entityDecode(String(html ?? "")
-    .replace(/<script[\s\S]*?<\/script>/gi, " ")
-    .replace(/<style[\s\S]*?<\/style>/gi, " ")
-    .replace(/<noscript[\s\S]*?<\/noscript>/gi, " ")
-    .replace(/<[^>]+>/g, " "))
-    .replace(/\s+/g, " ").trim();
+function textContent(html) {
+  return htmlDecode(String(html ?? "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim());
 }
 function absoluteUrl(href, base = ROOT) {
-  try { return new URL(entityDecode(href), base).toString(); } catch { return ""; }
+  try { return new URL(htmlDecode(href), base).toString(); } catch { return ""; }
 }
 async function fetchText(url, attempt = 1) {
   const controller = new AbortController();
@@ -38,291 +65,251 @@ async function fetchText(url, attempt = 1) {
     const response = await fetch(url, {
       signal: controller.signal,
       headers: {
-        "user-agent": "MiAlbumOnePiece-CardmarketUpdater/1.0 (+https://one-piece-card-market.vercel.app)",
-        "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+        "user-agent": "MiAlbumOnePiece-CardmarketUpdater/2.0",
+        "accept": "text/html,application/xhtml+xml;q=0.9,*/*;q=0.8"
       }
     });
     if (!response.ok) throw new Error("HTTP " + response.status);
     return await response.text();
   } catch (error) {
     if (attempt >= 3) throw error;
-    await sleep(700 * attempt);
+    await sleep(500 * attempt);
     return fetchText(url, attempt + 1);
   } finally {
     clearTimeout(timer);
   }
 }
-function extractLocs(xml, base) {
-  const out = [];
-  for (const match of String(xml).matchAll(/<loc>\s*([\s\S]*?)\s*<\/loc>/gi)) {
-    const u = absoluteUrl(match[1], base);
-    if (u) out.push(u);
+function parseCollectorNumber(line, fallbackSetCode) {
+  const clean = textContent(line).toUpperCase();
+  const patterns = [
+    /\b((?:OP|EB|ST|PRB)\d{2}[- ]\d{1,4}[A-Z*]*)\b/,
+    /\b((?:P|EX|DON)[-_ ]\d{1,4}[A-Z*]*)\b/,
+    /\b((?:OP|EB|ST|PRB)\d{2})[- ]?(\d{1,4}[A-Z*]*)\b/
+  ];
+  for (const re of patterns) {
+    const m = clean.match(re);
+    if (m) return m[1].includes("-") && /^(OP|EB|ST|PRB)\d{2}-/.test(m[1]) ? m[1] : m[1] + (m[2] ? "-" + m[2] : "");
   }
-  return [...new Set(out)];
+  const compactSet = String(fallbackSetCode || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const m = clean.match(/\b(\d{1,4}[A-Z*]*)\b/);
+  return compactSet && m ? compactSet + "-" + m[1] : "";
 }
-function isSitemapIndex(xml) {
-  return /<sitemapindex\b/i.test(xml);
+function parseVersion(blockText) {
+  const m = String(blockText).match(/\bV\.(\d+)\b/i);
+  return m ? Number(m[1]) : 1;
 }
-function isOnePieceCardUrl(url) {
-  try {
-    const u = new URL(url);
-    const p = u.pathname.replace(/\/+$/, "").split("/").filter(Boolean);
-    if (p.length !== 3 || p[0] !== "one-piece") return false;
-    const banned = new Set(["episodes","singles","products","binder","top_drops","trending","favourites","highest_price","lowest_price","last_added","score","one-piece"]);
-    return !banned.has(p[2]);
-  } catch { return false; }
+function parseSetCodeFromNumber(cardNumber) {
+  const m = String(cardNumber).toUpperCase().match(/^((?:OP|EB|ST|PRB)\d{2})-/);
+  return m ? m[1] : "";
 }
-function setSlugFromCardUrl(url) {
-  try {
-    const p = new URL(url).pathname.replace(/\/+$/, "").split("/").filter(Boolean);
-    return p.length === 3 ? p[1] : "";
-  } catch { return ""; }
-}
-function parseSetCode(text) {
-  const m = String(text).match(/\b(?:OP|EB|ST|PRB)[- ]?\d{1,2}\b/i);
-  if (!m) return "";
-  const x = m[0].toUpperCase().replace(/[^A-Z0-9]/g, "");
-  const mm = x.match(/^(OP|EB|ST|PRB)(\d{1,2})$/);
-  return mm ? mm[1] + String(mm[2]).padStart(2, "0") : "";
-}
-function normalizeSetCode(value) {
-  const s = upper(value);
-  if (!s) return "";
-  let m = s.match(/^OP(\d{1,2})(?:-EB\d{1,2})?$/);
-  if (m) return "OP" + String(m[1]).padStart(2, "0");
-  m = s.match(/^OP-?(\d{1,2})$/);
-  if (m) return "OP" + String(m[1]).padStart(2, "0");
-  m = s.match(/^EB-?(\d{1,2})$/);
-  if (m) return "EB" + String(m[1]).padStart(2, "0");
-  m = s.match(/^ST-?(\d{1,2})$/);
-  if (m) return "ST" + String(m[1]).padStart(2, "0");
-  m = s.match(/^PRB-?(\d{1,2})$/);
-  if (m) return "PRB" + String(m[1]).padStart(2, "0");
-  return s.replace(/[^A-Z0-9]/g, "");
-}
-function sourceCardKey(setCode, cardNumber) {
-  return normalizeSetCode(setCode) + "|" + upper(cardNumber);
-}
-function parseCardPage(url, html, setInfo) {
-  const setCode = setInfo?.code || "";
-  const setNameForRow = setInfo?.name || "";
-  const text = htmlText(html);
-  const versionMatch = text.match(/(?:Version\s+)?V\.(\d+)/i);
-  const version = versionMatch ? Number(versionMatch[1]) : 1;
-  const cm = text.match(/Cardmarket ID\s+(\d+)/i);
-  const cardmarketId = cm ? cm[1] : "";
-  const numberMatch =
-    text.match(/Card number\s+([A-Z0-9][A-Z0-9_-]*)/i) ||
-    text.match(/\b((?:OP|EB|ST|PRB)\d{2}[- ](?:[A-Z0-9-]+))\s+V\.\d+/i) ||
-    text.match(/\b((?:OP|EB|ST|PRB)\d{2}[- ]\d{3})\b/i);
-  let cardNumber = numberMatch ? numberMatch[1].replace(/ /g, "-").toUpperCase() : "";
-  if (!cardNumber) {
-    const idMatch = text.match(/\b(?:OP|EB|ST|PRB)\d{2}\s+(\d{3})\s+V\.\d+/i);
-    if (idMatch) cardNumber = idMatch[1];
+function parseCardsFromSetPage(html, fallbackSetCode, setName, sourceUrl) {
+  const rows = [];
+  const blocks = String(html).match(/<div[^>]*class=["'][^"']*t1-card[^"']*game-one-piece[^"']*["'][^>]*>[\s\S]*?<\/div>\s*<\/div>/gi) || [];
+  for (const block of blocks) {
+    const hrefMatch = block.match(/<a[^>]+href=["']([^"']+)["'][^>]*class=["'][^"']*font-semibold[^"']*["'][^>]*>([\s\S]*?)<\/a>/i);
+    if (!hrefMatch) continue;
+    const href = absoluteUrl(hrefMatch[1], sourceUrl);
+    const name = textContent(hrefMatch[2]);
+    const paragraphs = [...block.matchAll(/<p[^>]*class=["'][^"']*text-xs[^"']*text-slate-400[^"']*["'][^>]*>([\s\S]*?)<\/p>/gi)]
+      .map(m => textContent(m[1]));
+    const codeLine = paragraphs[1] || paragraphs.find(x => /(?:OP|EB|ST|PRB|P|EX|DON)/i.test(x)) || "";
+    const cardNumber = parseCollectorNumber(codeLine || block, fallbackSetCode);
+    if (!cardNumber) continue;
+    const priceMatch = block.match(/<[^>]*class=["'][^"']*font-display[^"']*["'][^>]*>([\s\S]*?)<\//i);
+    const price = parseEurPrice(textContent(priceMatch?.[1] || block));
+    if (price === null) continue;
+    const version = parseVersion(textContent(block));
+    const resolvedSet = parseSetCodeFromNumber(cardNumber) || String(fallbackSetCode || "").toUpperCase();
+    rows.push({
+      name,
+      cardNumber,
+      version,
+      eur: price,
+      setCode: resolvedSet,
+      setName,
+      sourceUrl: href
+    });
   }
-  if (!cardNumber) {
-    const m = url.match(/\/([^/]+)$/);
-    cardNumber = m ? m[1].toUpperCase() : "";
-  }
-  if (/^(OP|EB|ST|PRB)\d{2}-\d{3}$/i.test(cardNumber)) {
-    cardNumber = cardNumber.slice(7);
-  }
-  if (!cardNumber || !cardmarketId) return null;
-
-  const euSection = text.match(/EU Prices[\s\S]{0,2200}?(?:US Prices|Price history|RAW Prices)/i)?.[0] || text;
-  const priceMatch =
-    euSection.match(/English\s+Europe\s+([0-9][0-9.,]*)\s*€/i) ||
-    euSection.match(/English\s+English\s+Europe\s+([0-9][0-9.,]*)\s*€/i) ||
-    euSection.match(/English[\s\S]{0,160}?Europe\s+([0-9][0-9.,]*)\s*€/i);
-  if (!priceMatch) return null;
-  const rawPrice = priceMatch[1].replace(/\.(?=\d{3}(?:\D|$))/g, "").replace(",", ".");
-  const eur = Number(rawPrice);
-  if (!Number.isFinite(eur)) return null;
-
-  const nameMatch = text.match(/\bName\s+(.+?)\s+Rare\b/i);
-  const name = nameMatch ? nameMatch[1].trim() : "";
-  let marketUrl = "";
-  for (const match of html.matchAll(/href\s*=\s*["']([^"']+)["']/gi)) {
-    const u = absoluteUrl(match[1], url);
-    if (/cardmarket\.com\//i.test(u) && /Products\/Singles/i.test(u)) {
-      marketUrl = u;
-      break;
-    }
-  }
-  return {
-    url,
-    setCode: normalizeSetCode(setCode),
-    cardNumber: upper(cardNumber),
-    version,
-    name,
-    eur,
-    cardmarketId,
-    cardmarketUrl: marketUrl || "https://www.cardmarket.com/es/OnePiece/Products/Singles/" + marketSlug(setNameForRow) + "/" + marketSlug(name + "-" + (cardNumber.match(/^\d{3}$/) ? normalizeSetCode(setCode) + "-" + cardNumber : cardNumber) + "-V" + version)
-  };
+  return rows;
 }
-async function discoverSitemaps() {
-  const queue = [ROOT + "/sitemap.xml", ROOT + "/sitemap_index.xml"];
+function findPaginationUrls(html, pageUrl) {
+  const urls = new Set();
+  for (const match of String(html).matchAll(/href=["']([^"']+)["']/gi)) {
+    const u = absoluteUrl(match[1], pageUrl);
+    if (/\/singles(?:\/page\/\d+)?(?:\?.*(?:page|p)=\d+)?$/i.test(u)) urls.add(u);
+  }
+  return [...urls];
+}
+async function parseSetSingles(setUrl, setCode, setName) {
+  const all = [];
   const seen = new Set();
-  const pages = [];
-  while (queue.length && seen.size < MAX_SITEMAPS) {
+  const queue = [setUrl.replace(/\/$/, "") + "/singles"];
+  while (queue.length && seen.size < 100) {
     const url = queue.shift();
     if (seen.has(url)) continue;
     seen.add(url);
     try {
-      const xml = await fetchText(url);
-      const locs = extractLocs(xml, url);
-      if (isSitemapIndex(xml) || locs.some(x => /sitemap/i.test(x))) queue.push(...locs);
-      else pages.push(...locs);
+      const html = await fetchText(url);
+      all.push(...parseCardsFromSetPage(html, setCode, setName, url));
+      for (const next of findPaginationUrls(html, url)) if (!seen.has(next)) queue.push(next);
     } catch {}
   }
-  return [...new Set(pages)].filter(isOnePieceCardUrl);
+  return all;
 }
-async function discoverFallbackCardUrls() {
-  const episodeHtml = await fetchText(ROOT + "/one-piece/episodes");
-  const setUrls = [...new Set([...episodeHtml.matchAll(/href\s*=\s*["']([^"']+)["']/gi)]
-    .map(m => absoluteUrl(m[1], ROOT))
-    .filter(u => /^https:\/\/www\.tcggo\.com\/one-piece\/[^/]+\/?$/i.test(u)))];
-  const result = new Set();
-  for (const setUrl of setUrls) {
-    let next = setUrl.replace(/\/$/, "") + "/singles";
-    const seen = new Set();
-    for (let safety = 0; safety < 500 && next; safety++) {
-      if (seen.has(next)) break;
-      seen.add(next);
-      let html;
-      try { html = await fetchText(next); } catch { break; }
-      for (const m of html.matchAll(/href\s*=\s*["']([^"']+)["']/gi)) {
-        const u = absoluteUrl(m[1], next);
-        if (isOnePieceCardUrl(u)) result.add(u);
-      }
-      const links = [...html.matchAll(/href\s*=\s*["']([^"']+)["']/gi)].map(m => absoluteUrl(m[1], next));
-      next = links.find(u => /\/singles(?:\/page\/\d+)?(?:\?.*?(?:page|p)=\d+)?$/i.test(u) && !seen.has(u)) || "";
-    }
+function discoverLinks(html, base) {
+  const out = [];
+  for (const m of String(html).matchAll(/href=["']([^"']+)["']/gi)) {
+    const u = absoluteUrl(m[1], base);
+    if (u) out.push(u.replace(/\/$/, ""));
   }
-  return [...result];
+  return [...new Set(out)];
 }
-async function mapSetSlugs(slugs) {
-  const out = new Map();
+async function discoverSetCandidates(packs) {
+  const found = new Map();
+  const add = (slugValue, code, name) => {
+    const s = String(slugValue || "").replace(/^\/+|\/+$/g, "");
+    if (!s) return;
+    if (/^https?:/i.test(s)) {
+      try {
+        const u = new URL(s);
+        const parts = u.pathname.split("/").filter(Boolean);
+        if (parts.length >= 2 && parts[0] === "one-piece") s = parts[1];
+      } catch {}
+    }
+    found.set(s, {code: code || "", name: name || ""});
+  };
+
+  for (const p of packs) {
+    add(slug(p.name), p.code, p.name);
+  }
+
+  for (const page of [ROOT + "/one-piece/episodes", ROOT + "/one-piece"]) {
+    try {
+      const html = await fetchText(page);
+      for (const u of discoverLinks(html, page)) {
+        const m = u.match(/\/one-piece\/([^/]+)(?:\/singles)?$/i);
+        if (!m || !m[1] || /^(episodes|one-piece|search)$/i.test(m[1])) continue;
+        const name = packs.find(p => slug(p.name) === m[1])?.name || m[1].replace(/-/g, " ");
+        const code = packs.find(p => slug(p.name) === m[1])?.code || "";
+        add(m[1], code, name);
+      }
+    } catch {}
+  }
+
+  const candidates = [...found.entries()];
+  const valid = new Map();
   let cursor = 0;
-  const workers = Math.min(8, slugs.length);
-  await Promise.all(Array.from({length: workers}, async () => {
+  await Promise.all(Array.from({length: Math.min(CONCURRENCY, candidates.length)}, async () => {
     while (true) {
       const i = cursor++;
-      if (i >= slugs.length) return;
-      const slug = slugs[i];
+      if (i >= candidates.length) return;
+      const [s, info] = candidates[i];
       try {
-        const html = await fetchText(ROOT + "/one-piece/" + slug);
-        const text = htmlText(html);
-        const code = parseSetCode(text);
-        if (code) out.set(slug, {code, name: pageTitle(html)});
+        const html = await fetchText(ROOT + "/one-piece/" + s + "/singles");
+        if (!/t1-card|game-one-piece/i.test(html)) continue;
+        const title = htmlDecode(html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] || "").replace(/\s*-\s*TCGGO\.com\s*$/i, "").trim();
+        valid.set(s, {code: info.code, name: title || info.name || s.replace(/-/g, " ")});
       } catch {}
     }
   }));
-  return out;
+  return valid;
 }
-async function fetchCardPages(urls, setMap) {
-  const out = [];
-  let cursor = 0;
-  const workers = Math.min(CONCURRENCY, urls.length);
-  let failures = 0;
-  await Promise.all(Array.from({length: workers}, async () => {
-    while (true) {
-      const i = cursor++;
-      if (i >= urls.length) return;
-      const url = urls[i];
-      const slug = setSlugFromCardUrl(url);
-      const setInfo = setMap.get(slug);
-      if (!setInfo?.code) { failures++; continue; }
-      try {
-        const html = await fetchText(url);
-        const row = parseCardPage(url, html, setInfo);
-        if (row) out.push(row);
-      } catch { failures++; }
-    }
-  }));
-  return {rows: out, failures};
+function loadJsonFile(path) {
+  return fs.readFile(path, "utf8").then(JSON.parse);
 }
-function loadLocalCards(raw) {
-  const parsed = JSON.parse(raw);
-  const arr = Array.isArray(parsed) ? parsed : Object.entries(parsed || {}).map(([key, value]) => ({...(value || {}), id: value?.id || key}));
-  return arr.map(c => ({...c, id: String(c.id || "").trim()})).filter(c => c.id);
+function localCardsById(cards) {
+  return new Map(cards.map(c => [String(c.id || "").trim().toUpperCase(), c]));
 }
-function pageTitle(html) {
-  return entityDecode(html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] || "").replace(/\s*-\s*TCGGO\.com\s*$/i, "").trim();
-}
-function marketSlug(value) {
-  return normalize(value).replace(/[’\']/g, "").replace(/\./g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
-}
-function cardIdFromSource(row) {
-  let base = upper(row.cardNumber);
-  if (/^\d{3}$/.test(base)) base = normalizeSetCode(row.setCode) + "-" + base;
-  base = base.replace(/ /g, "-");
-  if (!base) return "";
-  return row.version <= 1 ? base : base + "_p" + (row.version - 1);
-}
-function sourceRank(row) {
-  const id = cardIdFromSource(row);
-  const prefix = normalizeSetCode(row.setCode) + "-";
-  return (id.startsWith(prefix) ? 10 : 0) + (row.cardmarketUrl ? 2 : 0);
-}
-function buildPriceDataset(sourceRows) {
-  const best = new Map();
+function mapToLocal(localCards, sourceRows) {
+  const byBase = new Map();
   for (const row of sourceRows) {
-    const id = cardIdFromSource(row);
-    if (!id || !Number.isFinite(row.eur)) continue;
-    const current = best.get(id);
-    if (!current || sourceRank(row) > sourceRank(current)) best.set(id, row);
+    const base = cardBaseId(row.cardNumber);
+    const key = base.toUpperCase();
+    if (!byBase.has(key)) byBase.set(key, new Map());
+    byBase.get(key).set(row.version, row);
   }
-  const cards = {};
-  for (const [id, row] of [...best.entries()].sort(([a], [b]) => a.localeCompare(b, "en", {numeric:true}))) {
-    cards[id] = {
+
+  const output = {};
+  let mapped = 0;
+  let missing = 0;
+  for (const c of localCards) {
+    const id = String(c.id || "").trim();
+    if (!id) continue;
+    const base = cardBaseId(id);
+    const version = suffixVersion(id);
+    const row = byBase.get(base.toUpperCase())?.get(version);
+    if (!row) {
+      missing++;
+      continue;
+    }
+    output[id] = {
       eur: row.eur,
-      cardmarketId: row.cardmarketId,
-      url: row.cardmarketUrl,
       version: row.version,
-      sourceUrl: row.url,
+      cardmarketId: null,
+      url: cardmarketUrl(row),
+      sourceUrl: row.sourceUrl,
       setCode: row.setCode,
       cardNumber: row.cardNumber
     };
+    mapped++;
   }
-  return cards;
+  return {output, mapped, missing};
 }
+
 async function main() {
-  const started = new Date().toISOString();
-  const sitemapUrls = await discoverSitemaps();
-  const cardUrls = sitemapUrls.length ? sitemapUrls : await discoverFallbackCardUrls();
-  if (!cardUrls.length) throw new Error("No TCGGO One Piece card pages discovered");
+  const updatedAt = new Date().toISOString();
+  const cards = await loadJsonFile(new URL("../data/cards.json", import.meta.url));
+  const packs = await loadJsonFile(new URL("../data/packs.json", import.meta.url));
+  const localCards = (Array.isArray(cards) ? cards : Object.values(cards || {}))
+    .map(c => ({...c, id: String(c?.id || "").trim()})).filter(c => c.id);
+  const localPacks = (Array.isArray(packs) ? packs : Object.values(packs || {}))
+    .map(p => ({...p, code: String(p?.code || "").trim(), name: String(p?.name || "").trim()}))
+    .filter(p => p.code);
 
-  const slugs = [...new Set(cardUrls.map(setSlugFromCardUrl).filter(Boolean))];
-  const setMap = await mapSetSlugs(slugs);
-  const source = await fetchCardPages(cardUrls, setMap);
-  if (!source.rows.length) throw new Error("No TCGGO card prices parsed");
+  const setCandidates = await discoverSetCandidates(localPacks);
+  if (!setCandidates.size) throw new Error("No TCGGO One Piece expansion pages discovered");
 
-  const cards = buildPriceDataset(source.rows);
+  const candidates = [...setCandidates.entries()];
+  let cursor = 0;
+  const sourceRows = [];
+  await Promise.all(Array.from({length: Math.min(CONCURRENCY, candidates.length)}, async () => {
+    while (true) {
+      const i = cursor++;
+      if (i >= candidates.length) return;
+      const [setSlug, info] = candidates[i];
+      const rows = await parseSetSingles(ROOT + "/one-piece/" + setSlug + "/singles", info.code, info.name);
+      sourceRows.push(...rows);
+    }
+  }));
+
+  const dedupe = new Map();
+  for (const row of sourceRows) {
+    const key = row.cardNumber.toUpperCase() + "|V" + row.version;
+    const old = dedupe.get(key);
+    if (!old || row.eur !== null) dedupe.set(key, row);
+  }
+  const uniqueSource = [...dedupe.values()];
+  const result = mapToLocal(localCards, uniqueSource);
 
   const payload = {
-    schemaVersion: 3,
-    updatedAt: new Date().toISOString(),
-    source: "TCGGO Cardmarket EU English",
-    sourcePage: ROOT + "/one-piece",
-    cards,
+    schemaVersion: 4,
+    updatedAt,
+    source: "TCGGO Cardmarket EU English (public HTML)",
+    sourcePage: ROOT + "/one-piece/one-piece",
+    cards: result.output,
     stats: {
-      sourceCardsParsed: source.rows.length,
-      mapped: Object.keys(cards).length,
-      missing: 0,
-      ambiguous: 0,
-      fetchFailures: source.failures,
-      discoveredUrls: cardUrls.length,
-      setPages: setMap.size
+      catalogCards: localCards.length,
+      sourceCardsParsed: uniqueSource.length,
+      mapped: result.mapped,
+      missing: result.missing,
+      expansionsDiscovered: setCandidates.size
     }
   };
-
-  if (Object.keys(cards).length < 1000) {
-    throw new Error("Safety check failed: only " + Object.keys(cards).length + " Cardmarket versions mapped");
+  if (result.mapped < 1000) {
+    throw new Error("Safety check failed: only " + result.mapped + " local cards mapped from TCGGO");
   }
-
   await fs.mkdir(new URL("../data", import.meta.url), {recursive:true});
-  await fs.writeFile(OUT, JSON.stringify(payload, null, 2) + "\n", "utf8");
+  await fs.writeFile(new URL("../data/cardmarket-prices.json", import.meta.url), JSON.stringify(payload, null, 2) + "\n", "utf8");
   console.log(JSON.stringify(payload.stats));
 }
 main().catch(error => { console.error(error); process.exit(1); });
