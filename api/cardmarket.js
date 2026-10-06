@@ -34,7 +34,7 @@ function scoreProduct(p,wanted){
 function buildPriceIndex(){
   const guide=new Map();
   for(const x of priceCache||[]){const id=x?.idProduct??x?.productId??x?.id;if(id!=null)guide.set(String(id),x)}
-  const exact=new Map(),base=new Map();
+  const exact=new Map();
   for(const p of productCache||[]){
     const pid=p?.idProduct??p?.productId??p?.id,g=pid!=null?guide.get(String(pid)):null,val=priceValue(g);
     if(!Number.isFinite(val))continue;
@@ -42,11 +42,10 @@ function buildPriceIndex(){
     for(const id of ids){
       const score=scoreProduct(p,[id]),current=exact.get(id);
       if(!current||score>current.score)exact.set(id,{value:val,score});
-      const b=baseId(id),bc=base.get(b);
-      if(!bc||score>bc.score)base.set(b,{value:val,score});
+
     }
   }
-  priceIndex={exact,base};
+  priceIndex={exact};
 }
 export default {
   async fetch(request){
@@ -65,7 +64,7 @@ export default {
       }
       const out={};
       for(const wantedId of ids){
-        const hit=priceIndex.exact.get(wantedId)||priceIndex.base.get(baseId(wantedId));
+        const hit=priceIndex.exact.get(wantedId)||priceIndex.exact.get(norm(wantedId));
         if(hit&&Number.isFinite(hit.value))out[wantedId]=hit.value;
       }
       return new Response(JSON.stringify({prices:out,updatedAt:new Date(cacheAt).toISOString(),source:"Cardmarket public data"}),{status:200,headers:{"content-type":"application/json; charset=utf-8","cache-control":"public, s-maxage=21600, stale-while-revalidate=86400"}});
