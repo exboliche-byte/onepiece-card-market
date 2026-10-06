@@ -35,7 +35,7 @@ const norm=s=>String(s??"").toLowerCase().normalize("NFD").replace(/[\u0300-\u03
 const money=n=>Number.isFinite(Number(n))?Number(n).toLocaleString("es-ES",{style:"currency",currency:"EUR"}):"—";
 const safeId=id=>String(id||"");
 const officialImageUrl=c=>"https://en.onepiece-cardgame.com/images/cardlist/card/"+encodeURIComponent(c?.id||"")+".png";
-const imageUrl=c=>c?.image||c?.img_full_url||c?.img_url||officialImageUrl(c);
+const imageUrl=c=>officialImageUrl(c);
 function cardImg(c,cls="cardimg"){
   const u=imageUrl(c),official=officialImageUrl(c),proxy="https://images.weserv.nl/?url="+encodeURIComponent(u.replace(/^https?:\/\//,""));
   return '<img class="'+cls+'" loading="lazy" decoding="async" referrerpolicy="no-referrer" src="'+esc(u)+'" alt="'+esc(c.name||c.id)+'" onerror="if(!this.dataset.fallback){this.dataset.fallback=1;this.src=\''+esc(proxy)+'\';}else if(!this.dataset.official){this.dataset.official=1;this.src=\''+esc(official)+'\';}">';
@@ -156,7 +156,7 @@ function groupedTile(g){
     '<div class="cardbody"><div class="name">'+esc(c.name)+'</div><div class="small">'+esc(c.category||"")+' · '+g.versions.length+' versión(es)</div>'+
     '<div class="chips">'+g.sets.slice(0,5).map(x=>'<span class="chip">'+esc(x)+'</span>').join("")+(g.sets.length>5?'<span class="chip">+'+(g.sets.length-5)+'</span>':"")+'</div>'+
     '<div class="row"><span>'+(Number.isFinite(bestPrice)?money(bestPrice):"Precio —")+'</span><span class="small">'+q+' copias</span></div>'+
-    '<button class="secondary btn" style="width:100%;margin-top:8px" data-group="'+esc(c.id)+'">Ver versiones</button></div></article>';
+    '<div class="quick"><button class="secondary" data-qty="'+esc(c.id)+'" data-d="-1">−</button><div class="qty">'+q+'</div><button class="primary" data-qty="'+esc(c.id)+'" data-d="1">+</button></div><button class="secondary btn" style="width:100%;margin-top:8px" data-group="'+esc(c.id)+'">Ver versiones</button></div></article>';
 }
 function pagination(total,page,key){
   const pages=Math.max(1,Math.ceil(total/PAGE));page=Math.min(page,pages);
@@ -223,7 +223,7 @@ function renderCatalogResults(){
   ensurePrices(visible.flatMap(g=>g.versions||[g.card]).map(c=>c.id));
 }
 function catalogView(){
-  return '<div class="wrap"><div class="hero"><div><h1>Catálogo</h1><p>Todas las cartas disponibles. Busca por nombre, ID o expansión; usa FILTRO para acotar resultados.</p></div></div>'+catalogToolbar()+'<div id="catalogResults"></div></div>';
+  return '<div class="wrap"><div class="hero"><div><h1>Catálogo</h1><p>Todas las cartas disponibles. Busca por nombre, ID o expansión; usa FILTRO para acotar resultados.</p></div></div><div id="liveCollectionCount" class="notice">Mi colección: '+collectionStats().distinct.toLocaleString("es-ES")+' cartas · '+collectionStats().copies.toLocaleString("es-ES")+' copias</div>'+catalogToolbar()+'<div id="catalogResults"></div></div>';
 }
 function collectionActiveFilterCount(){
   const f=state.collection;let n=0;
@@ -380,7 +380,7 @@ function createDeck(){
   const d={id:crypto.randomUUID(),name:name.trim(),leader:"",cards:{},description:"",colors:[]};state.decks.unshift(d);state.deckId=d.id;saveLocal();syncDeck(d);renderShell();
 }
 function changeQty(id,d){
-  const n=Math.max(0,Math.min(99,qty(id)+Number(d||0)));if(n===0)delete state.owned[id];else state.owned[id]=n;saveLocal();syncOne(id,n);renderVisibleOnly();notify(n?"Colección actualizada":"Carta quitada");
+  const n=Math.max(0,Math.min(99,qty(id)+Number(d||0)));if(n===0)delete state.owned[id];else state.owned[id]=n;saveLocal();syncOne(id,n);renderVisibleOnly();updateLiveCollectionCount();notify(n?"Colección actualizada":"Carta quitada");
 }
 function setQty(id,n){n=Math.max(0,Math.min(99,Number(n)||0));if(n===0)delete state.owned[id];else state.owned[id]=n;saveLocal();syncOne(id,n);renderVisibleOnly()}
 function changeDeckQty(id,d){
@@ -418,6 +418,7 @@ function renderShell(){
   if(state.tab==="decks")renderDeckResults();
   renderToast();
 }
+function updateLiveCollectionCount(){const el=$("#liveCollectionCount");if(!el)return;const s=collectionStats();el.textContent="Mi colección: "+s.distinct.toLocaleString("es-ES")+" cartas · "+s.copies.toLocaleString("es-ES")+" copias";}
 function renderVisibleOnly(){
   if(state.tab==="catalog")renderCatalogResults();
   else if(state.tab==="collection")renderCollectionResults();
