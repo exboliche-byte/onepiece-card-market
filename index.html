@@ -109,7 +109,7 @@ function filteredCards(mode){
     if(f.playset==="Completo")list=list.filter(c=>qty(c.id)>=4);
     if(f.playset==="Incompleto")list=list.filter(c=>qty(c.id)>0&&qty(c.id)<4);
   }
-  if(mode==="album"&&f.ownership==="Tengo")list=list.filter(c=>qty(c.id)>0);
+  if(mode==="album")list=list.filter(c=>qty(c.id)>0);
   if(mode==="album"&&f.ownership==="Me faltan")list=list.filter(c=>qty(c.id)<PLAYSET);
   const dir=f.dir==="desc"?-1:1;
   const p=c=>Number(state.prices[c.id]||0);
