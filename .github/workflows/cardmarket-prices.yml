@@ -1,0 +1,43 @@
+name: cardmarket-prices
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "15 4 * * *"
+  push:
+    paths:
+      - "scripts/update-cardmarket-prices.mjs"
+      - ".github/workflows/cardmarket-prices.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: cardmarket-prices
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+
+      - name: Update Cardmarket prices
+        run: node scripts/update-cardmarket-prices.mjs
+
+      - name: Commit updated dataset
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/cardmarket-prices.json
+          if git diff --cached --quiet; then
+            echo "No price changes"
+          else
+            git commit -m "data: update Cardmarket prices $(date -u +%Y-%m-%d)"
+            git push
+          fi
