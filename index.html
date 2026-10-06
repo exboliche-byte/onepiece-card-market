@@ -136,6 +136,12 @@ function option(values,current){return values.map(v=>'<option value="'+esc(v)+'"
 function values(key,from=state.cards){return uniqueSorted(from.flatMap(c=>Array.isArray(c[key])?c[key]:[c[key]]))}
 function setCodeKey(v){return String(v||"").toUpperCase().replace(/[_\\s]+/g,"-").replace(/--+/g,"-")}
 function setCodesEqual(a,b){return setCodeKey(a)===setCodeKey(b)}
+function filterValueMatches(value,selected){
+  const target=norm(selected);
+  if(!target||target==="todos"||target==="todas")return true;
+  const values=Array.isArray(value)?value:[value];
+  return values.some(v=>norm(v)===target);
+}
 function filteredCards(mode){
   const f=state[mode];
   let list=mode==="collection"
@@ -144,11 +150,11 @@ function filteredCards(mode){
   const q=norm(f.query||state.query||"");
   if(q)list=list.filter(c=>c.search.includes(q));
   if(mode==="catalog"&&f.set&&f.set!=="Todas")list=list.filter(c=>setCodesEqual(c.set,f.set));
-  if(f.category&&f.category!=="Todos")list=list.filter(c=>c.category===f.category);
-  if(f.color&&f.color!=="Todos")list=list.filter(c=>(c.colors||[]).includes(f.color));
-  if(f.rarity&&f.rarity!=="Todos")list=list.filter(c=>c.rarity===f.rarity);
-  if(f.type&&f.type!=="Todos")list=list.filter(c=>(c.types||[]).includes(f.type));
-  if(f.attribute&&f.attribute!=="Todos")list=list.filter(c=>(c.attributes||[]).includes(f.attribute));
+  if(f.category&&f.category!=="Todos")list=list.filter(c=>filterValueMatches(c.category,f.category));
+  if(f.color&&f.color!=="Todos")list=list.filter(c=>filterValueMatches(c.colors,f.color));
+  if(f.rarity&&f.rarity!=="Todos")list=list.filter(c=>filterValueMatches(c.rarity,f.rarity));
+  if(f.type&&f.type!=="Todos")list=list.filter(c=>filterValueMatches(c.types,f.type));
+  if(f.attribute&&f.attribute!=="Todos")list=list.filter(c=>filterValueMatches(c.attributes,f.attribute));
   if(mode==="catalog"){
     if(f.minCost!=="")list=list.filter(c=>Number(c.cost??-1)>=Number(f.minCost));
     if(f.maxCost!=="")list=list.filter(c=>Number(c.cost??9999)<=Number(f.maxCost));
