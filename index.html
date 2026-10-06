@@ -288,9 +288,10 @@ function catalogToolbar(){
   '<div class="row" style="margin-bottom:10px"><span class="hint">Versiones agrupadas · '+state.cards.length.toLocaleString("es-ES")+' cartas en el catálogo.</span></div>';
 }
 
-function renderCatalogResults(){
+async function renderCatalogResults(){
   const host=$("#catalogResults");if(!host)return;
   if(state.loading&&!state.cards.length){host.innerHTML='<div class="notice">Cargando catálogo de cartas…</div>';return}
+  if(state.catalog.sort==="price")await ensurePrices(state.cards.map(c=>c.id));
   const data=groupFiltered(),pages=Math.max(1,Math.ceil(data.length/PAGE));state.catalog.page=Math.min(state.catalog.page,pages);
   const start=(state.catalog.page-1)*PAGE,visible=data.slice(start,start+PAGE);
   visible.slice(0,12).forEach(g=>preloadCardImage(g.card));
@@ -298,7 +299,7 @@ function renderCatalogResults(){
   const mode="versiones agrupadas",active=catalogActiveFilterCount();
   host.innerHTML='<div class="grid">'+visible.map(g=>state.catalog.grouped?groupedTile(g):cardTile(g.card)).join("")+'</div>'+pagination(data.length,state.catalog.page,"catalog");
   bindResultEvents(host);
-  ensurePrices(visible.flatMap(g=>g.versions||[g.card]).map(c=>c.id));
+  if(state.catalog.sort!=="price")ensurePrices(visible.flatMap(g=>g.versions||[g.card]).map(c=>c.id));
 }
 function catalogView(){
   return '<div class="wrap"><div class="hero"><div><h1>Catálogo</h1><p>Todas las cartas disponibles. Busca por nombre, ID o expansión; usa FILTRO para acotar resultados.</p></div></div><div id="liveCollectionCount" class="notice">Mi colección: '+collectionStats().distinct.toLocaleString("es-ES")+' cartas · '+collectionStats().copies.toLocaleString("es-ES")+' copias</div>'+catalogToolbar()+'<div id="catalogResults"></div></div>';
@@ -346,13 +347,14 @@ function collectionToolbar(){
   '<div class="row" style="margin-bottom:10px"><span class="hint">Aquí solo aparecen las cartas que tienes.</span><details class="io-details"><summary>Gestionar datos</summary><div class="inline-actions" style="margin-top:8px"><button class="secondary btn" id="exportCsv">Exportar CSV</button><button class="secondary btn" id="importCsv">Importar CSV</button><input id="csvFile" type="file" class="fileinput" accept=".csv,text/csv"></div></details></div>';
 }
 
-function renderCollectionResults(){
+async function renderCollectionResults(){
   const host=$("#collectionResults");if(!host)return;
+  if(state.collection.sort==="price")await ensurePrices(state.cards.map(c=>c.id));
   const list=filteredCards("collection"),pages=Math.max(1,Math.ceil(list.length/PAGE));state.collection.page=Math.min(state.collection.page,pages);
   const start=(state.collection.page-1)*PAGE,visible=list.slice(start,start+PAGE),active=collectionActiveFilterCount();
   host.innerHTML='<div class="notice">'+list.length.toLocaleString("es-ES")+' cartas en tu colección · '+collectionStats().copies.toLocaleString("es-ES")+' copias totales.'+(active?' Filtros activos: '+active+'.':'')+'</div><div class="grid">'+visible.map(c=>cardTile(c)).join("")+'</div>'+pagination(list.length,state.collection.page,"collection");
   bindResultEvents(host);
-  ensurePrices(visible.map(c=>c.id));
+  if(state.collection.sort!=="price")ensurePrices(visible.map(c=>c.id));
 }
 function collectionView(){
   const s=collectionStats();
