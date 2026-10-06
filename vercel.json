@@ -46,5 +46,6 @@
         }
       ]
     }
-  ]
+  ],
+  "buildCommand": "node scripts/update-cardmarket-prices.mjs && mkdir -p public && cp index.html public/index.html"
 }
