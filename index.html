@@ -40,7 +40,10 @@ const imageUrl=c=>officialImageUrl(c);
 const imageCdnUrl=c=>"https://optcg-api.arjunbansal-ai.workers.dev/images/"+encodeURIComponent(c?.id||"");
 const fallbackImageUrl=c=>"https://images.weserv.nl/?url="+encodeURIComponent(officialImageUrl(c).replace("https://","").replace("http://",""));
 function preloadCardImage(c){const u=imageCdnUrl(c);if(!u||imagePreloadCache.has(u))return;const im=new Image();im.src=u;imagePreloadCache.set(u,im)}
-function cardmarketSearchId(c){return String(c?.id||"").trim().replace(/_(?:p|r|c)\\d+$/i,"")}\nfunction cardmarketSlug(c){const name=String(c?.name||"").trim();const id=cardmarketSearchId(c);const slug=norm(name).replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,"");return (slug?slug+"-":"")+id}\nfunction cardmarketUrl(c){return "https://www.cardmarket.com/es/OnePiece/Cards/"+encodeURIComponent(cardmarketSlug(c))}\nfunction cardImg(c,cls="cardimg"){
+function cardmarketSearchId(c){return String(c?.id||"").trim().replace(/_(?:p|r|c)\d+$/i,"")}
+function cardmarketSlug(c){const name=String(c?.name||"").trim();const id=cardmarketSearchId(c);const slug=norm(name).replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,"");return (slug?slug+"-":"")+id}
+function cardmarketUrl(c){return "https://www.cardmarket.com/es/OnePiece/Cards/"+encodeURIComponent(cardmarketSlug(c))}
+function cardImg(c,cls="cardimg"){
   const cdn=imageCdnUrl(c),official=officialImageUrl(c),fallback=fallbackImageUrl(c);
   const loading=cls.includes("detail")?"eager":"lazy";
   const priority=cls.includes("detail")?' fetchpriority="high"':"";
