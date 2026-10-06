@@ -3,7 +3,7 @@ import fs from "node:fs/promises";
 const PRODUCT_URL = "https://downloads.s3.cardmarket.com/productCatalog/productList/products_singles_18.json";
 const PRICE_URL = "https://downloads.s3.cardmarket.com/productCatalog/priceGuide/price_guide_18.json";
 const REQUEST_TIMEOUT = 120000;
-const MIN_COVERAGE = 0.70;
+const MIN_COVERAGE = 0.90;
 
 const CARDMARKET_SET_NAMES = {
   "OP-01": ["Romance Dawn"],
@@ -318,9 +318,7 @@ async function main() {
     }
 
     const guide = prices.get(String(product.idProduct));
-    if (!guide) continue;
-
-    const eur = priceNumber(
+    const eur = guide ? priceNumber(
       guide.trend,
       guide.TREND,
       guide["Trend Price"],
@@ -328,25 +326,24 @@ async function main() {
       guide.AVG,
       guide.sell,
       guide.SELL
-    );
-    if (eur === null) continue;
+    ) : null;
 
     mapped++;
-    priced++;
+    if (eur !== null) priced++;
     const prior = oldCards[card.id] || {};
     const launchPrice = priceNumber(prior.launchPrice) ?? eur;
-    const launchPriceDate = prior.launchPriceDate || pricesRaw?.createdAt || new Date().toISOString();
+    const launchPriceDate = prior.launchPriceDate || (launchPrice !== null ? pricesRaw?.createdAt || new Date().toISOString() : null);
 
     outputCards[card.id] = {
       eur,
-      trend: priceNumber(guide.trend, guide.TREND, guide["Trend Price"]) ?? eur,
-      low: priceNumber(guide.low, guide.LOW, guide["Low Price"]),
-      avg: priceNumber(guide.avg, guide.AVG, guide["Avg. Sell Price"]),
-      avg1: priceNumber(guide.avg1, guide.AVG1, guide["AVG1"]),
-      avg7: priceNumber(guide.avg7, guide.AVG7, guide["AVG7"]),
-      avg30: priceNumber(guide.avg30, guide.AVG30, guide["AVG30"]),
+      trend: guide ? priceNumber(guide.trend, guide.TREND, guide["Trend Price"]) : null,
+      low: guide ? priceNumber(guide.low, guide.LOW, guide["Low Price"]) : null,
+      avg: guide ? priceNumber(guide.avg, guide.AVG, guide["Avg. Sell Price"]) : null,
+      avg1: guide ? priceNumber(guide.avg1, guide.AVG1, guide["AVG1"]) : null,
+      avg7: guide ? priceNumber(guide.avg7, guide.AVG7, guide["AVG7"]) : null,
+      avg30: guide ? priceNumber(guide.avg30, guide.AVG30, guide["AVG30"]) : null,
       cardmarketId: Number(product.idProduct),
-      expansion: String(product.expansionName || card.set),
+      expansion: String(product.expansionName || card.set_name || card.set),
       version: productVersion(product.name),
       url: "https://www.cardmarket.com/es/OnePiece/Products?idProduct=" + encodeURIComponent(String(product.idProduct)),
       launchPrice,
@@ -369,8 +366,11 @@ async function main() {
       catalogCards: cards.length,
       productCatalogSingles: products.length,
       priceGuideRows: prices.size,
+      mappedCards: mapped,
+      pricedCards: priced,
       priceCards: Object.keys(outputCards).length,
       coverage: Number(coverage.toFixed(4)),
+      priceCoverage: Number((priced / Math.max(1, cards.length)).toFixed(4)),
       unmatched: unmatched.length
     }
   };
