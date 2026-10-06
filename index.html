@@ -100,6 +100,7 @@ function cardHtml(c,mode){
     '<div class="chips">'+(c.colors||[]).map(x=>'<span class="chip">'+esc(x)+'</span>').join("")+'</div>'+
     '<div class="row"><b>'+(p?money(p):"Precio —")+'</b><span class="muted">'+(q<4?("Playset −"+need):"Playset ✓")+'</span></div>'+
     '<div class="quick"><button class="secondary" data-qty="'+esc(c.id)+'" data-delta="-1">−</button><div class="qty">'+q+'</div><button class="primary" data-qty="'+esc(c.id)+'" data-delta="1">+</button></div>'+
+    '<div class="quick" style="grid-template-columns:1fr 1fr"><button class="secondary btn" data-setqty="'+esc(c.id)+'" data-value="4">Completar 4/4</button><button class="secondary btn" data-setqty="'+esc(c.id)+'" data-value="4">+4</button></div>'+
     '<button class="secondary btn" style="width:100%;margin-top:7px" data-detail="'+esc(c.id)+'">Ver carta</button>'+
     '</div></article>';
 }
@@ -260,6 +261,7 @@ function wire(){
   $("#searchInput")?.addEventListener("input",e=>{query=e.target.value;catalogLimit=120;collectionLimit=120;render()});
   document.querySelectorAll("[data-filter]").forEach(x=>x.onchange=()=>{const key=x.dataset.filter;if(tab==="catalog")catalogFilters[key]=x.value;else collectionFilters[key]=x.value;catalogLimit=120;collectionLimit=120;render()});
   document.querySelectorAll("[data-qty]").forEach(b=>b.onclick=()=>changeCollection(b.dataset.qty,Number(b.dataset.delta)));
+  document.querySelectorAll("[data-setqty]").forEach(b=>b.onclick=()=>setCollectionQuantity(b.dataset.setqty,Number(b.dataset.value)));
   document.querySelectorAll("[data-detail]").forEach(b=>b.onclick=()=>{detail=cards.find(c=>c.id===b.dataset.detail)||null;render()});
   $("#moreCatalog")?.addEventListener("click",()=>{catalogLimit+=120;render()});$("#moreCollection")?.addEventListener("click",()=>{collectionLimit+=120;render()});
   $("#newDeck")?.addEventListener("click",newDeck);$("#deleteDeck")?.addEventListener("click",deleteDeck);$("#renameDeck")?.addEventListener("click",renameDeck);$("#chooseLeader")?.addEventListener("click",chooseLeader);
@@ -456,6 +458,7 @@ function applyAdvancedCollection(list){
     return true;
   });
 }
+function setCollectionQuantity(id,value){const n=Math.max(0,Math.min(99,Number(value)||0));if(n===0)delete collection[id];else collection[id]=n;saveLocal();if(sb&&user)syncOne(id,n);render();}
 const originalFilterCollection=filterCollection;
 function filterCollectionEnhanced(){
   return applyAdvancedCollection(originalFilterCollection());
