@@ -135,7 +135,7 @@ async function ensurePrices(ids){
     const chunk=wanted.slice(i,i+80);
     try{const d=await fetchJson("/api/cardmarket?ids="+encodeURIComponent(chunk.join(",")),12000);Object.assign(state.prices,d.prices||{});state.priceDate=d.updatedAt||state.priceDate;localStorage.setItem("mialbumonepiece_prices",JSON.stringify({prices:state.prices,updatedAt:state.priceDate}));}catch{}
   }
-  renderVisibleOnly();
+  // Evita desmontar y volver a cargar las imágenes cuando llegan los precios.
 }
 function loadCachedPrices(){try{const d=JSON.parse(localStorage.getItem("mialbumonepiece_prices")||"null");if(d?.prices)state.prices=d.prices;state.priceDate=d?.updatedAt||null}catch{}}
 function cardTile(c,extra=""){
