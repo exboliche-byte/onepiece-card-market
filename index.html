@@ -47,7 +47,7 @@ function cardmarketSetSlug(c){
   if(known[code])return known[code];
   return norm(String(c?.set_name||code)).replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,"");
 }
-function cardmarketSlugName(c){return norm(String(c?.name||"").trim()).replace(/[^a-z0-9]+/g,"")}
+function cardmarketSlugName(c){return norm(String(c?.name||"").trim()).replace(/\./g,"").replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,"")}
 function cardmarketVersionNumber(c){
   const base=cardmarketSearchId(c),set=String(c?.set||"");
   const same=state.cards.filter(x=>cardmarketSearchId(x)===base&&String(x?.set||"")===set);
