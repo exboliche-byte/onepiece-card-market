@@ -50,7 +50,7 @@ function groupKey(c){
 }
 function uniqueSorted(arr){return [...new Set(arr.filter(v=>v!==null&&v!==undefined&&String(v)!==""))].sort((a,b)=>String(a).localeCompare(String(b),"es"))}
 function setName(code){return state.packs.find(p=>p.code===code)?.name||code}
-function packLabel(p){return String(p?.code||"")+" · "+String(p?.name||p?.code||"")}
+function packLabel(p){return String(p?.code||"")}
 function prepareCatalog(raw,packs){
   state.packs=Array.isArray(packs)?packs:Object.values(packs);
   state.cards=(Array.isArray(raw)?raw:Object.values(raw)).map(c=>({...c,id:String(c.id||"").trim(),set:String(c.set||"").trim(),set_name:c.set_name||setName(c.set||"")})).filter(c=>c.id);
