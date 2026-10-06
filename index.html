@@ -49,10 +49,18 @@ function groupKey(c){
   return norm([c.name,c.category,c.cost,c.power,c.counter,(c.colors||[]).join(","),(c.types||[]).join(","),c.effect,c.trigger].join("|"));
 }
 function uniqueSorted(arr){return [...new Set(arr.filter(v=>v!==null&&v!==undefined&&String(v)!==""))].sort((a,b)=>String(a).localeCompare(String(b),"es"))}
+function packSortKey(code){
+  const s=String(code||"").toUpperCase().replace(/\s+/g,"");
+  const m=s.match(/^(OP|ST|EB|PRB|P|DON|PROMO)[-_]?(\d+)/);
+  const rank={OP:1,EB:2,ST:3,PRB:4,P:5,PROMO:6,DON:7};
+  if(m)return [rank[m[1]]||99,Number(m[2]),m[1],s];
+  return [99,9999,s,s];
+}
+function comparePacks(a,b){const x=packSortKey(a?.code),y=packSortKey(b?.code);for(let i=0;i<x.length;i++){if(x[i]!==y[i])return typeof x[i]==="number"?x[i]-y[i]:String(x[i]).localeCompare(String(y[i]),"es")}return 0}
 function setName(code){return state.packs.find(p=>p.code===code)?.name||code}
 function packLabel(p){return String(p?.code||"")}
 function prepareCatalog(raw,packs){
-  state.packs=Array.isArray(packs)?packs:Object.values(packs);
+  state.packs=(Array.isArray(packs)?packs:Object.values(packs)).slice().sort(comparePacks);
   state.cards=(Array.isArray(raw)?raw:Object.values(raw)).map(c=>({...c,id:String(c.id||"").trim(),set:String(c.set||"").trim(),set_name:c.set_name||setName(c.set||"")})).filter(c=>c.id);
   const map=new Map();
   for(const c of state.cards){c.search=norm([c.id,c.name,c.set,c.set_name,c.category,c.rarity,...(c.colors||[]),...(c.types||[]),...(c.attributes||[]),c.effect,c.trigger].join(" "));const k=groupKey(c);if(!map.has(k))map.set(k,{key:k,card:c,ids:[],sets:new Set()});const g=map.get(k);g.ids.push(c.id);g.sets.add(c.set)}
@@ -250,7 +258,7 @@ function collectionFilterPanel(){
   return '<div class="filter-panel" id="collectionFilterPanel">'+
     '<div class="filter-heading"><h3>Filtros de mi colección</h3><button class="secondary btn" id="clearCollectionFilters" type="button">Limpiar filtros</button></div>'+
     '<div class="filter-grid">'+
-      filterLabel("Expansión",'<select id="colSet" class="field"><option value="Todas" '+(f.set==="Todas"?"selected":"")+'>Todas</option>'+option(state.packs.map(p=>packLabel(p)),state.packs.find(p=>p.code===f.set)?packLabel(state.packs.find(p=>p.code===f.set)):"")+'</select>')+
+      filterLabel("Expansión",'<select id="colSet" class="field"><option value="Todas" '+(f.set==="Todas"?"selected":"")+'>Todas</option>'+state.packs.map(p=>'<option value="'+esc(p.code)+'" '+(p.code===f.set?"selected":"")+'>'+esc(packLabel(p))+'</option>').join("")+'</select>')+
       filterLabel("Categoría",'<select id="colCategory" class="field"><option value="Todos" '+(f.category==="Todos"?"selected":"")+'>Todas</option>'+option(values("category"),f.category)+'</select>')+
       filterLabel("Color",'<select id="colColor" class="field"><option value="Todos" '+(f.color==="Todos"?"selected":"")+'>Todos</option>'+option(values("colors"),f.color)+'</select>')+
       filterLabel("Rareza",'<select id="colRarity" class="field"><option value="Todos" '+(f.rarity==="Todos"?"selected":"")+'>Todas</option>'+option(values("rarity"),f.rarity)+'</select>')+
@@ -310,7 +318,7 @@ function renderAlbumResults(){
   ensurePrices(visible.map(c=>c.id));
 }
 function expansionStats(){
-  return state.packs.map(p=>{const list=state.cards.filter(c=>c.set===p.code),owned=list.filter(c=>qty(c.id)>0),value=owned.reduce((s,c)=>s+qty(c.id)*Number(state.prices[c.id]||0),0),missingCost=list.reduce((s,c)=>s+Math.max(0,4-qty(c.id))*Number(state.prices[c.id]||0),0);return {...p,total:list.length,owned:owned.length,pct:list.length?owned.length/list.length*100:0,playsets:list.filter(c=>qty(c.id)>=4).length,value,missingCost}})
+  return state.packs.slice().sort(comparePacks).map(p=>{const list=state.cards.filter(c=>c.set===p.code),owned=list.filter(c=>qty(c.id)>0),value=owned.reduce((s,c)=>s+qty(c.id)*Number(state.prices[c.id]||0),0),missingCost=list.reduce((s,c)=>s+Math.max(0,4-qty(c.id))*Number(state.prices[c.id]||0),0);return {...p,total:list.length,owned:owned.length,pct:list.length?owned.length/list.length*100:0,playsets:list.filter(c=>qty(c.id)>=4).length,value,missingCost}})
 }
 function homeView(){
   const s=collectionStats(), ex=expansionStats().slice(0,6);
