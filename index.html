@@ -65,7 +65,7 @@ function comparePacks(a,b){
 function setName(code){return state.packs.find(p=>p.code===code)?.name||code}
 function packLabel(p){return String(p?.code||"")}
 function prepareCatalog(raw,packs){
-  state.packs=(Array.isArray(packs)?packs:Object.values(packs)).filter(p=>!/^EB[-_]?\d+/i.test(String(p?.code||""))).slice().sort(comparePacks);
+  state.packs=(Array.isArray(packs)?packs:Object.values(packs)).slice().sort(comparePacks);
   state.cards=(Array.isArray(raw)?raw:Object.values(raw)).map(c=>({...c,id:String(c.id||"").trim(),set:String(c.set||"").trim(),set_name:c.set_name||setName(c.set||"")})).filter(c=>c.id);
   const map=new Map();
   for(const c of state.cards){c.search=norm([c.id,c.name,c.set,c.set_name,c.category,c.rarity,...(c.colors||[]),...(c.types||[]),...(c.attributes||[]),c.effect,c.trigger].join(" "));const k=groupKey(c);if(!map.has(k))map.set(k,{key:k,card:c,ids:[],sets:new Set()});const g=map.get(k);g.ids.push(c.id);g.sets.add(c.set)}
