@@ -241,8 +241,9 @@ function deckValidate(d){
   const banned=new Set(["OP06-047","OP03-040","OP06-086","ST10-001","OP06-116"]);
   const pairs=[["OP07-115","EB04-058"],["OP11-040","OP11-067"],["OP11-040","OP08-069"]];
   let illegal=0;if(!leader)messages.push("Líder no seleccionado");if(total!==50)messages.push(total+"/50 cartas no líder");
-  const ids=Object.entries(d.cards||{});
-  for(const [id,n] of ids){const c=card(id);const base=baseId(id);if(!c){illegal++;continue}if(c.category==="Leader"){illegal++;continue}if(Number(n)>4){illegal++;messages.push(c.id+">4 copias")}if(banned.has(base)){illegal++;messages.push(base+" prohibida")}if(leader&&!(c.colors||[]).some(col=>(leader.colors||[]).includes(col))){illegal++;}}
+  const ids=Object.entries(d.cards||{}),baseCounts=new Map();
+  for(const [id,n] of ids){const c=card(id);const base=baseId(id);baseCounts.set(base,(baseCounts.get(base)||0)+Number(n||0));if(!c){illegal++;continue}if(c.category==="Leader"){illegal++;continue}if(Number(n)>4){illegal++;messages.push(c.id+">4 copias")}if(banned.has(base)){illegal++;messages.push(base+" prohibida")}if(leader&&!(c.colors||[]).some(col=>(leader.colors||[]).includes(col))){illegal++;}}
+  for(const [base,count] of baseCounts)if(count>4){illegal++;messages.push(base+">4 copias totales entre versiones")}
   for(const [a,b] of pairs){if(ids.some(([id,n])=>baseId(id)===a&&Number(n)>0)&&ids.some(([id,n])=>baseId(id)===b&&Number(n)>0)){illegal++;messages.push("pareja prohibida "+a+" + "+b)}}
   if(illegal)messages.push(illegal+" carta(s) ilegales");
   return {total,illegal,valid:!!leader&&total===50&&illegal===0,messages};
@@ -268,10 +269,13 @@ function changeQty(id,d){
 }
 function setQty(id,n){n=Math.max(0,Math.min(99,Number(n)||0));if(n===0)delete state.owned[id];else state.owned[id]=n;saveLocal();syncOne(id,n);renderVisibleOnly()}
 function changeDeckQty(id,d){
-  const deck=state.decks.find(x=>x.id===state.deckId);if(!deck)return;const n=Math.max(0,Math.min(4,Number(deck.cards[id]||0)+Number(d||0)));if(n===0)delete deck.cards[id];else deck.cards[id]=n;saveLocal();syncDeck(deck);renderShell();
+  const deck=state.decks.find(x=>x.id===state.deckId);if(!deck)return;
+  let n=Math.max(0,Math.min(4,Number(deck.cards[id]||0)+Number(d||0)));
+  if(d>0){const used=Object.entries(deck.cards||{}).filter(([x])=>baseId(x)===baseId(id)).reduce((s,[,q])=>s+Number(q||0),0);if(used>=4){notify("Máximo 4 copias de ese número de carta");return}}
+  if(n===0)delete deck.cards[id];else deck.cards[id]=n;saveLocal();syncDeck(deck);renderShell();
 }
 function setLeader(id){const d=state.decks.find(x=>x.id===state.deckId);if(!d)return;d.leader=id;saveLocal();syncDeck(d);renderShell()}
-function addToDeck(id){const d=state.decks.find(x=>x.id===state.deckId);if(!d)return;const c=card(id);if(!c)return;if(c.category==="Leader"){setLeader(id);return}if(Number(d.cards[id]||0)>=4){notify("Máximo 4 copias");return}d.cards[id]=Number(d.cards[id]||0)+1;saveLocal();syncDeck(d);renderShell();notify("Añadida al mazo")}
+function addToDeck(id){const d=state.decks.find(x=>x.id===state.deckId);if(!d)return;const c=card(id);if(!c)return;if(c.category==="Leader"){setLeader(id);return}const used=Object.entries(d.cards||{}).filter(([x])=>baseId(x)===baseId(id)).reduce((s,[,q])=>s+Number(q||0),0);if(used>=4){notify("Máximo 4 copias de ese número de carta");return}d.cards[id]=Number(d.cards[id]||0)+1;saveLocal();syncDeck(d);renderShell();notify("Añadida al mazo")}
 function newDeckModal(){
   return '<div class="modalback"><div class="modal"><div class="sectionhead"><h2>Nuevo mazo</h2><button class="close" data-close>×</button></div><input id="newDeckName" class="field" placeholder="Nombre del mazo"><textarea id="newDeckDesc" class="field" style="margin-top:8px" rows="3" placeholder="Descripción (opcional)"></textarea><div class="row" style="margin-top:9px"><button class="secondary btn" data-close>Cancelar</button><button class="primary btn" id="createDeckConfirm">Crear</button></div></div></div>';
 }
