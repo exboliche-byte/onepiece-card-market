@@ -27,51 +27,56 @@ function scoreProduct(p,wanted){
   for(const id of wanted){
     if(ids.includes(id))score=Math.max(score,100);
     if(baseId(id)===baseId(ids[0]||""))score=Math.max(score,70);
-    if(baseId(id)===baseId(id)&&name.includes(baseId(id)))score=Math.max(score,50);
-    if(/_(P\d+|R\d+)$/.test(id) && /(PARALLEL|V\.\d+|ALT|REPRINT)/.test(name))score+=8;
+    if(name.includes(baseId(id)))score=Math.max(score,50);
+    if(/_(P\d+|R\d+)$/.test(id)&&/(PARALLEL|V\.\d+|ALT|REPRINT)/.test(name))score+=8;
   }
   return score;
 }
-export default async function handler(req,res){
-  try{
-    const ids=String(req.query?.ids||"").split(",").map(norm).filter(Boolean).slice(0,120);
-    const now=Date.now();
-    if(!productCache||!priceCache||now-cacheAt>TTL){
-      const [pr,pg]=await Promise.all([
-        fetch("https://downloads.s3.cardmarket.com/productCatalog/productList/products_singles_18.json"),
-        fetch("https://downloads.s3.cardmarket.com/productCatalog/priceGuide/price_guide_18.json")
-      ]);
-      if(!pr.ok||!pg.ok)throw new Error("Cardmarket feed unavailable");
-      productCache=rows(await pr.json());
-      priceCache=rows(await pg.json());
-      cacheAt=now;
-    }
-    const guide=new Map();
-    for(const x of priceCache){
-      const id=x?.idProduct??x?.productId??x?.id;
-      if(id!=null)guide.set(String(id),x);
-    }
-    const out={};
-    for(const wantedId of ids){
-      const base=baseId(wantedId);
-      let best=null,bestScore=-1;
-      for(const p of productCache){
-        const idsIn=extractIds(p);
-        const match=idsIn.some(id=>id===wantedId||baseId(id)===base);
-        if(!match)continue;
-        const score=scoreProduct(p,[wantedId]);
-        const pid=p?.idProduct??p?.productId??p?.id;
-        const g=pid!=null?guide.get(String(pid)):null;
-        if(!g)continue;
-        const val=[g.trend,g.priceTrend,g.avg30,g.avg,g.average,g.low].map(number).find(Number.isFinite);
-        if(!Number.isFinite(val))continue;
-        if(score>bestScore){bestScore=score;best={val,score}}
+export default {
+  async fetch(request){
+    try{
+      const url=new URL(request.url);
+      const ids=String(url.searchParams.get("ids")||"").split(",").map(norm).filter(Boolean).slice(0,120);
+      if(!ids.length)return Response.json({prices:{},updatedAt:null,source:"Cardmarket public data"});
+      const now=Date.now();
+      if(!productCache||!priceCache||now-cacheAt>TTL){
+        const [pr,pg]=await Promise.all([
+          fetch("https://downloads.s3.cardmarket.com/productCatalog/productList/products_singles_18.json"),
+          fetch("https://downloads.s3.cardmarket.com/productCatalog/priceGuide/price_guide_18.json")
+        ]);
+        if(!pr.ok||!pg.ok)throw new Error("Cardmarket feed unavailable");
+        productCache=rows(await pr.json());
+        priceCache=rows(await pg.json());
+        cacheAt=now;
       }
-      if(best)out[wantedId]=best.val;
+      const guide=new Map();
+      for(const x of priceCache){
+        const id=x?.idProduct??x?.productId??x?.id;
+        if(id!=null)guide.set(String(id),x);
+      }
+      const out={};
+      for(const wantedId of ids){
+        const base=baseId(wantedId);
+        let best=null,bestScore=-1;
+        for(const p of productCache){
+          const idsIn=extractIds(p);
+          if(!idsIn.some(id=>id===wantedId||baseId(id)===base))continue;
+          const pid=p?.idProduct??p?.productId??p?.id;
+          const g=pid!=null?guide.get(String(pid)):null;
+          if(!g)continue;
+          const val=[g.trend,g.avg,g.avg30,g.priceTrend,g.average,g.low].map(number).find(Number.isFinite);
+          if(!Number.isFinite(val))continue;
+          const score=scoreProduct(p,[wantedId]);
+          if(score>bestScore){bestScore=score;best=val;}
+        }
+        if(best!==null)out[wantedId]=best;
+      }
+      return new Response(JSON.stringify({prices:out,updatedAt:new Date(cacheAt).toISOString(),source:"Cardmarket public data"}),{
+        status:200,
+        headers:{"content-type":"application/json; charset=utf-8","cache-control":"public, s-maxage=21600, stale-while-revalidate=86400"}
+      });
+    }catch(e){
+      return Response.json({prices:{},updatedAt:null,error:"Precio de referencia no disponible"},{status:502});
     }
-    res.setHeader("Cache-Control","public, s-maxage=21600, stale-while-revalidate=86400");
-    res.status(200).json({prices:out,updatedAt:new Date(cacheAt).toISOString(),source:"Cardmarket public data"});
-  }catch(e){
-    res.status(502).json({prices:{},updatedAt:null,error:"Precio de referencia no disponible"});
   }
-}
+};
