@@ -50,6 +50,7 @@ function groupKey(c){
 }
 function uniqueSorted(arr){return [...new Set(arr.filter(v=>v!==null&&v!==undefined&&String(v)!==""))].sort((a,b)=>String(a).localeCompare(String(b),"es"))}
 function setName(code){return state.packs.find(p=>p.code===code)?.name||code}
+function packLabel(p){return String(p?.code||"")+" · "+String(p?.name||p?.code||"")}
 function prepareCatalog(raw,packs){
   state.packs=Array.isArray(packs)?packs:Object.values(packs);
   state.cards=(Array.isArray(raw)?raw:Object.values(raw)).map(c=>({...c,id:String(c.id||"").trim(),set:String(c.set||"").trim(),set_name:c.set_name||setName(c.set||"")})).filter(c=>c.id);
@@ -188,7 +189,7 @@ function catalogFilterPanel(){
   return '<div class="filter-panel" id="catalogFilterPanel">'+
     '<div class="filter-heading"><h3>Filtros</h3><button class="secondary btn" id="clearCatalogFilters" type="button">Limpiar filtros</button></div>'+
     '<div class="filter-grid">'+
-      filterLabel("Expansión",'<select id="catSet" class="field"><option value="Todas" '+(f.set==="Todas"?"selected":"")+' >Todas</option>'+state.packs.map(p=>'<option value="'+esc(p.code)+'" '+(p.code===f.set?"selected":"")+'>'+esc(p.name||p.code)+'</option>').join("")+'</select>')+
+      filterLabel("Expansión",'<select id="catSet" class="field"><option value="Todas" '+(f.set==="Todas"?"selected":"")+' >Todas</option>'+state.packs.map(p=>'<option value="'+esc(p.code)+'" '+(p.code===f.set?"selected":"")+'>'+esc(packLabel(p))+'</option>').join("")+'</select>')+
       filterLabel("Categoría",'<select id="catCategory" class="field"><option value="Todos" '+(f.category==="Todos"?"selected":"")+'>Todas</option>'+option(values("category"),f.category)+'</select>')+
       filterLabel("Color",'<select id="catColor" class="field"><option value="Todos" '+(f.color==="Todos"?"selected":"")+'>Todos</option>'+option(values("colors"),f.color)+'</select>')+
       filterLabel("Rareza",'<select id="catRarity" class="field"><option value="Todos" '+(f.rarity==="Todos"?"selected":"")+'>Todas</option>'+option(values("rarity"),f.rarity)+'</select>')+
@@ -249,7 +250,7 @@ function collectionFilterPanel(){
   return '<div class="filter-panel" id="collectionFilterPanel">'+
     '<div class="filter-heading"><h3>Filtros de mi colección</h3><button class="secondary btn" id="clearCollectionFilters" type="button">Limpiar filtros</button></div>'+
     '<div class="filter-grid">'+
-      filterLabel("Expansión",'<select id="colSet" class="field"><option value="Todas" '+(f.set==="Todas"?"selected":"")+'>Todas</option>'+option(state.packs.map(p=>p.code),f.set)+'</select>')+
+      filterLabel("Expansión",'<select id="colSet" class="field"><option value="Todas" '+(f.set==="Todas"?"selected":"")+'>Todas</option>'+option(state.packs.map(p=>packLabel(p)),state.packs.find(p=>p.code===f.set)?packLabel(state.packs.find(p=>p.code===f.set)):"")+'</select>')+
       filterLabel("Categoría",'<select id="colCategory" class="field"><option value="Todos" '+(f.category==="Todos"?"selected":"")+'>Todas</option>'+option(values("category"),f.category)+'</select>')+
       filterLabel("Color",'<select id="colColor" class="field"><option value="Todos" '+(f.color==="Todos"?"selected":"")+'>Todos</option>'+option(values("colors"),f.color)+'</select>')+
       filterLabel("Rareza",'<select id="colRarity" class="field"><option value="Todos" '+(f.rarity==="Todos"?"selected":"")+'>Todas</option>'+option(values("rarity"),f.rarity)+'</select>')+
@@ -585,12 +586,24 @@ function parseCSV(text){
 function previewImport(text){
   try{const rows=parseCSV(text);if(rows.length<2)throw Error("CSV vacío");const h=rows[0].map(x=>norm(x).replace(/\\s+/g,"_"));const idI=Math.max(h.indexOf("card_id"),h.indexOf("id"),h.indexOf("numero"),h.indexOf("number"));const qI=Math.max(h.indexOf("quantity"),h.indexOf("cantidad"),h.indexOf("qty"),h.indexOf("copias"));if(idI<0||qI<0)throw Error("Faltan card_id/id y quantity/cantidad");const unknown=[],valid=[];for(const r of rows.slice(1)){const id=String(r[idI]||"").trim().toUpperCase(),q=Math.max(0,Math.min(99,Number(r[qI]||0)));if(card(id))valid.push([id,q]);else unknown.push(id)}const sum=valid.reduce((a,x)=>a+x[1],0);const msg="Filas: "+(rows.length-1)+" · reconocidas: "+valid.length+" · desconocidas: "+unknown.length+" · copias: "+sum+(unknown.length?"\\nIDs no encontrados: "+unknown.slice(0,20).join(", "):"");if(confirm(msg+"\\n\\nAceptar = sumar cantidades. Cancelar = no importar.")){for(const [id,q] of valid){state.owned[id]=qty(id)+q;if(state.owned[id]>99)state.owned[id]=99}saveLocal();if(state.user)syncCloud();renderVisibleOnly();notify("Colección importada")}}catch(e){alert(e.message||"CSV no válido")}
 }
+const REMOTE_CARDS="https://raw.githubusercontent.com/michalkiral/optcg-data/main/data/index/cards_by_id.json";
+const REMOTE_PACKS="https://raw.githubusercontent.com/michalkiral/optcg-data/main/data/packs.json";
+async function loadCatalogData(){
+  try{
+    const [remoteCards,remotePacks]=await Promise.all([fetchJson(REMOTE_CARDS,30000),fetchJson(REMOTE_PACKS,20000)]);
+    const cards=Array.isArray(remoteCards)?remoteCards:Object.values(remoteCards||{});
+    if(!cards.length||!Array.isArray(remotePacks)||!remotePacks.length)throw Error("Fuente remota vacía");
+    return {cards,packs:remotePacks,remote:true};
+  }catch(e){
+    const [localCards,localPacks]=await Promise.all([fetchJson(DATA+"cards.json"),fetchJson(DATA+"packs.json")]);
+    return {cards:Array.isArray(localCards)?localCards:Object.values(localCards||{}),packs:localPacks,remote:false};
+  }
+}
 async function boot(){
   loadLocal();loadCachedPrices();renderShell();
-  try{const [raw,packs]=await Promise.all([fetchJson(DATA+"cards.json"),fetchJson(DATA+"packs.json")]);prepareCatalog(raw,packs);state.loading=false;renderShell();await loadShared();if(state.shared)renderShell();if(state.tab==="catalog")ensurePrices(groupFiltered().slice(0,PAGE).flatMap(g=>(g.versions||[g.card]).map(c=>c.id)));}catch(e){$("#app").innerHTML='<div class="wrap"><div class="hero"><div><h1>MiAlbumOnePiece</h1><p>No se pudo cargar el catálogo.</p></div></div><div class="section"><div class="notice">Error cargando datos: '+esc(e.message||"desconocido")+'</div><button class="primary btn" onclick="location.reload()">Reintentar</button></div></div>'}
+  try{const data=await loadCatalogData();prepareCatalog(data.cards,data.packs);state.loading=false;renderShell();await loadShared();if(state.shared)renderShell();if(state.tab==="catalog")ensurePrices(groupFiltered().slice(0,PAGE).flatMap(g=>(g.versions||[g.card]).map(c=>c.id)));}catch(e){$("#app").innerHTML='<div class="wrap"><div class="hero"><div><h1>MiAlbumOnePiece</h1><p>No se pudo cargar el catálogo.</p></div></div><div class="section"><div class="notice">Error cargando datos: '+esc(e.message||"desconocido")+'</div><button class="primary btn" onclick="location.reload()">Reintentar</button></div></div>'}
   initSupabase();
-}
-boot();
+}boot();
 </script>
 </body>
 </html>
