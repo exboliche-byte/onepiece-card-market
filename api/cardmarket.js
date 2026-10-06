@@ -14,7 +14,14 @@ function norm(v){return String(v??"").toUpperCase().replace(/\s+/g," ").trim()}
 function baseId(id){return norm(id).replace(/_(?:P\d+|R\d+|C\d+)$/,"")}
 function extractIds(v){
   const text=typeof v==="string"?v:JSON.stringify(v||"");
-  return [...new Set((text.match(/(?:(?:OP|ST|EB)\d{2}-\d{3}|(?:PRB|P|EX|DON)[-_]\d{2,3})(?:_[A-Z0-9]+)?/gi)||[]).map(norm))];
+  const baseIds=(text.match(/(?:(?:OP|ST|EB)\d{2}-\d{3}|(?:PRB|P|EX|DON)[-_]\d{2,3})(?:_[A-Z0-9]+)?/gi)||[]).map(norm);
+  const versions=[...new Set((text.match(/\(V\.\d+\)/gi)||[]).map(x=>x.replace(/[^0-9]/g,"")))];
+  const out=new Set(baseIds);
+  for(const id of baseIds){
+    const base=baseId(id);
+    for(const v of versions)out.add(base+"_P"+v);
+  }
+  return [...out];
 }
 function number(v){
   if(v===null||v===undefined||v==="")return NaN;
