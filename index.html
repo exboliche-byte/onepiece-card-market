@@ -2,6 +2,9 @@
 :root{--bg:#090b12;--panel:#111521;--panel2:#171c2a;--line:#273044;--txt:#f7f8fb;--muted:#9aa4b8;--accent:#ffcf33;--danger:#ff667a;--ok:#63e6be}
 *{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 20% -10%,#1c2540 0,#090b12 42%);color:var(--txt);font:15px system-ui,-apple-system,Segoe UI,Roboto,sans-serif}button,input,select{font:inherit}button{cursor:pointer;border:0}.app{min-height:100vh;padding-bottom:78px}.top{position:sticky;top:0;z-index:5;display:flex;justify-content:space-between;align-items:center;padding:14px 16px;background:#090b12e8;backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}.brand b{display:block;letter-spacing:.12em}.brand span{font-size:10px;color:var(--muted);letter-spacing:.2em}.account{background:var(--panel2);color:var(--txt);border:1px solid var(--line);padding:8px 11px;border-radius:999px}.wrap{max-width:1200px;margin:auto;padding:18px 16px}.hero{display:flex;justify-content:space-between;gap:16px;align-items:end;margin:8px 0 18px}.hero h1{font-size:clamp(27px,7vw,48px);margin:0 0 5px}.hero p{margin:0;color:var(--muted)}.search{display:flex;gap:8px;margin-bottom:12px}.search input,.filters select,.modal input{width:100%;background:var(--panel);border:1px solid var(--line);color:var(--txt);border-radius:13px;padding:12px}.btn{padding:11px 14px;border-radius:12px;font-weight:700}.primary{background:var(--accent);color:#16120a}.secondary{background:var(--panel2);color:var(--txt);border:1px solid var(--line)}.filters{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px}.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}.card{background:linear-gradient(180deg,#151a28,#0f131e);border:1px solid var(--line);border-radius:16px;overflow:hidden}.card img{display:block;width:100%;aspect-ratio:63/88;object-fit:cover;background:#080a0f}.card .body{padding:10px}.name{font-weight:750;line-height:1.2}.muted{color:var(--muted);font-size:12px}.pills{display:flex;flex-wrap:wrap;gap:4px;margin:7px 0}.pill{font-size:10px;padding:3px 6px;border:1px solid var(--line);border-radius:999px;color:#cdd5e5}.row{display:flex;justify-content:space-between;align-items:center;gap:7px}.actions{display:flex;gap:6px;margin-top:8px}.actions button{flex:1;font-size:12px}.nav{position:fixed;z-index:10;bottom:0;left:0;right:0;display:grid;grid-template-columns:repeat(4,1fr);padding:8px max(8px,env(safe-area-inset-left)) max(8px,env(safe-area-inset-bottom));background:#0d111bdF;border-top:1px solid var(--line);backdrop-filter:blur(18px)}.nav button{background:transparent;color:var(--muted);padding:8px 4px}.nav button.active{color:var(--accent);font-weight:700}.nav span{display:block;font-size:11px;margin-top:2px}.section{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:14px;margin-bottom:12px}.section h2{margin:0 0 10px}.list{display:grid;gap:8px}.listrow{display:flex;align-items:center;gap:10px;padding:9px;background:var(--panel2);border-radius:12px}.listrow img{width:46px;height:64px;object-fit:cover;border-radius:6px}.modalback{position:fixed;inset:0;z-index:20;background:#000b;display:grid;place-items:end center}.modal{width:min(720px,100%);max-height:92vh;overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:22px 22px 0 0;padding:18px}.modaltop{display:flex;justify-content:space-between}.detail{display:grid;grid-template-columns:180px 1fr;gap:18px}.detail img{width:100%;border-radius:10px}.close{background:var(--panel2);color:var(--txt);border-radius:50%;width:36px;height:36px}.empty{text-align:center;padding:45px 15px;color:var(--muted)}.toast{position:fixed;z-index:30;left:50%;bottom:88px;transform:translateX(-50%);background:#f7f8fb;color:#111;padding:10px 14px;border-radius:999px;font-weight:700}.error{color:var(--danger);margin-top:8px}.ok{color:var(--ok)}
 @media(max-width:700px){.filters{grid-template-columns:1fr 1fr}.detail{grid-template-columns:120px 1fr}.grid{grid-template-columns:repeat(2,1fr)}.actions{flex-direction:column}}
+
+.statsmini{display:flex;flex-direction:column;align-items:flex-end;background:var(--panel);border:1px solid var(--line);padding:10px 12px;border-radius:14px}.statsmini b{font-size:22px}.statsmini span{font-size:11px;color:var(--muted)}.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px}.kpi{display:flex;flex-direction:column;gap:4px;margin:0}.kpi b{font-size:20px}.kpi span{font-size:11px;color:var(--muted)}.sectiontitle{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px}.sectiontitle h2,.sectiontitle h3{margin:0}.subbar{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:8px 0 12px;color:var(--muted);font-size:12px}.loadmore{text-align:center;padding:20px}.expgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}.exp{display:grid;grid-template-columns:1fr auto;grid-template-rows:auto auto;text-align:left;background:var(--panel2);color:var(--txt);border:1px solid var(--line);border-radius:12px;padding:12px}.exp strong{grid-row:1/3;grid-column:2;font-size:18px}.exp small{color:var(--muted)}.qtyctrl{display:flex;align-items:center;gap:10px;justify-content:center;margin-top:8px}.mini{min-width:36px;height:36px;border-radius:10px}.decklist{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.deckcard{display:flex;flex-direction:column;align-items:flex-start;gap:4px;text-align:left;background:var(--panel2);color:var(--txt);border:1px solid var(--line);border-radius:13px;padding:12px}.deckcard.sel{border-color:var(--accent)}.deckcard span,.deckcard small{color:var(--muted)}.rowBtns{display:flex;gap:7px}.deckhero{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:10px 0}.deckhero>div{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:10px}.deckhero b,.deckhero strong{display:block}.deckhero strong{font-size:19px;margin-top:3px}.fieldlabel{display:block;font-size:12px;font-weight:700;margin:12px 0 5px}.decknote{margin:5px 0 10px}.deckrow{min-height:82px}.thumb{width:46px!important;height:64px!important;flex:none}.deckinfo{flex:1;min-width:0}.deckinfo b{font-size:12px}.deckinfo>div{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.detailimg{width:180px!important;height:auto!important}.csvbuttons{display:flex;gap:8px}.broken{background:#211923!important;object-fit:contain!important}.actions .btn{min-height:40px}
+@media(max-width:900px){.decklist{grid-template-columns:1fr 1fr}.kpis{grid-template-columns:1fr 1fr}}@media(max-width:700px){.kpis{grid-template-columns:1fr 1fr}.expgrid{grid-template-columns:1fr}.decklist{grid-template-columns:1fr}.deckhero{grid-template-columns:1fr}.detailimg{width:120px!important}.hero{align-items:flex-start}.statsmini{display:none}.rowBtns{flex-direction:column}.search{flex-wrap:wrap}.search input{flex:1;min-width:150px}.subbar{align-items:flex-start}.qtyctrl{justify-content:flex-start}}
 </style></head><body><div id="app"><div class="empty">Cargando MiAlbumOnePiece…</div></div><script>
 let bootDone=false;
 window.addEventListener("error",function(e){
@@ -208,16 +211,21 @@ function deckEditor(d){
   const st=deckStats(d);
   const leader=cardById(d.leader);
   const leaders=cards.filter(c=>c.category==="Leader").sort((a,b)=>a.id.localeCompare(b.id));
-  let results=[];
   const sq=norm(deckSearch);
-  if(sq)results=cards.filter(c=>c.category!=="Don" && norm([c.id,c.name,(c.types||[]).join(" "),(c.colors||[]).join(" ")].join(" ")).includes(sq)).slice(0,12);
+  const results=sq?cards.filter(c=>c.category!=="Don"&&norm([c.id,c.name,(c.types||[]).join(" "),(c.colors||[]).join(" ")].join(" ")).includes(sq)).slice(0,12):[];
   return '<div class="section"><div class="sectiontitle"><div><h2>'+esc(d.name)+'</h2><span class="muted">Líder + 50 cartas · máximo 4 copias por carta.</span></div><div class="rowBtns"><button class="secondary btn" id="shareDeck">Compartir</button><button class="secondary btn" id="deleteDeck">Eliminar</button></div></div>'+
-    '<div class="deckhero"><div><b>Progreso</b><strong>'+st.total+'/50</strong></div><div><b>Cartas que faltan</b><strong>'+st.missing+'</strong></div><div><b>Coste estimado faltante</b><strong>'+euro(st.missingValue)+'</strong></div></div>'+
-    '<label class="fieldlabel">Líder</label><select id="deckleader"><option value="">Selecciona líder</option>'+leaders.map(c=>'<option value="'+esc(c.id)+'" '+(c.id===d.leader?"selected":"")+'>'+esc(c.id)+" · "+esc(c.name)+" · "+esc((c.colors||[]).join("/"))+"</option>").join("")+'</select>'+
-    '<div class="muted decknote">'+(leader?("Tienes "+qty(leader.id)+" copia(s) del líder."):"Selecciona un líder.")+"</div>"+
-    '<label class="fieldlabel">Añadir cartas rápidamente</label><div class="search"><input id="deckq" value="'+esc(deckSearch)+'" placeholder="Busca Luffy, Zoro, OP17-093..."><button class="secondary btn" id="clearDeckSearch">Limpiar</button></div>"+
-    '<div class="deckresults">'+(results.map(c=>'<div class="listrow"><div style="flex:1"><b>'+esc(c.id)+" · "+esc(c.name)+"</b><div class=\"muted\">Tienes "+qty(c.id)+" · Precio ref. "+(price(c.id)?euro(price(c.id)):"—")+"</div></div>"+(c.category==="Leader"?'<button class="primary btn" data-setleader="'+esc(c.id)+'">Usar líder</button>':'<button class="primary btn" data-deckadd="'+esc(c.id)+'">+ Añadir</button>')+"</div>").join(""))+"</div>"+
-    '<div class="sectiontitle"><h3>Contenido del mazo</h3><span class="muted">'+(leader?"Líder: "+esc(leader.name):"Sin líder")+"</span></div>"+
+    '<div class="deckhero"><div><b>Progreso</b><strong>'+st.total+'/50</strong></div><div><b>Faltan</b><strong>'+st.missing+'</strong></div><div><b>Coste faltante</b><strong>'+euro(st.missingValue)+'</strong></div></div>'+
+    '<label class="fieldlabel">Líder</label><select id="deckleader"><option value="">Selecciona líder</option>'+
+      leaders.map(c=>'<option value="'+esc(c.id)+'" '+(c.id===d.leader?"selected":"")+'>'+esc(c.id)+' · '+esc(c.name)+' · '+esc((c.colors||[]).join("/"))+"</option>").join("")+
+    '</select><div class="muted decknote">'+(leader?"Tienes "+qty(leader.id)+" copia(s) del líder.":"Selecciona un líder.")+"</div>"+
+    '<label class="fieldlabel">Añadir cartas</label><div class="search"><input id="deckq" value="'+esc(deckSearch)+'" placeholder="Luffy, Zoro, OP17-093..."><button class="primary btn" id="deckSearchBtn">Buscar</button><button class="secondary btn" id="clearDeckSearch">Limpiar</button></div>'+
+    '<div class="deckresults">'+results.map(c=>{
+      const have=qty(c.id);
+      return '<div class="listrow"><div style="flex:1"><b>'+esc(c.id)+' · '+esc(c.name)+'</b><div class="muted">Tienes '+have+' · Ref. '+(price(c.id)?euro(price(c.id)):"—")+"</div></div>"+
+        (c.category==="Leader"?'<button class="primary btn" data-setleader="'+esc(c.id)+'">Usar líder</button>':'<button class="primary btn" data-deckadd="'+esc(c.id)+'">+ Añadir</button>')+
+      '</div>';
+    }).join("")+'</div>'+
+    '<div class="sectiontitle"><h3>Contenido</h3><span class="muted">'+(leader?"Líder: "+esc(leader.name):"Sin líder")+"</span></div>"+
     '<div class="list">'+(deckCardRows(d)||'<div class="empty">Añade cartas al mazo.</div>')+"</div></div>";
 }
 function decksView(){
@@ -351,22 +359,44 @@ function bindCollectionControls(){
 }
 function wire(){
   document.querySelectorAll("[data-tab]").forEach(b=>b.onclick=()=>{tab=b.dataset.tab;render()});
-  $("[data-account]")?.addEventListener("click",()=>{auth=true;render()});
-  $("#account")?.addEventListener("click",()=>{auth=true;render()});
-  $("#closeauth")?.addEventListener("click",()=>{auth=false;render()});
-  $("#closedetail")?.addEventListener("click",()=>{detail=null;render()});
-  $("#closeShared")?.addEventListener("click",()=>{sharedDeck=null;render()});
-  $("#importShared")?.addEventListener("click",importShared);
-  $("#catalogSearch")?.addEventListener("click",()=>{q=$("#catalogQ").value.trim();page=1;render()});
-  $("#catalogQ")?.addEventListener("keydown",e=>{if(e.key==="Enter"){q=e.target.value.trim();page=1;render()}});
-  $("#clearCatalog")?.addEventListener("click",()=>{q="";filters={cat:"Todos",color:"Todos",rarity:"Todos",set:"Todos",own:"all",sort:"id",dir:"asc"};page=1;render()});
-  $("#loadMore")?.addEventListener("click",()=>{page++;render()});
-  $("#newdeck")?.addEventListener("click",newDeck);
-  $("#deleteDeck")?.addEventListener("click",async()=>{const d=decks.find(x=>x.id===activeDeck);if(!d||!confirm("¿Eliminar este mazo?"))return;decks=decks.filter(x=>x.id!==d.id);activeDeck=decks[0]?.id||null;saveLocal();if(sb&&user)await sb.from("decks").delete().eq("id",d.id);render()});
-  $("#shareDeck")?.addEventListener("click",shareDeck);
-  $("#clearDeckSearch")?.addEventListener("click",()=>{deckSearch="";render()});
-  $("#deckq")?.addEventListener("input",e=>{deckSearch=e.target.value;render()});
-  $("#deckleader")?.addEventListener("change",e=>{const d=decks.find(x=>x.id===activeDeck);if(d){d.leader=e.target.value;saveLocal();syncDeck(d);render()}});
+  const accountBtn=document.querySelector("[data-account]");if(accountBtn)accountBtn.onclick=()=>{auth=true;render()};
+  const accountTop=$("#account");if(accountTop)accountTop.onclick=()=>{auth=true;render()};
+  const closeAuth=$("#closeauth");if(closeAuth)closeAuth.onclick=()=>{auth=false;render()};
+  const closeDetail=$("#closedetail");if(closeDetail)closeDetail.onclick=()=>{detail=null;render()};
+  const closeShared=$("#closeShared");if(closeShared)closeShared.onclick=()=>{sharedDeck=null;render()};
+  const importSharedBtn=$("#importShared");if(importSharedBtn)importSharedBtn.onclick=importShared;
+
+  const catalogSearch=$("#catalogSearch");if(catalogSearch)catalogSearch.onclick=()=>{q=$("#catalogQ").value.trim();page=1;render()};
+  const catalogQ=$("#catalogQ");if(catalogQ)catalogQ.onkeydown=e=>{if(e.key==="Enter"){q=e.target.value.trim();page=1;render()}};
+  const clearCatalog=$("#clearCatalog");if(clearCatalog)clearCatalog.onclick=()=>{q="";filters={cat:"Todos",color:"Todos",rarity:"Todos",set:"Todos",own:"all",sort:"id",dir:"asc"};page=1;render()};
+  const more=$("#loadMore");if(more)more.onclick=()=>{page++;render()};
+
+  document.querySelectorAll("[data-filter]").forEach(x=>x.onchange=()=>{
+    const k=x.dataset.filter;
+    if(k in filters){filters[k]=x.value;page=1;render()}
+  });
+
+  const collSearch=$("#collectionSearch");if(collSearch)collSearch.onclick=()=>{collectionFilters.q=$("#collectionQ").value.trim();render()};
+  const collQ=$("#collectionQ");if(collQ)collQ.onkeydown=e=>{if(e.key==="Enter"){collectionFilters.q=e.target.value.trim();render()}};
+  const collMap={collectionSet:"set",collectionCat:"cat",collectionColor:"color",collectionRarity:"rarity",collectionSort:"sort",collectionDir:"dir"};
+  Object.entries(collMap).forEach(([id,key])=>{const el=$("#"+id);if(el)el.onchange=e=>{collectionFilters[key]=e.target.value;render()}});
+  document.querySelectorAll("[data-exp]").forEach(b=>b.onclick=()=>{collectionFilters.set=b.dataset.exp;tab="collection";render()});
+  bindCollectionControls();
+
+  const newDeckBtn=$("#newdeck");if(newDeckBtn)newDeckBtn.onclick=newDeck;
+  const deleteDeck=$("#deleteDeck");if(deleteDeck)deleteDeck.onclick=async()=>{
+    const d=decks.find(x=>x.id===activeDeck);
+    if(!d||!confirm("¿Eliminar este mazo?"))return;
+    decks=decks.filter(x=>x.id!==d.id);activeDeck=decks[0]?.id||null;saveLocal();
+    if(sb&&user)await sb.from("decks").delete().eq("id",d.id);
+    render();
+  };
+  const shareDeckBtn=$("#shareDeck");if(shareDeckBtn)shareDeckBtn.onclick=shareDeck;
+  const deckSearchBtn=$("#deckSearchBtn");if(deckSearchBtn)deckSearchBtn.onclick=()=>{deckSearch=$("#deckq").value.trim();render()};
+  const deckQ=$("#deckq");if(deckQ)deckQ.onkeydown=e=>{if(e.key==="Enter"){deckSearch=e.target.value.trim();render()}};
+  const clearDeck=$("#clearDeckSearch");if(clearDeck)clearDeck.onclick=()=>{deckSearch="";render()};
+  const leaderSelect=$("#deckleader");if(leaderSelect)leaderSelect.onchange=e=>{const d=decks.find(x=>x.id===activeDeck);if(d){d.leader=e.target.value;saveLocal();syncDeck(d);render()}};
+
   document.querySelectorAll("[data-setleader]").forEach(b=>b.onclick=()=>{const d=decks.find(x=>x.id===activeDeck);if(d){d.leader=b.dataset.setleader;saveLocal();syncDeck(d);render()}});
   document.querySelectorAll("[data-deckadd]").forEach(b=>b.onclick=()=>deckAdd(b.dataset.deckadd));
   document.querySelectorAll("[data-plusdeck]").forEach(b=>b.onclick=()=>deckAdd(b.dataset.plusdeck));
@@ -376,24 +406,10 @@ function wire(){
   document.querySelectorAll("[data-add]").forEach(b=>b.onclick=()=>add(b.dataset.add));
   document.querySelectorAll("[data-remove]").forEach(b=>b.onclick=()=>remove(b.dataset.remove));
 
-  document.querySelectorAll("[data-filter]").forEach(x=>x.onchange=()=>{
-    const k=x.dataset.filter,v=x.value;
-    if(k in filters){filters[k]=v;page=1}
-    else if(k==="own"){filters.own=v}
-    render();
-  });
-
-  $("#collectionQ")?.addEventListener("input",e=>{collectionFilters.q=e.target.value;render()});
-  document.querySelectorAll("select[data-filter]").forEach(()=>{});
-  const collMap={collectionSet:"set",collectionCat:"cat",collectionColor:"color",collectionRarity:"rarity",collectionSort:"sort",collectionDir:"dir"};
-  Object.entries(collMap).forEach(([id,key])=>$("#"+id)?.addEventListener("change",e=>{collectionFilters[key]=e.target.value;render()}));
-  document.querySelectorAll("[data-exp]").forEach(b=>b.onclick=()=>{collectionFilters.set=b.dataset.exp;tab="collection";render()});
-  bindCollectionControls();
-
-  $("#email")?.addEventListener("keydown",e=>{if(e.key==="Enter")login()});
-  $("#login")?.addEventListener("click",login);
-  $("#register")?.addEventListener("click",register);
-  $("#logout")?.addEventListener("click",logout);
+  const loginBtn=$("#login");if(loginBtn)loginBtn.onclick=login;
+  const registerBtn=$("#register");if(registerBtn)registerBtn.onclick=register;
+  const logoutBtn=$("#logout");if(logoutBtn)logoutBtn.onclick=logout;
+  const pass=$("#pass");if(pass)pass.onkeydown=e=>{if(e.key==="Enter")login()};
 }
 async function fetchJson(url,ms){
   const c=new AbortController();const t=setTimeout(()=>c.abort(),ms||20000);
