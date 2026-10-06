@@ -38,7 +38,7 @@ const imagePreloadCache=new Map();
 const officialImageUrl=c=>String(c?.image||"").trim()||("https://en.onepiece-cardgame.com/images/cardlist/card/"+encodeURIComponent(c?.id||"")+".png");
 const imageUrl=c=>officialImageUrl(c);
 const imageCdnUrl=c=>"https://optcg-api.arjunbansal-ai.workers.dev/images/"+encodeURIComponent(c?.id||"");
-const fallbackImageUrl=c=>"https://images.weserv.nl/?url="+encodeURIComponent(officialImageUrl(c).replace(/^https?:\\/\\//,""));
+const fallbackImageUrl=c=>"https://images.weserv.nl/?url="+encodeURIComponent(officialImageUrl(c).replace("https://","").replace("http://",""));
 function preloadCardImage(c){const u=imageCdnUrl(c);if(!u||imagePreloadCache.has(u))return;const im=new Image();im.src=u;imagePreloadCache.set(u,im)}
 function cardImg(c,cls="cardimg"){
   const cdn=imageCdnUrl(c),official=officialImageUrl(c),fallback=fallbackImageUrl(c);
