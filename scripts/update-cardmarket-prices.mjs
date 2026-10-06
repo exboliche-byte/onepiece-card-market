@@ -164,7 +164,7 @@ async function discoverSitemaps() {
   const queue = [ROOT + "/sitemap.xml", ROOT + "/sitemap_index.xml"];
   const seen = new Set();
   const pages = [];
-  while (queue.length && pages.length < MAX_SITEMAPS) {
+  while (queue.length && seen.size < MAX_SITEMAPS) {
     const url = queue.shift();
     if (seen.has(url)) continue;
     seen.add(url);
@@ -251,7 +251,7 @@ function pageTitle(html) {
   return entityDecode(html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] || "").replace(/\s*-\s*TCGGO\.com\s*$/i, "").trim();
 }
 function marketSlug(value) {
-  return normalize(value).replace(/[’\'] /g, "").replace(/[’\']/g, "").replace(/\./g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  return normalize(value).replace(/[’\']/g, "").replace(/\./g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 }
 function cardIdFromSource(row) {
   let base = upper(row.cardNumber);
