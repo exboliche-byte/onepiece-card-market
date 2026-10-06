@@ -14,16 +14,36 @@ function norm(v){return String(v??"").toUpperCase().replace(/\s+/g," ").trim()}
 function baseId(id){return norm(id).replace(/_(?:P\d+|R\d+|C\d+)$/,"")}
 function extractIds(v){
   const text=typeof v==="string"?v:JSON.stringify(v||"");
-  const baseIds=(text.match(/(?:(?:OP|ST|EB)\d{2}-\d{3}|(?:PRB|P|EX|DON)[-_]\d{2,3})(?:_[A-Z0-9]+)?/gi)||[]).map(norm);
-  const versions=[...new Set((text.match(/\(V\.\d+\)/gi)||[]).map(x=>x.replace(/[^0-9]/g,"")))];
-  const out=new Set(baseIds);
-  for(const id of baseIds){
-    const base=baseId(id);
-    for(const v of versions)out.add(base+"_P"+v);
-  }
-  return [...out];
+  return [...new Set((text.match(/(?:(?:OP|ST|EB)\d{2}-\d{3}|(?:PRB|P|EX|DON)[-_]\d{2,3})(?:_[A-Z0-9]+)?/gi)||[]).map(norm))];
 }
-function number(v){
+function productVersionKeys(p,id){
+  const base=baseId(id);
+  const meta=String(p?.idMetacard??p?.idMetaproduct??"");
+  const expansion=String(p?.idExpansion??"");
+  const name=norm(p?.name||p?.enName||"");
+  return base+"|"+meta+"|"+expansion+"|"+name;
+}
+function buildProductVersionMap(){
+  const groups=new Map();
+  for(const p of productCache||[]){
+    for(const id of extractIds(p)){
+      const key=productVersionKeys(p,id);
+      if(!groups.has(key))groups.set(key,[]);
+      groups.get(key).push({p,id});
+    }
+  }
+  const map=new Map();
+  for(const items of groups.values()){
+    items.sort((a,b)=>{
+      const da=String(a.p?.dateAdded||""),db=String(b.p?.dateAdded||"");
+      return da.localeCompare(db)||Number(a.p?.idProduct??a.p?.productId??a.p?.id||0)-Number(b.p?.idProduct??b.p?.productId??b.p?.id||0);
+    });
+    if(items.length===1)map.set(baseId(items[0].id),items[0].p);
+    else items.forEach((item,index)=>map.set(baseId(item.id)+"_P"+(index+1),item.p));
+  }
+  return map;
+}
+function number(function number(v){
   if(v===null||v===undefined||v==="")return NaN;
   const n=Number(String(v).replace(",","."));return Number.isFinite(n)?n:NaN;
 }
@@ -42,19 +62,22 @@ function buildPriceIndex(){
   const guide=new Map();
   for(const x of priceCache||[]){const id=x?.idProduct??x?.productId??x?.id;if(id!=null)guide.set(String(id),x)}
   const exact=new Map();
+  const versionMap=buildProductVersionMap();
+  for(const [wantedId,p] of versionMap){
+    const pid=p?.idProduct??p?.productId??p?.id,g=pid!=null?guide.get(String(pid)):null,val=priceValue(g);
+    if(Number.isFinite(val))exact.set(wantedId,{value:val,score:100});
+  }
   for(const p of productCache||[]){
     const pid=p?.idProduct??p?.productId??p?.id,g=pid!=null?guide.get(String(pid)):null,val=priceValue(g);
     if(!Number.isFinite(val))continue;
-    const ids=extractIds(p);
-    for(const id of ids){
-      const score=scoreProduct(p,[id]),current=exact.get(id);
-      if(!current||score>current.score)exact.set(id,{value:val,score});
-
+    for(const id of extractIds(p)){
+      const base=baseId(id);
+      if(!exact.has(base))exact.set(base,{value:val,score:40});
     }
   }
   priceIndex={exact};
 }
-export default {
+export defaultexport default {
   async fetch(request){
     try{
       const url=new URL(request.url);
