@@ -102,22 +102,38 @@ function parseSetCodeFromNumber(cardNumber) {
   const m = String(cardNumber).toUpperCase().match(/^((?:OP|EB|ST|PRB)\d{2})-/);
   return m ? m[1] : "";
 }
-function extractTcggoCardBlocks(html) {
+function extractTcggoCardBlocks(html, sourceUrl) {
   const source = String(html);
-  const matches = [...source.matchAll(/<div[^>]*class=["'][^"']*t1-card[^"']*game-one-piece[^"']*["'][^>]*>/gi)];
-  return matches.map((m, i) => source.slice(m.index, i + 1 < matches.length ? matches[i + 1].index : source.length));
+  const matches = [];
+  for (const m of source.matchAll(/<a[^>]*href=["']([^"']+)["'][^>]*>/gi)) {
+    const href = absoluteUrl(m[1], sourceUrl);
+    try {
+      const p = new URL(href).pathname.split("/").filter(Boolean);
+      if (p.length === 3 && p[0] === "one-piece" && !["episodes", "one-piece", "search"].includes(p[1]) && p[2] !== "singles") {
+        matches.push({index:m.index, href, tag:m[0]});
+      }
+    } catch {}
+  }
+  const unique = [];
+  const seen = new Set();
+  for (const item of matches) {
+    if (seen.has(item.href)) continue;
+    seen.add(item.href);
+    unique.push(item);
+  }
+  return unique.map((m, i) => {
+    const end = i + 1 < unique.length ? unique[i + 1].index : source.length;
+    const chunk = source.slice(m.index, end);
+    const gt = chunk.indexOf(">");
+    const lt = gt >= 0 ? chunk.indexOf("<", gt + 1) : -1;
+    const anchorName = gt >= 0 && lt > gt ? textContent(chunk.slice(gt + 1, lt)) : "";
+    return {html:chunk, href:m.href, anchorName};
+  });
 }
 function parseCardsFromSetPage(html, fallbackSetCode, setName, sourceUrl) {
   const rows = [];
-  for (const block of extractTcggoCardBlocks(html)) {
-    const hrefs = [...block.matchAll(/href=["']([^"']+)["']/gi)].map(m => absoluteUrl(m[1], sourceUrl));
-    const href = hrefs.find(u => {
-      try {
-        const p = new URL(u).pathname.split("/").filter(Boolean);
-        return p.length === 3 && p[0] === "one-piece";
-      } catch { return false; }
-    }) || hrefs.find(Boolean);
-    if (!href) continue;
+  for (const blockInfo of extractTcggoCardBlocks(html, sourceUrl)) {
+    const block = blockInfo.html;
     const text = textContent(block);
     const cardNumber = parseCollectorNumber(text, fallbackSetCode);
     if (!cardNumber || /booster|display|box|deck|case|pack/i.test(cardNumber)) continue;
@@ -126,13 +142,13 @@ function parseCardsFromSetPage(html, fallbackSetCode, setName, sourceUrl) {
     const version = parseVersion(text);
     const resolvedSet = parseSetCodeFromNumber(cardNumber) || String(fallbackSetCode || "").toUpperCase();
     rows.push({
-      name: "",
+      name: blockInfo.anchorName,
       cardNumber,
       version,
       eur: price,
       setCode: resolvedSet,
       setName,
-      sourceUrl: href
+      sourceUrl: blockInfo.href
     });
   }
   return rows;
