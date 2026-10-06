@@ -37,7 +37,7 @@ const safeId=id=>String(id||"");
 const officialImageUrl=c=>"https://en.onepiece-cardgame.com/images/cardlist/card/"+encodeURIComponent(c?.id||"")+".png";
 const imageUrl=c=>c?.image||c?.img_full_url||c?.img_url||officialImageUrl(c);
 function cardImg(c,cls="cardimg"){
-  const u=imageUrl(c),official=officialImageUrl(c),proxy="https://images.weserv.nl/?url="+encodeURIComponent(u.replace(/^https?:\\/\\//,""));
+  const u=imageUrl(c),official=officialImageUrl(c),proxy="https://images.weserv.nl/?url="+encodeURIComponent(u.replace(/^https?:\/\//,""));
   return '<img class="'+cls+'" loading="lazy" decoding="async" referrerpolicy="no-referrer" src="'+esc(u)+'" alt="'+esc(c.name||c.id)+'" onerror="if(!this.dataset.fallback){this.dataset.fallback=1;this.src=\''+esc(proxy)+'\';}else if(!this.dataset.official){this.dataset.official=1;this.src=\''+esc(official)+'\';}">';
 }
 function qty(id){return Number(state.owned[id]||0)}
