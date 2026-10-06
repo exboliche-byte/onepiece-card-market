@@ -21,7 +21,7 @@ const DATA="/data/";
 const PLAYSET=4;
 const PAGE=60;
 const state={
-  cards:[],packs:[],groups:[],groupByKey:new Map(),prices:{},collectionPrices:{},priceDate:null,
+  cards:[],packs:[],groups:[],groupByKey:new Map(),prices:{},priceDate:null,
   collection:{},decks:[],wishlist:{},user:null,sb:null,
   tab:"catalog",set:"",query:"",detail:null,deckId:null,
   catalog:{set:"Todas",category:"Todos",color:"Todos",rarity:"Todos",type:"Todos",attribute:"Todos",ownership:"Todas",sort:"id",dir:"asc",page:1,grouped:true,minCost:"",maxCost:"",minPower:"",maxPower:"",query:"",filtersOpen:false},
@@ -40,8 +40,8 @@ const imageUrl=c=>officialImageUrl(c);
 const imageCdnUrl=c=>"https://optcg-api.arjunbansal-ai.workers.dev/images/"+encodeURIComponent(c?.id||"");
 const fallbackImageUrl=c=>"https://images.weserv.nl/?url="+encodeURIComponent(officialImageUrl(c).replace("https://","").replace("http://",""));
 function preloadCardImage(c){const u=imageCdnUrl(c);if(!u||imagePreloadCache.has(u))return;const im=new Image();im.src=u;imagePreloadCache.set(u,im)}
-function cardmarketVersionLabel(c){const m=String(c?.id||"").match(/_(?:p|r)(\\d+)$/i);return m?"(V."+((Number(m[1])||0)+1)+")":"(V.1)"}
-function cardmarketUrl(c){const name=String(c?.name||"").trim();const id=String(c?.id||"").trim();const set=String(c?.set_name||c?.set||"").trim();const version=cardmarketVersionLabel(c);return "https://www.cardmarket.com/es/OnePiece/Products/Singles?mode=list&searchString="+encodeURIComponent([name,id,version,set].filter(Boolean).join(" "))}
+function cardmarketSearchId(c){return String(c?.id||"").trim().replace(/_(?:p|r|c)\\d+$/i,"")}
+function cardmarketUrl(c){const id=cardmarketSearchId(c);return "https://www.cardmarket.com/es/OnePiece/Products/Singles?mode=list&searchString="+encodeURIComponent(id)}
 function cardImg(c,cls="cardimg"){
   const cdn=imageCdnUrl(c),official=officialImageUrl(c),fallback=fallbackImageUrl(c);
   const loading=cls.includes("detail")?"eager":"lazy";
@@ -126,37 +126,10 @@ function saveLocal(){localStorage.setItem("mialbumonepiece_collection",JSON.stri
 function loadLocal(){try{state.owned=JSON.parse(localStorage.getItem("mialbumonepiece_collection")||"{}")}catch{}try{state.decks=JSON.parse(localStorage.getItem("mialbumonepiece_decks")||"[]")}catch{}try{state.wishlist=JSON.parse(localStorage.getItem("mialbumonepiece_wishlist")||"{}")}catch{}}
 function notify(msg){state.toast=msg;renderToast();setTimeout(()=>{if(state.toast===msg){state.toast="";renderToast()}},1800)}
 function renderToast(){const old=$(".toast");if(old)old.remove();if(state.toast){const d=document.createElement("div");d.className="toast";d.textContent=state.toast;document.body.appendChild(d)}}
-function collectionPriceOf(c){
-  const raw=state.collectionPrices[c?.id]??state.collectionPrices[norm(c?.id)];
-  const n=Number(raw);
-  return Number.isFinite(n)?n:null;
-}
+function collectionPriceOf(c){return priceOf(c)}
 async function ensureCollectionPrices({refresh=false}={}){
   const ownedIds=state.cards.filter(c=>qty(c.id)>0).map(c=>c.id);
-  const wanted=[...new Set(ownedIds.filter(id=>refresh||collectionPriceOf({id})===null))];
-  if(!wanted.length)return;
-  for(let i=0;i<wanted.length;i+=600){
-    const chunk=wanted.slice(i,i+600);
-    try{
-      const d=await fetchJson("/api/cardmarket?ids="+encodeURIComponent(chunk.join(",")),30000);
-      for(const [id,value] of Object.entries(d.prices||{})){
-        const n=Number(value);
-        if(!Number.isFinite(n))continue;
-        state.collectionPrices[id]=n;
-        state.collectionPrices[norm(id)]=n;
-      }
-      state.priceDate=d.updatedAt||state.priceDate;
-    }catch{}
-  }
-  localStorage.setItem("mialbumonepiece_collection_prices",JSON.stringify({version:COLLECTION_PRICE_CACHE_VERSION,prices:state.collectionPrices,updatedAt:state.priceDate}));
-}
-const COLLECTION_PRICE_CACHE_VERSION=2;
-function loadCachedCollectionPrices(){
-  try{
-    const d=JSON.parse(localStorage.getItem("mialbumonepiece_collection_prices")||"null");
-    if(d?.version===COLLECTION_PRICE_CACHE_VERSION&&d?.prices)state.collectionPrices=d.prices;
-    else localStorage.removeItem("mialbumonepiece_collection_prices");
-  }catch{localStorage.removeItem("mialbumonepiece_collection_prices")}
+  await ensurePrices(ownedIds,{refresh});
 }
 function collectionStats(){
   const distinct=Object.values(state.owned).filter(q=>Number(q)>0).length;
@@ -293,9 +266,21 @@ async function ensurePrices(ids,{refresh=false}={}){
       state.priceDate=d.updatedAt||state.priceDate;
     }catch{}
   }
-  localStorage.setItem("mialbumonepiece_prices",JSON.stringify({prices:state.prices,updatedAt:state.priceDate}));
+  localStorage.setItem("mialbumonepiece_prices",JSON.stringify({version:PRICE_CACHE_VERSION,prices:state.prices,updatedAt:state.priceDate}));
 }
-function loadCachedPrices(){try{const d=JSON.parse(localStorage.getItem("mialbumonepiece_prices")||"null");if(d?.prices)state.prices=d.prices;state.priceDate=d?.updatedAt||null}catch{}}
+const PRICE_CACHE_VERSION=3;
+function loadCachedPrices(){
+  try{
+    const d=JSON.parse(localStorage.getItem("mialbumonepiece_prices")||"null");
+    if(d?.version===PRICE_CACHE_VERSION&&d?.prices)state.prices=d.prices;
+    else localStorage.removeItem("mialbumonepiece_prices");
+    localStorage.removeItem("mialbumonepiece_collection_prices");
+    state.priceDate=d?.updatedAt||null;
+  }catch{
+    localStorage.removeItem("mialbumonepiece_prices");
+    localStorage.removeItem("mialbumonepiece_collection_prices");
+  }
+}
 function cardTile(c,extra=""){
   const q=qty(c.id);const p=priceOf(c);
   return '<article class="card">'+(q?'<span class="tag">×'+q+'</span>':'<span class="tag missing">0/4</span>')+
@@ -309,12 +294,13 @@ function cardTile(c,extra=""){
 function groupedTile(g){
   const c=g.card,q=g.versions.reduce((s,x)=>s+qty(x.id),0);
   const versionPrices=g.versions.map(priceOf).filter(v=>v!==null);
-  const bestPrice=versionPrices.length?(state.catalog.dir==="desc"?Math.max(...versionPrices):Math.min(...versionPrices)):null;
+  const minPrice=versionPrices.length?Math.min(...versionPrices):null;
+  const maxPrice=versionPrices.length?Math.max(...versionPrices):null;
   return '<article class="card">'+(q?'<span class="tag">×'+q+' total</span>':'<span class="tag missing">Falta</span>')+
     '<button class="linkbtn" data-detail="'+esc(c.id)+'" style="display:block;width:100%;padding:0">'+cardImg(c,"cardimg catalogthumb")+'</button>'+
     '<div class="cardbody"><div class="name">'+esc(c.name)+'</div><div class="small">'+esc(c.id)+'</div><div class="small">'+esc(c.category||"")+' · '+g.versions.length+' versión(es)</div>'+
     '<div class="chips">'+g.sets.slice(0,5).map(x=>'<span class="chip">'+esc(x)+'</span>').join("")+(g.sets.length>5?'<span class="chip">+'+(g.sets.length-5)+'</span>':"")+'</div>'+
-    '<div class="row"><span>'+(bestPrice!==null?money(bestPrice):"Precio —")+'</span><span class="small">'+q+' copias</span></div>'+
+    '<div class="row"><span>'+(minPrice!==null?(maxPrice!==null&&maxPrice!==minPrice?"Desde "+money(minPrice):money(minPrice)):"Precio —")+'</span><span class="small">'+q+' copias</span></div>'+
     '<div class="quick"><button class="secondary" data-qty="'+esc(c.id)+'" data-d="-1">−</button><div class="qty">'+q+'</div><button class="primary" data-qty="'+esc(c.id)+'" data-d="1">+</button></div><button class="secondary btn" style="width:100%;margin-top:8px" data-group="'+esc(c.id)+'">Ver versiones</button></div></article>';
 }
 function pagination(total,page,key){
@@ -587,7 +573,7 @@ function newDeckModal(){
 }
 function detailView(c){
   const versions=state.groups.find(g=>g.ids.includes(c.id))?.versions||[c],q=qty(c.id);
-  return '<div class="modalback"><div class="modal"><div class="sectionhead"><div><b>'+esc(c.id)+'</b><div class="small">'+esc(c.name)+'</div></div><button class="close" data-close>×</button></div><div class="detail"><div>'+cardImg(c,"cardimg detailimg")+'</div><div><h2 style="margin-top:0">'+esc(c.name)+'</h2><div class="small">'+esc(c.set)+' · '+esc(c.rarity||"—")+' · '+esc(c.category||"—")+'</div><div class="chips">'+(c.colors||[]).map(x=>'<span class="chip">'+esc(x)+'</span>').join("")+'</div><p style="white-space:pre-wrap">'+esc(c.effect||"Sin efecto disponible")+'</p><div class="small">Coste '+esc(c.cost??"—")+' · Poder '+esc(c.power??"—")+' · Counter '+esc(c.counter??"—")+'</div><div class="row" style="margin-top:10px"><b>Mi colección: '+q+'</b><b>'+(priceOf(c)!==null?money(priceOf(c)):"Precio —")+'</b></div><div class="quick"><button class="secondary" data-qty="'+esc(c.id)+'" data-d="-1">−</button><div class="qty">'+q+'</div><button class="primary" data-qty="'+esc(c.id)+'" data-d="1">+</button></div><a class="secondary btn" style="display:block;text-align:center;margin-top:8px;text-decoration:none" target="_blank" rel="noopener" href="'+esc(cardmarketUrl(c))+'">Buscar en Cardmarket ↗</a><h3>Versiones / reimpresiones</h3><div class="version-list">'+versions.map(v=>'<button class="version secondary" data-detail="'+esc(v.id)+'">'+cardImg(v,"versionImg")+'<small>'+esc(v.set)+' · ×'+qty(v.id)+'</small></button>').join("")+'</div></div></div></div></div>';
+  return '<div class="modalback"><div class="modal"><div class="sectionhead"><div><b>'+esc(c.id)+'</b><div class="small">'+esc(c.name)+'</div></div><button class="close" data-close>×</button></div><div class="detail"><div>'+cardImg(c,"cardimg detailimg")+'</div><div><h2 style="margin-top:0">'+esc(c.name)+'</h2><div class="small">'+esc(c.set)+' · '+esc(c.rarity||"—")+' · '+esc(c.category||"—")+'</div><div class="chips">'+(c.colors||[]).map(x=>'<span class="chip">'+esc(x)+'</span>').join("")+'</div><p style="white-space:pre-wrap">'+esc(c.effect||"Sin efecto disponible")+'</p><div class="small">Coste '+esc(c.cost??"—")+' · Poder '+esc(c.power??"—")+' · Counter '+esc(c.counter??"—")+'</div><div class="row" style="margin-top:10px"><b>Mi colección: '+q+'</b><b>'+(priceOf(c)!==null?money(priceOf(c)):"Precio —")+'</b></div><div class="quick"><button class="secondary" data-qty="'+esc(c.id)+'" data-d="-1">−</button><div class="qty">'+q+'</div><button class="primary" data-qty="'+esc(c.id)+'" data-d="1">+</button></div><a class="secondary btn" style="display:block;text-align:center;margin-top:8px;text-decoration:none" target="_blank" rel="noopener" href="'+esc(cardmarketUrl(c))+'">Buscar en Cardmarket ↗</a><h3>Versiones / reimpresiones</h3><div class="version-list">'+versions.map(v=>'<button class="version secondary" data-detail="'+esc(v.id)+'">'+cardImg(v,"versionImg")+'<small>'+esc(v.set)+' · '+(priceOf(v)!==null?money(priceOf(v)):"Precio —")+' · ×'+qty(v.id)+'</small></button>').join("")+'</div></div></div></div></div>';
 }
 function accountView(){
   return '<div class="wrap"><div class="hero"><div><h1>Cuenta</h1><p>'+(state.user?("Sesión: "+esc(state.user.email||"")):"Usa la app sin cuenta o sincroniza tu colección con Supabase.")+'</p></div></div>'+
@@ -800,8 +786,8 @@ async function loadCatalogData(){
   }
 }
 async function boot(){
-  loadLocal();loadCachedPrices();loadCachedCollectionPrices();renderShell();
-  try{const data=await loadCatalogData();prepareCatalog(data.cards,data.packs);state.loading=false;renderShell();await loadShared();if(state.shared)renderShell();if(state.tab==="catalog")ensurePrices(groupFiltered().slice(0,PAGE).flatMap(g=>(g.versions||[g.card]).map(c=>c.id)));}catch(e){$("#app").innerHTML='<div class="wrap"><div class="hero"><div><h1>MiAlbumOnePiece</h1><p>No se pudo cargar el catálogo.</p></div></div><div class="section"><div class="notice">Error cargando datos: '+esc(e.message||"desconocido")+'</div><button class="primary btn" onclick="location.reload()">Reintentar</button></div></div>'}
+  loadLocal();loadCachedPrices();renderShell();
+  try{const data=await loadCatalogData();prepareCatalog(data.cards,data.packs);state.loading=false;renderShell();await loadShared();if(state.shared)renderShell();ensurePrices(state.cards.filter(c=>qty(c.id)>0).map(c=>c.id));}catch(e){$("#app").innerHTML='<div class="wrap"><div class="hero"><div><h1>MiAlbumOnePiece</h1><p>No se pudo cargar el catálogo.</p></div></div><div class="section"><div class="notice">Error cargando datos: '+esc(e.message||"desconocido")+'</div><button class="primary btn" onclick="location.reload()">Reintentar</button></div></div>'}
   initSupabase();
 }boot();
 </script>
