@@ -277,7 +277,7 @@ function catalogFilterPanel(){
 }
 function catalogToolbar(){
   const f=state.catalog,n=catalogActiveFilterCount();
-  return '<div class="catalog-controls">'+
+  return '<div class="catalog-controls" id="catalogToolbar">'+
     '<input id="catalogSearch" class="field" inputmode="search" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="search" aria-label="Buscar cartas" placeholder="🔎 Buscar por nombre, ID o expansión..." value="'+esc(f.query)+'">'+
     '<div class="sort-controls">'+
       filterLabel("Ordenar por",'<select id="catSort" class="field"><option value="id" '+(f.sort==="id"?"selected":"")+'>Número de carta</option><option value="name" '+(f.sort==="name"?"selected":"")+'>Nombre</option><option value="set" '+(f.sort==="set"?"selected":"")+'>Expansión</option><option value="rarity" '+(f.sort==="rarity"?"selected":"")+'>Rareza</option><option value="cost" '+(f.sort==="cost"?"selected":"")+'>Coste</option><option value="power" '+(f.sort==="power"?"selected":"")+'>Poder</option><option value="price" '+(f.sort==="price"?"selected":"")+'>Precio</option><option value="quantity" '+(f.sort==="quantity"?"selected":"")+'>Cantidad que tengo</option></select>')+
@@ -544,15 +544,22 @@ function bindShell(){
   document.querySelectorAll("[data-open-set]").forEach(b=>b.onclick=()=>{state.tab="album";state.album.set=b.dataset.openSet;state.album.page=1;renderShell()});
   if(state.tab==="catalog"){
     bindSearch("#catalogSearch",v=>{state.catalog.query=v;state.query=v;state.catalog.page=1;renderCatalogResults()});
-    const applyCatalog=async()=>{
-      const map={catSet:"set",catCategory:"category",catColor:"color",catRarity:"rarity",catType:"type",catAttribute:"attribute",catMinCost:"minCost",catMaxCost:"maxCost",catMinPower:"minPower",catMaxPower:"maxPower",catOwnership:"ownership",catSort:"sort",catDir:"dir"};
-      Object.entries(map).forEach(([id,k])=>{const el=$("#"+id);if(el)state.catalog[k]=el.value});
+    const catalogFieldMap={catSet:"set",catCategory:"category",catColor:"color",catRarity:"rarity",catType:"type",catAttribute:"attribute",catMinCost:"minCost",catMaxCost:"maxCost",catMinPower:"minPower",catMaxPower:"maxPower",catOwnership:"ownership",catSort:"sort",catDir:"dir"};
+    const syncCatalogControl=(target)=>{
+      const key=catalogFieldMap[target?.id];
+      if(!key)return;
+      state.catalog[key]=target.value;
       state.catalog.page=1;
-      if(state.catalog.sort==="price")await ensurePrices(state.cards.map(c=>c.id));
       renderCatalogResults();
+      if(key==="sort"&&state.catalog.sort==="price"){
+        ensurePrices(state.cards.map(c=>c.id)).then(()=>renderCatalogResults());
+      }
     };
-    const bindCatalogLive=id=>$("#"+id)?.addEventListener("change",applyCatalog);
-    ["catSet","catCategory","catColor","catRarity","catType","catAttribute","catMinCost","catMaxCost","catMinPower","catMaxPower","catOwnership","catSort","catDir"].forEach(bindCatalogLive);
+    const catalogToolbar=$("#catalogToolbar");
+    catalogToolbar?.addEventListener("change",e=>syncCatalogControl(e.target));
+    catalogToolbar?.addEventListener("input",e=>{
+      if(/^cat(?:MinCost|MaxCost|MinPower|MaxPower)$/.test(e.target?.id))syncCatalogControl(e.target);
+    });
     $("#applyCatalogFilters")?.remove();
     $("#applyCatalogFilters2")?.remove();
     $("#catalogFilterToggle")?.addEventListener("click",()=>{state.catalog.filtersOpen=!state.catalog.filtersOpen;renderShell()});
