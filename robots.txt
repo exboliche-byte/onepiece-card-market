@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://onepiece-card-market-exboliche-6884.vercel.app/sitemap.xml
