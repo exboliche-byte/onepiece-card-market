@@ -483,6 +483,7 @@ render=function(){
     return;
   }
   originalRender();
+  const nav=document.querySelector(".nav"); if(nav) nav.outerHTML=enhancedNav();
   collectionEnhanceRender();
   injectValidation();
   wireEnhancementEvents();
@@ -514,6 +515,7 @@ async function loadShared(){
     }else{
       const raw=slug; let b=raw.replace(/-/g,"+").replace(/_/g,"/");while(b.length%4)b+="=";sharedDeck=JSON.parse(decodeURIComponent(escape(atob(b))));
     }
+    if(sharedDeck)render();
   }catch(e){console.warn("Shared deck unavailable",e)}
 }
 async function shareDeck(d){
