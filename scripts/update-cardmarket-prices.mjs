@@ -2,7 +2,6 @@ import fs from "node:fs/promises";
 import process from "node:process";
 
 const ROOT = "https://www.tcggo.com";
-const CARDS_URL = "https://raw.githubusercontent.com/exboliche-byte/onepiece-card-market/main/data/cards.json";
 const OUT = new URL("../data/cardmarket-prices.json", import.meta.url);
 const MAX_SITEMAPS = 60;
 const CONCURRENCY = 12;
@@ -101,35 +100,14 @@ function normalizeSetCode(value) {
   if (m) return "PRB" + String(m[1]).padStart(2, "0");
   return s.replace(/[^A-Z0-9]/g, "");
 }
-function localSetCode(card) {
-  return normalizeSetCode(card?.set || card?.set_code || card?.setCode || "");
-}
-function baseCardId(id) {
-  return upper(id).replace(/_(?:P\d+|R\d+|C\d+)$/i, "");
-}
-function suffixRank(id) {
-  const s = String(id ?? "");
-  const m = s.match(/_(p|r|c)(\d+)$/i);
-  if (!m) return 0;
-  const n = Number(m[2]) || 0;
-  const kind = m[1].toLowerCase();
-  if (kind === "p") return 100 + n;
-  if (kind === "r") return 200 + n;
-  return 300 + n;
-}
-function localCardNumber(card) {
-  const base = baseCardId(card?.id || "");
-  const m = base.match(/^(?:OP\d{2}|EB\d{2}|ST\d{2}|PRB\d{2})[-_](.+)$/i);
-  if (m) return m[1].toUpperCase();
-  const p = base.match(/^(?:P|EX|DON)[-_](.+)$/i);
-  return p ? p[1].toUpperCase() : base;
-}
 function sourceCardKey(setCode, cardNumber) {
   return normalizeSetCode(setCode) + "|" + upper(cardNumber);
 }
-function parseCardPage(url, html, setInfo) {\n  const setCode = setInfo?.code || "";\n  const setNameForRow = setInfo?.name || "";
+function parseCardPage(url, html, setInfo) {
+  const setCode = setInfo?.code || "";
+  const setNameForRow = setInfo?.name || "";
   const text = htmlText(html);
-  const versionMatch = text.match(/Version\s+V\.(\d+)/i) || text.match(/\bV\.(\d+)\b/i);
+  const versionMatch = text.match(/(?:Version\s+)?V\.(\d+)/i);
   const version = versionMatch ? Number(versionMatch[1]) : 1;
   const cm = text.match(/Cardmarket ID\s+(\d+)/i);
   const cardmarketId = cm ? cm[1] : "";
@@ -179,7 +157,7 @@ function parseCardPage(url, html, setInfo) {\n  const setCode = setInfo?.code ||
     name,
     eur,
     cardmarketId,
-    cardmarketUrl: marketUrl || "https://www.cardmarket.com/es/OnePiece/Products/Singles/" + marketSlug(setNameForRow) + "/" + marketSlug(name + "-" + (cardNumber.match(/^\\d{3}$/) ? normalizeSetCode(setCode) + "-" + cardNumber : cardNumber) + "-V" + version)nePiece/Products/Singles?searchString=" + encodeURIComponent(cardmarketId)
+    cardmarketUrl: marketUrl || "https://www.cardmarket.com/es/OnePiece/Products/Singles/" + marketSlug(setNameForRow) + "/" + marketSlug(name + "-" + (cardNumber.match(/^\d{3}$/) ? normalizeSetCode(setCode) + "-" + cardNumber : cardNumber) + "-V" + version)
   };
 }
 async function discoverSitemaps() {
@@ -236,7 +214,7 @@ async function mapSetSlugs(slugs) {
         const html = await fetchText(ROOT + "/one-piece/" + slug);
         const text = htmlText(html);
         const code = parseSetCode(text);
-        if (code) out.set(slug, code);
+        if (code) out.set(slug, {code, name: pageTitle(html)});
       } catch {}
     }
   }));
