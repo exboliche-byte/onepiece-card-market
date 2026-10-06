@@ -26,7 +26,7 @@ const state={
   tab:"catalog",set:"",query:"",detail:null,deckId:null,
   catalog:{set:"Todas",category:"Todos",color:"Todos",rarity:"Todos",type:"Todos",attribute:"Todos",ownership:"Todas",sort:"id",dir:"asc",page:1,grouped:true,minCost:"",maxCost:"",minPower:"",maxPower:"",query:"",filtersOpen:false},
   owned:{},collection:{query:"",set:"Todas",category:"Todos",color:"Todos",rarity:"Todos",type:"Todos",attribute:"Todos",quantity:"Todas",playset:"Todas",sort:"id",dir:"asc",page:1,filtersOpen:false},
-  album:{set:"",query:"",ownership:"Todas",sort:"id",dir:"asc",page:1},
+  album:{set:"",query:"",ownership:"Todas",sort:"id",dir:"asc",page:1},expansions:{query:"",type:"Todos",sort:"set",dir:"asc"},
   deckQuery:"",deckPage:1,deckFilters:{category:"Todos",color:"Todos",rarity:"Todos",filtersOpen:false},auth:false,toast:"",loading:true
 };
 const $=s=>document.querySelector(s);
@@ -63,7 +63,37 @@ function comparePacks(a,b){
   return String(a?.code||"").localeCompare(String(b?.code||""),"es", {numeric:true});
 }
 function setName(code){return state.packs.find(p=>p.code===code)?.name||code}
-function packLabel(p){return String(p?.code||"")}
+function packLabel(p){
+  const code=String(p?.code||"");
+  if(/^OP14-EB04$/i.test(code))return "EB-04";
+  if(/^OP15-EB04$/i.test(code))return "EB-05";
+  return code;
+}
+function expansionType(code){
+  const s=String(code||"").toUpperCase();
+  if(/^OP-?\\d+$/i.test(s))return "OP";
+  if(/^EB-?\\d+$/i.test(s)||/^OP\\d+-EB\\d+$/i.test(s))return "EB";
+  if(/^ST-?\\d+$/i.test(s))return "ST";
+  if(/^PRB-?\\d+$/i.test(s))return "PRB";
+  if(/^P(ROMO)?[-_]/i.test(s)||/PROMOTION/i.test(s))return "PROMO";
+  return "OTROS";
+}
+function expansionList(){
+  const f=state.expansions;
+  let list=state.packs.slice();
+  const q=norm(f.query);
+  if(q)list=list.filter(p=>norm([packLabel(p),p.name,p.code].join(" ")).includes(q));
+  if(f.type&&f.type!=="Todos")list=list.filter(p=>expansionType(p.code)===f.type);
+  const dir=f.dir==="desc"?-1:1;
+  list.sort((a,b)=>{
+    let d=0;
+    if(f.sort==="name")d=String(a.name||"").localeCompare(String(b.name||""),"es",{numeric:true,sensitivity:"base"});
+    else if(f.sort==="type")d=String(expansionType(a.code)).localeCompare(String(expansionType(b.code)),"es",{numeric:true});
+    else {const x=packSortKey(a.code),y=packSortKey(b.code);for(let i=0;i<x.length&&!d;i++)d=String(x[i]).localeCompare(String(y[i]),"es",{numeric:true});}
+    return d*dir||String(packLabel(a)).localeCompare(String(packLabel(b)),"es",{numeric:true});
+  });
+  return list;
+}
 function prepareCatalog(raw,packs){
   state.packs=(Array.isArray(packs)?packs:Object.values(packs)).slice().sort(comparePacks);
   state.cards=(Array.isArray(raw)?raw:Object.values(raw)).map(c=>({...c,id:String(c.id||"").trim(),set:String(c.set||"").trim(),set_name:c.set_name||setName(c.set||"")})).filter(c=>c.id);
@@ -313,11 +343,18 @@ function collectionView(){
 function albumView(){
   const f=state.album;
   if(!f.set){
-    const sets=expansionStats();
-    return '<div class="wrap"><div class="hero"><div><h1>Expansiones</h1><p>Consulta el progreso de tu colección por expansión. Elige una para ver sus cartas.</p></div></div><div class="setgrid">'+sets.map(p=>'<button class="setcard" data-open-set="'+esc(p.code)+'"><div class="settop"><b>'+esc(p.code)+'</b><span>'+p.owned+'/'+p.total+'</span></div><strong>'+esc(p.name||p.code)+'</strong><div class="progress" style="margin:9px 0"><i style="width:'+p.pct+'%"></i></div><div class="small">'+p.pct.toFixed(1)+'% · '+p.playsets+' playsets · '+money(p.value)+'</div></button>').join("")+'</div></div>';
+    const sets=expansionList(),ef=state.expansions;
+    return '<div class="wrap"><div class="hero"><div><h1>Expansiones</h1><p>Consulta el progreso de tu colección por expansión.</p></div></div>'+
+      '<div class="catalog-controls">'+
+      '<input id="expansionSearch" class="field" inputmode="search" autocomplete="off" placeholder="🔎 Buscar expansión..." value="'+esc(ef.query)+'">'+
+      '<div class="sort-controls">'+
+      filterLabel("Tipo",'<select id="expansionType" class="field"><option value="Todos" '+(ef.type==="Todos"?"selected":"")+'>Todos</option><option value="OP" '+(ef.type==="OP"?"selected":"")+'>OP</option><option value="EB" '+(ef.type==="EB"?"selected":"")+'>EB</option><option value="ST" '+(ef.type==="ST"?"selected":"")+'>ST</option><option value="PRB" '+(ef.type==="PRB"?"selected":"")+'>PRB</option><option value="PROMO" '+(ef.type==="PROMO"?"selected":"")+'>Promo</option><option value="OTROS" '+(ef.type==="OTROS"?"selected":"")+'>Otros</option></select>')+
+      filterLabel("Ordenar por",'<select id="expansionSort" class="field"><option value="set" '+(ef.sort==="set"?"selected":"")+'>Número / código</option><option value="name" '+(ef.sort==="name"?"selected":"")+'>Nombre</option><option value="type" '+(ef.sort==="type"?"selected":"")+'>Tipo</option></select>')+
+      filterLabel("Orden",'<select id="expansionDir" class="field"><option value="asc" '+(ef.dir==="asc"?"selected":"")+'>Ascendente</option><option value="desc" '+(ef.dir==="desc"?"selected":"")+'>Descendente</option></select>')+
+      '</div></div><div class="setgrid">'+sets.map(p=>'<button class="setcard" data-open-set="'+esc(p.code)+'"><div class="settop"><b>'+esc(packLabel(p))+'</b><span>'+p.owned+'/'+p.total+'</span></div><strong>'+esc(p.name||p.code)+'</strong><div class="progress" style="margin:9px 0"><i style="width:'+p.pct+'%"></i></div><div class="small">'+p.pct.toFixed(1)+'% · '+p.playsets+' playsets · '+money(p.value)+'</div></button>').join("")+'</div></div>';
   }
-  return '<div class="wrap"><div class="hero"><div><h1>Expansión '+esc(f.set)+'</h1><p>'+esc(setName(f.set))+' · aquí puedes buscar y ver las cartas de esta expansión.</p></div><button class="secondary btn" id="backToExpansions">← Todas las expansiones</button></div>'+
-    '<div class="catalog-controls"><input id="albumSearch" class="field" inputmode="search" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="search" aria-label="Buscar en la expansión" placeholder="🔎 Buscar cartas en '+esc(f.set)+'..." value="'+esc(f.query)+'"><div class="sort-controls">'+
+  return '<div class="wrap"><div class="hero"><div><h1>Expansión '+esc(packLabel({code:f.set}))+'</h1><p>'+esc(setName(f.set))+' · aquí puedes buscar y ver las cartas de esta expansión.</p></div><button class="secondary btn" id="backToExpansions">← Todas las expansiones</button></div>'+
+    '<div class="catalog-controls"><input id="albumSearch" class="field" inputmode="search" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="search" aria-label="Buscar en la expansión" placeholder="🔎 Buscar cartas en '+esc(packLabel({code:f.set}))+'..." value="'+esc(f.query)+'"><div class="sort-controls">'+
       filterLabel("Mostrar",'<select id="albumOwn" class="field" disabled><option value="Tengo" selected>Solo las que tengo</option></select>')+
       filterLabel("Ordenar por",'<select id="albumSort" class="field"><option value="id" '+(f.sort==="id"?"selected":"")+'>Número de carta</option><option value="name" '+(f.sort==="name"?"selected":"")+'>Nombre</option><option value="rarity" '+(f.sort==="rarity"?"selected":"")+'>Rareza</option><option value="quantity" '+(f.sort==="quantity"?"selected":"")+'>Cantidad que tengo</option><option value="price" '+(f.sort==="price"?"selected":"")+'>Precio</option></select>')+
     '</div></div><div id="albumResults"></div></div>';
@@ -509,6 +546,12 @@ function bindShell(){
     $("#exportCsv")?.addEventListener("click",exportCollectionCSV);
     $("#importCsv")?.addEventListener("click",()=>$("#csvFile").click());
     $("#csvFile")?.addEventListener("change",e=>{const f=e.target.files?.[0];if(f)f.text().then(t=>previewImport(t))});
+  }
+  if(state.tab==="album"&&!state.album.set){
+    bindSearch("#expansionSearch",v=>{state.expansions.query=v;renderShell()});
+    $("#expansionType")?.addEventListener("change",e=>{state.expansions.type=e.target.value;renderShell()});
+    $("#expansionSort")?.addEventListener("change",e=>{state.expansions.sort=e.target.value;renderShell()});
+    $("#expansionDir")?.addEventListener("change",e=>{state.expansions.dir=e.target.value;renderShell()});
   }
   if(state.tab==="album"){
     $("#backToExpansions")?.addEventListener("click",()=>{state.album.set="";state.album.query="";state.album.page=1;renderShell()});
