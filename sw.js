@@ -1,5 +1,5 @@
-const CACHE="mialbumonepiece-v5";
-const SHELL=["/","/index.html","/manifest.json","/icon.svg","/data/cards.json","/data/packs.json"];
+const CACHE="mialbumonepiece-v6";
+const SHELL=["/","/index.html","/manifest.json","/icon.svg","/data/cards.json","/data/packs.json","/data/cardmarket-prices.json"];
 self.addEventListener("install",event=>{
   event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(SHELL).catch(()=>{})).then(()=>self.skipWaiting()));
 });
