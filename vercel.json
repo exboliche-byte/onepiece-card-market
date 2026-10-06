@@ -46,6 +46,5 @@
         }
       ]
     }
-  ],
-  "buildCommand": "mkdir -p public && node scripts/probe-tcggo.mjs && cp index.html public/index.html"
+  ]
 }
