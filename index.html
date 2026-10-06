@@ -1,94 +1,538 @@
-<!doctype html>
-<html lang="es"><head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#090b12"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><link rel="manifest" href="manifest.json"><link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27%3E%3Ctext y=%27.9em%27 font-size=%2790%27%3E%F0%9F%92%A5%3C/text%3E%3C/svg%3E"><meta name="description" content="MiAlbumOnePiece — catálogo, colección y constructor de mazos de One Piece Card Game.">
-<title>MiAlbumOnePiece</title>
-<style>
+<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#090b12"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><link rel="manifest" href="manifest.json"><meta name="description" content="MiAlbumOnePiece — catálogo completo, colección, mazos y progreso de One Piece Card Game."><title>MiAlbumOnePiece</title><style>
 :root{--bg:#090b12;--panel:#111521;--panel2:#171c2a;--line:#273044;--txt:#f7f8fb;--muted:#9aa4b8;--accent:#ffcf33;--danger:#ff667a;--ok:#63e6be}
 *{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 20% -10%,#1c2540 0,#090b12 42%);color:var(--txt);font:15px system-ui,-apple-system,Segoe UI,Roboto,sans-serif}button,input,select{font:inherit}button{cursor:pointer;border:0}.app{min-height:100vh;padding-bottom:78px}.top{position:sticky;top:0;z-index:5;display:flex;justify-content:space-between;align-items:center;padding:14px 16px;background:#090b12e8;backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}.brand b{display:block;letter-spacing:.12em}.brand span{font-size:10px;color:var(--muted);letter-spacing:.2em}.account{background:var(--panel2);color:var(--txt);border:1px solid var(--line);padding:8px 11px;border-radius:999px}.wrap{max-width:1200px;margin:auto;padding:18px 16px}.hero{display:flex;justify-content:space-between;gap:16px;align-items:end;margin:8px 0 18px}.hero h1{font-size:clamp(27px,7vw,48px);margin:0 0 5px}.hero p{margin:0;color:var(--muted)}.search{display:flex;gap:8px;margin-bottom:12px}.search input,.filters select,.modal input{width:100%;background:var(--panel);border:1px solid var(--line);color:var(--txt);border-radius:13px;padding:12px}.btn{padding:11px 14px;border-radius:12px;font-weight:700}.primary{background:var(--accent);color:#16120a}.secondary{background:var(--panel2);color:var(--txt);border:1px solid var(--line)}.filters{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px}.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}.card{background:linear-gradient(180deg,#151a28,#0f131e);border:1px solid var(--line);border-radius:16px;overflow:hidden}.card img{display:block;width:100%;aspect-ratio:63/88;object-fit:cover;background:#080a0f}.card .body{padding:10px}.name{font-weight:750;line-height:1.2}.muted{color:var(--muted);font-size:12px}.pills{display:flex;flex-wrap:wrap;gap:4px;margin:7px 0}.pill{font-size:10px;padding:3px 6px;border:1px solid var(--line);border-radius:999px;color:#cdd5e5}.row{display:flex;justify-content:space-between;align-items:center;gap:7px}.actions{display:flex;gap:6px;margin-top:8px}.actions button{flex:1;font-size:12px}.nav{position:fixed;z-index:10;bottom:0;left:0;right:0;display:grid;grid-template-columns:repeat(4,1fr);padding:8px max(8px,env(safe-area-inset-left)) max(8px,env(safe-area-inset-bottom));background:#0d111bdF;border-top:1px solid var(--line);backdrop-filter:blur(18px)}.nav button{background:transparent;color:var(--muted);padding:8px 4px}.nav button.active{color:var(--accent);font-weight:700}.nav span{display:block;font-size:11px;margin-top:2px}.section{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:14px;margin-bottom:12px}.section h2{margin:0 0 10px}.list{display:grid;gap:8px}.listrow{display:flex;align-items:center;gap:10px;padding:9px;background:var(--panel2);border-radius:12px}.listrow img{width:46px;height:64px;object-fit:cover;border-radius:6px}.modalback{position:fixed;inset:0;z-index:20;background:#000b;display:grid;place-items:end center}.modal{width:min(720px,100%);max-height:92vh;overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:22px 22px 0 0;padding:18px}.modaltop{display:flex;justify-content:space-between}.detail{display:grid;grid-template-columns:180px 1fr;gap:18px}.detail img{width:100%;border-radius:10px}.close{background:var(--panel2);color:var(--txt);border-radius:50%;width:36px;height:36px}.empty{text-align:center;padding:45px 15px;color:var(--muted)}.toast{position:fixed;z-index:30;left:50%;bottom:88px;transform:translateX(-50%);background:#f7f8fb;color:#111;padding:10px 14px;border-radius:999px;font-weight:700}.error{color:var(--danger);margin-top:8px}.ok{color:var(--ok)}
 @media(max-width:700px){.filters{grid-template-columns:1fr 1fr}.detail{grid-template-columns:120px 1fr}.grid{grid-template-columns:repeat(2,1fr)}.actions{flex-direction:column}}
 </style></head><body><div id="app"><div class="empty">Cargando MiAlbumOnePiece…</div></div><script>
-let bootDone=false; window.addEventListener("error",function(e){console.error(e.error||e.message);if(!bootDone){var a=document.getElementById("app");if(a)a.innerHTML="<div class=\"empty\"><h2>No se pudo iniciar la app</h2><p>Recarga la página. Si el problema persiste, abre el navegador actualizado.</p></div>";}});
-window.addEventListener("unhandledrejection",function(e){console.error(e.reason);});
-const SB_URL="https://zawzbdbdbcshljhlvgjx.supabase.co",SB_KEY="sb_publishable_TGSNNhx2wvUGteg_pdPg_zkyVP4s-";
-const DATA="./data",IMG=id=>"https://en.onepiece-cardgame.com/images/cardlist/card/"+encodeURIComponent(id)+".png";
-const esc=s=>String(s??"").replace(/[&<>'"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[c])), norm=s=>String(s??"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
-let sb=null,cards=[],packs={},prices=new Map(),collection=JSON.parse(localStorage.optcg_collection||"{}"),decks=JSON.parse(localStorage.optcg_decks||"[]"),user=null;
-let tab="catalog",q="",filters={cat:"Todos",color:"Todos",rarity:"Todos",set:"Todos",own:"all"},detail=null,auth=false,toast="",activeDeck=null;
-const $=s=>document.querySelector(s), qty=id=>+collection[id]||0;
-function save(){localStorage.optcg_collection=JSON.stringify(collection);localStorage.optcg_decks=JSON.stringify(decks)}
-function euro(n){return Number.isFinite(+n)?(+n).toFixed(2).replace(".",",")+" €":"—"}
-function colors(){return["Todos","Red","Green","Blue","Purple","Black","Yellow"]}
-function categories(){return["Todos","Leader","Character","Event","Stage","Don"]}
-function select(id,vals,val){return '<select data-f="'+id+'">'+vals.map(x=>'<option '+(x===val?"selected":"")+'>'+esc(x)+'</option>').join("")+'</select>'}
-function filtered(){return cards.filter(c=>{if(filters.cat!=="Todos"&&String(c.category||"").toLowerCase()!==filters.cat.toLowerCase())return false;if(filters.color!=="Todos"&&!Array.isArray(c.colors)||filters.color!=="Todos"&&!(c.colors||[]).some(x=>norm(x)===norm(filters.color)))return false;if(filters.rarity!=="Todos"&&c.rarity!==filters.rarity)return false;if(filters.set!=="Todos"&&c.pack_id!==filters.set)return false;if(filters.own==="owned"&&!qty(c.id))return false;if(filters.own==="missing"&&qty(c.id))return false;if(q&&!norm([c.id,c.name,c.rarity,c.pack_id,...(c.colors||[])].join(" ")).includes(norm(q)))return false;return true})}
-function card(c){return '<article class="card"><img loading="lazy" src="'+IMG(c.id)+'" alt="'+esc(c.name)+'"><div class="body"><div class="name">'+esc(c.name)+'</div><div class="muted">'+esc(c.id)+' · '+esc(c.rarity||"—")+'</div><div class="pills">'+(c.colors||[]).map(x=>'<span class="pill">'+esc(x)+'</span>').join("")+'</div><div class="row"><b>'+(prices.get(c.id)?euro(prices.get(c.id)):"Cardmarket")+'</b><span class="muted">'+(qty(c.id)?"×"+qty(c.id):"—")+'</span></div><div class="actions"><button class="secondary btn" data-detail="'+esc(c.id)+'">Ver</button><button class="primary btn" data-add="'+esc(c.id)+'">+ Colección</button></div></div></article>'}
-function catalog(){let list=filtered().slice(0,240);return '<div class="wrap"><div class="hero"><div><h1>Catálogo</h1><p>'+cards.length.toLocaleString("es-ES")+' cartas · búsqueda y filtros rápidos.</p></div></div><div class="search"><input id="q" value="'+esc(q)+'" placeholder="Busca Luffy, OP17-093, Zoro…"><button class="primary btn" id="search">Buscar</button></div><div class="filters">'+select("cat",categories(),filters.cat)+select("color",colors(),filters.color)+select("rarity",["Todos",...new Set(cards.map(c=>c.rarity).filter(Boolean))],filters.rarity)+select("set",["Todos",...Object.keys(packs).sort((a,b)=>(packs[a]||a).localeCompare(packs[b]||b))],filters.set)+'</div><div class="filters">'+select("own",["all","owned","missing"],filters.own)+'</div><div class="grid">'+(list.length?list.map(card).join(""):'<div class="empty">No hay resultados con estos filtros.</div>')+'</div></div>'}
-function collectionView(){let owned=Object.entries(collection).filter(([,v])=>+v>0),total=owned.reduce((s,[,v])=>s+v,0);return '<div class="wrap"><div class="hero"><div><h1>Mi colección</h1><p>'+owned.length+' cartas distintas · '+total+' copias.</p></div></div><div class="section"><div class="row"><b>Valor visible de referencia</b><strong>'+euro(owned.reduce((s,[id,v])=>s+(prices.get(id)||0)*+v,0))+'</strong></div><p class="muted">Cardmarket: precio de referencia, actualizado según la disponibilidad de la fuente pública; no es tiempo real.</p></div><div class="grid">'+owned.map(([id])=>{let c=cards.find(x=>x.id===id);return c?card(c):""}).join("")+'</div></div>'}
-function decksView(){let d=decks.find(x=>x.id===activeDeck)||decks[0];if(d)activeDeck=d.id;return '<div class="wrap"><div class="hero"><div><h1>Mazos</h1><p>Construye con líder + hasta 50 cartas no líder y máximo 4 copias.</p></div><button class="primary btn" id="newdeck">+ Nuevo</button></div><div class="section">'+(decks.length?decks.map(x=>'<div class="listrow"><div style="flex:1"><b>'+esc(x.name)+'</b><div class="muted">'+Object.values(x.cards||{}).reduce((a,b)=>a+ +b,0)+'/50 · '+(x.leader||"sin líder")+'</div></div><button class="secondary btn" data-deck="'+x.id+'">Abrir</button></div>').join(""):'<div class="empty">Todavía no tienes mazos.</div>')+'</div>'+(d?deckEditor(d):"")+'</div>'}
-function deckEditor(d){let total=Object.values(d.cards||{}).reduce((a,b)=>a+ +b,0),leader=cards.find(c=>c.id===d.leader);return '<div class="section"><div class="row"><h2 style="margin:0">'+esc(d.name)+'</h2><button class="secondary btn" id="deleteDeck">Eliminar</button></div><p class="muted">Líder: '+esc(leader?.name||d.leader||"elige un líder")+' · '+total+'/50</p><input id="deckq" placeholder="Añadir carta al mazo…"><div id="deckresults"></div><div class="list">'+Object.entries(d.cards||{}).map(([id,n])=>{let c=cards.find(x=>x.id===id);return c?'<div class="listrow"><img src="'+IMG(id)+'"><div style="flex:1"><b>'+esc(c.id)+'</b><div>'+esc(c.name)+'</div></div><button class="secondary btn" data-minusdeck="'+id+'">−</button><b>'+n+'</b><button class="primary btn" data-plusdeck="'+id+'">+</button></div>':""}).join("")+'</div></div>'}
-function authView(){return '<div class="modalback"><div class="modal"><div class="modaltop"><h2>Cuenta</h2><button class="close" id="closeauth">×</button></div><p class="muted">Sin cuenta: demo local. Con cuenta: colección y mazos sincronizados con Supabase.</p><input id="email" placeholder="Email" type="email"><br><br><input id="pass" placeholder="Contraseña" type="password"><div class="actions"><button class="primary btn" id="login">Entrar</button><button class="secondary btn" id="register">Crear cuenta</button></div>'+(user?'<button class="secondary btn" id="logout">Cerrar sesión</button>':"")+'</div></div>'}
-function detailView(){let c=detail;return '<div class="modalback"><div class="modal"><div class="modaltop"><h2>'+esc(c.name)+'</h2><button class="close" id="closedetail">×</button></div><div class="detail"><img src="'+IMG(c.id)+'"><div><div class="muted">'+esc(c.id)+' · '+esc(c.rarity||"—")+'</div><div class="pills">'+(c.colors||[]).map(x=>'<span class="pill">'+esc(x)+'</span>').join("")+'</div><p>'+esc(String(c.effect||"Sin texto de efecto.").replace(/<br\s*\/?>/gi,"\n").replace(/<[^>]+>/g,""))+'</p><p class="muted">Tipo: '+esc(c.category||"—")+' · Coste: '+esc(c.cost??"—")+' · Poder: '+esc(c.power??"—")+'</p><button class="primary btn" data-add="'+esc(c.id)+'">+ Añadir a colección</button><a class="secondary btn" style="display:inline-block;margin-top:8px" target="_blank" rel="noopener" href="https://www.cardmarket.com/es/OnePiece/Products/Singles?mode=list&searchString='+encodeURIComponent(c.id)+'">Cardmarket ↗</a></div></div></div></div>'}
-function render(){document.querySelector("#app").innerHTML='<div class="app"><header class="top"><div class="brand"><b>ONE PIECE</b><span>MiAlbumOnePiece</span></div><button class="account" id="account">'+(user?esc(user.email.split("@")[0]):"Entrar")+'</button></header>'+ (tab==="catalog"?catalog():tab==="collection"?collectionView():decksView())+'<nav class="nav"><button class="'+(tab==="catalog"?"active":"")+'" data-tab="catalog">⌕<span>Catálogo</span></button><button class="'+(tab==="collection"?"active":"")+'" data-tab="collection">▦<span>Colección</span></button><button class="'+(tab==="decks"?"active":"")+'" data-tab="decks">♟<span>Mazos</span></button><button data-account>◉<span>Cuenta</span></button></nav>'+(auth?authView():"")+(detail?detailView():"")+(toast?'<div class="toast">'+esc(toast)+'</div>':"")+'</div>';wire()}
-function notice(x){toast=x;render();setTimeout(()=>{toast="";render()},1500)}
-function add(id){collection[id]=qty(id)+1;save();syncCollection();notice("Añadida a tu colección")}
-function deckAdd(id,delta){let d=decks.find(x=>x.id===activeDeck)||decks[0];if(!d)return;if(!d.cards)d.cards={};let c=cards.find(x=>x.id===id);if(c?.category==="Leader"){d.leader=id}else{let n=+d.cards[id]||0,total=Object.values(d.cards).reduce((a,b)=>a+ +b,0);if(delta>0&&n<4&&total<50)d.cards[id]=n+1;else if(delta<0&&n>0){d.cards[id]=n-1;if(!d.cards[id])delete d.cards[id]}}save();syncDeck(d);render()}
-function wire(){document.querySelectorAll("[data-tab]").forEach(b=>b.onclick=()=>{tab=b.dataset.tab;render()});document.querySelector("[data-account]")?.addEventListener("click",()=>{auth=true;render()});$("#account")?.addEventListener("click",()=>{auth=true;render()});$("#closeauth")?.addEventListener("click",()=>{auth=false;render()});$("#closedetail")?.addEventListener("click",()=>{detail=null;render()});$("#search")?.addEventListener("click",()=>{q=$("#q").value.trim();render()});$("#q")?.addEventListener("keydown",e=>{if(e.key==="Enter"){q=e.target.value.trim();render()}});document.querySelectorAll("[data-f]").forEach(x=>x.onchange=()=>{filters[x.dataset.f]=x.value;render()});document.querySelectorAll("[data-add]").forEach(x=>x.onclick=()=>add(x.dataset.add));document.querySelectorAll("[data-detail]").forEach(x=>x.onclick=()=>{detail=cards.find(c=>c.id===x.dataset.detail);render()});$("#deleteDeck")?.addEventListener("click",async()=>{const d=decks.find(x=>x.id===activeDeck);if(!d||!confirm("¿Eliminar este mazo?"))return;decks=decks.filter(x=>x.id!==d.id);activeDeck=decks[0]?.id||null;save();if(sb&&user)await sb.from("decks").delete().eq("id",d.id);render()});$("#newdeck")?.addEventListener("click",()=>{let n=prompt("Nombre del mazo","Mi mazo");if(n){const d={id:crypto.randomUUID(),name:n,leader:"",cards:{}};decks.unshift(d);activeDeck=d.id;save();syncDeck(d);render()}});document.querySelectorAll("[data-plusdeck]").forEach(x=>x.onclick=()=>deckAdd(x.dataset.plusdeck,1));document.querySelectorAll("[data-minusdeck]").forEach(x=>x.onclick=()=>deckAdd(x.dataset.minusdeck,-1));document.querySelectorAll("[data-deck]").forEach(x=>x.onclick=()=>{activeDeck=x.dataset.deck;render()});$("#deckq")?.addEventListener("input",()=>{let s=norm($("#deckq").value),el=$("#deckresults");if(!s){el.innerHTML="";return}el.innerHTML=cards.filter(c=>norm(c.id+" "+c.name).includes(s)).slice(0,8).map(c=>'<button class="secondary btn" style="width:100%;margin-top:5px;text-align:left" data-deckadd="'+c.id+'">'+esc(c.id)+" · "+esc(c.name)+"</button>").join("");el.querySelectorAll("[data-deckadd]").forEach(b=>b.onclick=()=>deckAdd(b.dataset.deckadd,1))});$("#login")?.addEventListener("click",login);$("#register")?.addEventListener("click",register);$("#logout")?.addEventListener("click",logout)}
-async function initSB(){try{const m=await import("https://esm.sh/@supabase/supabase-js@2");sb=m.createClient(SB_URL,SB_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});const s=await sb.auth.getSession();user=s.data.session?.user||null;sb.auth.onAuthStateChange((_e,s)=>{user=s?.user||null;loadCloud();render()});loadCloud();render()}catch(e){}}
-async function login(){try{if(!sb)throw new Error("La conexión de cuenta todavía está cargando. Inténtalo de nuevo en unos segundos.");let {data,error}=await sb.auth.signInWithPassword({email:$("#email").value,password:$("#pass").value});if(error)throw error;user=data.user;auth=false;loadCloud();render()}catch(e){alert(e.message)}}
-async function register(){try{if(!sb)throw new Error("La conexión de cuenta todavía está cargando. Inténtalo de nuevo en unos segundos.");let {error}=await sb.auth.signUp({email:$("#email").value,password:$("#pass").value});if(error)throw error;alert("Cuenta creada. Revisa tu email si la confirmación está activada.")}catch(e){alert(e.message)}}
-async function logout(){await sb?.auth.signOut();user=null;auth=false;render()}
-async function loadCloud(){if(!sb||!user)return;try{let {data:ci}=await sb.from("collection_items").select("card_id,quantity").eq("user_id",user.id);collection={};(ci||[]).forEach(x=>collection[x.card_id]=+x.quantity);let {data:ds}=await sb.from("decks").select("id,name,leader_card_id,created_at").eq("user_id",user.id).order("created_at",{ascending:false});decks=[];for(const d of ds||[]){let {data:dc}=await sb.from("deck_cards").select("card_id,quantity").eq("deck_id",d.id);let m={};(dc||[]).forEach(x=>m[x.card_id]=+x.quantity);decks.push({id:d.id,name:d.name,leader:d.leader_card_id||"",cards:m})}save();render()}catch(e){}}
-async function syncCollection(){if(!sb||!user)return;try{const {data:rows}=await sb.from("collection_items").select("card_id").eq("user_id",user.id);const keep=new Set(Object.keys(collection));for(const r of rows||[]){if(!keep.has(String(r.card_id)))await sb.from("collection_items").delete().eq("user_id",user.id).eq("card_id",r.card_id)}for(const [id,n] of Object.entries(collection))await sb.from("collection_items").upsert({user_id:user.id,card_id:id,quantity:+n,updated_at:new Date().toISOString()},{onConflict:"user_id,card_id"})}catch(e){console.warn(e)}}
-async function syncDeck(d){if(!sb||!user)return;await sb.from("decks").upsert({id:d.id,user_id:user.id,name:d.name,leader_card_id:d.leader||null,updated_at:new Date().toISOString()});await sb.from("deck_cards").delete().eq("deck_id",d.id);let rows=Object.entries(d.cards||{}).map(([card_id,quantity])=>({deck_id:d.id,card_id,quantity:+quantity}));if(rows.length)await sb.from("deck_cards").insert(rows)}
-async function fetchJson(url){
-  const c=new AbortController(); const t=setTimeout(()=>c.abort(),15000);
-  try{const r=await fetch(url,{cache:"no-store",signal:c.signal});if(!r.ok)throw new Error("HTTP "+r.status);return await r.json()}finally{clearTimeout(t)}
+let bootDone=false;
+window.addEventListener("error",function(e){
+  console.error(e.error||e.message);
+  if(!bootDone){
+    const a=document.getElementById("app");
+    if(a)a.innerHTML='<div class="empty"><h2>No se pudo iniciar MiAlbumOnePiece</h2><p>Se ha producido un error inesperado.</p><button class="primary btn" onclick="location.reload()">Reintentar</button></div>';
+  }
+});
+window.addEventListener("unhandledrejection",e=>console.error(e.reason));
+
+const SB_URL="https://zawzbdbdbcshljhlvgjx.supabase.co";
+const SB_KEY="sb_publishable_TGSNNhx2wvUGteg_pdPg_zkyVP4s-";
+const CARDMARKET_PRODUCTS="https://downloads.s3.cardmarket.com/productCatalog/productList/products_singles_18.json";
+const CARDMARKET_PRICES="https://downloads.s3.cardmarket.com/productCatalog/priceGuide/price_guide_18.json";
+const IMAGE_PROXY=id=>"https://optcg-api.arjunbansal-ai.workers.dev/images/"+encodeURIComponent(id);
+const OFFICIAL_IMAGE=id=>"https://en.onepiece-cardgame.com/images/cardlist/card/"+encodeURIComponent(id)+".png";
+
+const esc=s=>String(s??"").replace(/[&<>'"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[c]));
+const norm=s=>String(s??"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+const $=s=>document.querySelector(s);
+
+function safeJSON(v,f){
+  try{return JSON.parse(v||"")}catch(e){return f}
+}
+let sb=null;
+let cards=[];
+let packs=[];
+let packMap=new Map();
+let prices=new Map();
+let collection=safeJSON(localStorage.getItem("mialbumonepiece_collection"),{});
+let decks=safeJSON(localStorage.getItem("mialbumonepiece_decks"),[]);
+let user=null;
+let tab="catalog";
+let q="";
+let filters={cat:"Todos",color:"Todos",rarity:"Todos",set:"Todos",sort:"id",dir:"asc"};
+let collectionFilters={q:"",set:"Todos",cat:"Todos",color:"Todos",rarity:"Todos",sort:"name",dir:"asc"};
+let page=1;
+let auth=false;
+let detail=null;
+let toast="";
+let activeDeck=null;
+let deckSearch="";
+let sharedDeck=null;
+
+function saveLocal(){
+  localStorage.setItem("mialbumonepiece_collection",JSON.stringify(collection));
+  localStorage.setItem("mialbumonepiece_decks",JSON.stringify(decks));
+}
+function qty(id){return Math.max(0,Number(collection[id]||0))}
+function price(id){return Number(prices.get(id)||0)}
+function euro(n){return Number.isFinite(Number(n))?Number(n).toFixed(2).replace(".",",")+" €":"—"}
+function cardById(id){return cards.find(c=>c.id===id)}
+function baseCardId(id){return String(id||"").replace(/_(?:p|r)\d+$/i,"")}
+function setLabel(code){return packMap.get(code)||code}
+function setOptions(){
+  return ["Todos"].concat(packs.slice().sort((a,b)=>String(a.code).localeCompare(String(b.code))).map(p=>p.code));
+}
+function rarityOptions(){
+  return ["Todos"].concat(Array.from(new Set(cards.map(c=>c.rarity).filter(Boolean))).sort());
+}
+function colorOptions(){
+  return ["Todos"].concat(Array.from(new Set(cards.flatMap(c=>c.colors||[]))).sort());
+}
+function categoryOptions(){return ["Todos","Leader","Character","Event","Stage","Don"]}
+
+function imageTags(c,cls){
+  const id=encodeURIComponent(c.id);
+  const base=encodeURIComponent(baseCardId(c.id));
+  const first=c.image||OFFICIAL_IMAGE(c.id);
+  return '<img class="'+(cls||"")+'" loading="lazy" decoding="async" data-card-image="'+id+'" data-f1="'+esc(IMAGE_PROXY(c.id))+'" data-f2="'+esc(OFFICIAL_IMAGE(c.id))+'" data-f3="'+esc(IMAGE_PROXY(baseCardId(c.id)))+'" data-f4="'+esc(OFFICIAL_IMAGE(baseCardId(c.id)))+'" data-fallback="0" src="'+esc(first)+'" alt="'+esc(c.name)+'">';
+}
+function wireImages(){
+  document.querySelectorAll("img[data-card-image]").forEach(img=>{
+    if(img.dataset.bound)return;
+    img.dataset.bound="1";
+    img.onerror=function(){
+      let n=Number(this.dataset.fallback||0)+1;
+      this.dataset.fallback=String(n);
+      const next=this.dataset["f"+n];
+      if(next && this.src!==next)this.src=next;
+      else this.classList.add("broken");
+    };
+  });
+}
+
+function selectHtml(id,vals,val){
+  return '<select data-filter="'+id+'">'+vals.map(x=>'<option value="'+esc(x)+'" '+(String(x)===String(val)?"selected":"")+'>'+esc(x)+"</option>").join("")+"</select>";
+}
+function sortCards(arr,sort,dir){
+  const mul=dir==="desc"?-1:1;
+  return arr.slice().sort((a,b)=>{
+    let av,bv;
+    if(sort==="name"){av=norm(a.name);bv=norm(b.name)}
+    else if(sort==="price"){av=price(a.id);bv=price(b.id)}
+    else if(sort==="qty"){av=qty(a.id);bv=qty(b.id)}
+    else {av=norm(a.id);bv=norm(b.id)}
+    if(av<bv)return -1*mul;
+    if(av>bv)return 1*mul;
+    return 0;
+  });
+}
+
+function filteredCatalog(){
+  let arr=cards.filter(c=>{
+    if(filters.cat!=="Todos" && String(c.category||"")!==filters.cat)return false;
+    if(filters.color!=="Todos" && !(c.colors||[]).some(x=>norm(x)===norm(filters.color)))return false;
+    if(filters.rarity!=="Todos" && c.rarity!==filters.rarity)return false;
+    if(filters.set!=="Todos" && c.set!==filters.set)return false;
+    if(filters.own==="owned" && qty(c.id)===0)return false;
+    if(filters.own==="missing" && qty(c.id)>0)return false;
+    if(q && !norm([c.id,c.name,c.rarity,c.set,(c.colors||[]).join(" "),(c.types||[]).join(" ")].join(" ")).includes(norm(q)))return false;
+    return true;
+  });
+  return sortCards(arr,filters.sort,filters.dir);
+}
+
+function cardHtml(c,mode){
+  const owned=qty(c.id);
+  const p=price(c.id);
+  const controls=mode==="collection"
+    ? '<div class="qtyctrl"><button class="secondary mini" data-remove="'+esc(c.id)+'">−</button><b>'+owned+"</b><button class=\"primary mini\" data-add=\""+esc(c.id)+'">+</button></div>'
+    : '<div class="actions"><button class="secondary btn" data-detail="'+esc(c.id)+'">Ver</button><button class="primary btn" data-add="'+esc(c.id)+'">Añadir</button></div>';
+  return '<article class="card">'+imageTags(c)+"<div class=\"body\"><div class=\"name\">"+esc(c.name)+"</div><div class=\"muted\">"+esc(c.id)+" · "+esc(c.rarity||"—")+' · '+esc(c.set||"—")+"</div><div class=\"pills\">"+(c.colors||[]).map(x=>'<span class="pill">'+esc(x)+"</span>").join("")+"</div><div class=\"row\"><b>"+(p?euro(p):"Precio ref. —")+'</b><span class="muted">'+(owned?"Tienes ×"+owned:"No la tienes")+"</span></div>"+controls+"</div></article>";
+}
+
+function catalog(){
+  const all=filteredCatalog();
+  const shown=all.slice(0,page*60);
+  const more=shown.length<all.length;
+  return '<div class="wrap"><div class="hero"><div><h1>Catálogo</h1><p>'+cards.length.toLocaleString("es-ES")+' cartas disponibles · mostrando '+shown.length+" de "+all.length+" filtradas.</p></div><div class=\"statsmini\"><b>"+cards.length+"</b><span>cartas</span></div></div>"+
+    '<div class="search"><input id="catalogQ" value="'+esc(q)+'" placeholder="Busca nombre, ID, personaje, colección..."><button class="primary btn" id="catalogSearch">Buscar</button></div>'+
+    '<div class="filters">'+selectHtml("cat",categoryOptions(),filters.cat)+selectHtml("color",colorOptions(),filters.color)+selectHtml("rarity",rarityOptions(),filters.rarity)+selectHtml("set",setOptions(),filters.set)+'</div>'+
+    '<div class="filters">'+selectHtml("own",["all","owned","missing"],filters.own||"all")+selectHtml("sort",["id","name","qty","price"],filters.sort)+selectHtml("dir",["asc","desc"],filters.dir)+'</div>'+
+    '<div class="subbar"><span>Modo: todas las cartas</span><button class="secondary btn" id="clearCatalog">Limpiar filtros</button></div>'+
+    '<div class="grid">'+(shown.length?shown.map(c=>cardHtml(c,"catalog")).join(""):'<div class="empty">No hay cartas con estos filtros.</div>')+"</div>"+
+    (more?'<div class="loadmore"><button class="primary btn" id="loadMore">Cargar más cartas</button></div>':"")+"</div>";
+}
+
+function collectionFiltered(){
+  let arr=cards.filter(c=>{
+    if(qty(c.id)<=0)return false;
+    if(collectionFilters.set!=="Todos" && c.set!==collectionFilters.set)return false;
+    if(collectionFilters.cat!=="Todos" && c.category!==collectionFilters.cat)return false;
+    if(collectionFilters.color!=="Todos" && !(c.colors||[]).some(x=>norm(x)===norm(collectionFilters.color)))return false;
+    if(collectionFilters.rarity!=="Todos" && c.rarity!==collectionFilters.rarity)return false;
+    if(collectionFilters.q && !norm([c.id,c.name,c.set,(c.colors||[]).join(" "),(c.types||[]).join(" ")].join(" ")).includes(norm(collectionFilters.q)))return false;
+    return true;
+  });
+  return sortCards(arr,collectionFilters.sort,collectionFilters.dir);
+}
+function collectionStats(){
+  const owned=cards.filter(c=>qty(c.id)>0);
+  const copies=owned.reduce((s,c)=>s+qty(c.id),0);
+  const missingPlayset=cards.reduce((s,c)=>s+Math.max(0,4-qty(c.id)),0);
+  const playsets=cards.filter(c=>qty(c.id)>=4).length;
+  return {distinct:owned.length,copies,missingPlayset,playsets,total:cards.length};
+}
+function expansionStats(){
+  return packs.slice().sort((a,b)=>String(a.code).localeCompare(String(b.code))).map(p=>{
+    const cs=cards.filter(c=>c.set===p.code);
+    const owned=cs.filter(c=>qty(c.id)>0).length;
+    const copies=cs.reduce((s,c)=>s+qty(c.id),0);
+    const missing=cs.length-owned;
+    const playset=cs.reduce((s,c)=>s+Math.max(0,4-qty(c.id)),0);
+    return {code:p.code,name:p.name,total:cs.length,owned,copies,missing,playset,completion:cs.length?Math.round(owned*100/cs.length):0}
+  });
+}
+function collectionView(){
+  const st=collectionStats();
+  const arr=collectionFiltered();
+  const ex=expansionStats();
+  return '<div class="wrap"><div class="hero"><div><h1>Mi colección</h1><p>'+st.distinct+" cartas distintas · "+st.copies+" copias · "+st.playsets+" playsets completos.</p></div><div class=\"statsmini\"><b>"+st.missingPlayset+"</b><span>copias para playset</span></div></div>"+
+    '<div class="kpis"><div class="section kpi"><b>'+st.distinct+"/"+st.total+'</b><span>cartas conseguidas</span></div><div class="section kpi"><b>'+(st.total-st.distinct)+"</b><span>cartas que faltan</span></div><div class=\"section kpi\"><b>"+st.missingPlayset+"</b><span>copias para completar playsets</span></div><div class=\"section kpi\"><b>"+euro(arr.reduce((s,c)=>s+price(c.id)*qty(c.id),0))+"</b><span>valor visible</span></div></div>"+
+    '<div class="section"><div class="sectiontitle"><h2>Filtros y orden</h2><button class="secondary btn" id="csvExport">Exportar CSV</button></div>'+
+    '<div class="search"><input id="collectionQ" value="'+esc(collectionFilters.q)+'" placeholder="Buscar en mi colección..."></div>'+
+    '<div class="filters">'+selectHtml("collectionSet",setOptions(),collectionFilters.set)+selectHtml("collectionCat",categoryOptions(),collectionFilters.cat)+selectHtml("collectionColor",colorOptions(),collectionFilters.color)+selectHtml("collectionRarity",rarityOptions(),collectionFilters.rarity)+'</div>'+
+    '<div class="filters">'+selectHtml("collectionSort",["name","id","qty","price","value"],collectionFilters.sort)+selectHtml("collectionDir",["asc","desc"],collectionFilters.dir)+'</div>'+
+    '<div class="subbar"><span>'+arr.length+" cartas encontradas</span><div class=\"csvbuttons\"><button class=\"secondary btn\" id=\"csvImportBtn\">Importar CSV</button><input id=\"csvFile\" type=\"file\" accept=\".csv,text/csv\" hidden></div></div></div>"+
+    '<div class="section"><div class="sectiontitle"><h2>Progreso por expansión</h2><span class="muted">Incluye todas las variantes publicadas en cada expansión.</span></div><div class="expgrid">'+ex.map(s=>'<button class="exp" data-exp="'+esc(s.code)+'"><div><b>'+esc(s.code)+" · "+esc(s.name)+"</b><div class=\"muted\">"+s.owned+"/"+s.total+" cartas · "+s.missing+" faltan · "+s.playset+" copias para playsets</div></div><strong>"+s.completion+"%</strong><small>"+s.copies+" copias</small></button>").join("")+"</div></div>"+
+    '<div class="grid">'+(arr.length?arr.map(c=>cardHtml(c,"collection")).join(""):'<div class="empty">No tienes cartas que coincidan.</div>')+"</div></div>";
+}
+
+function deckStats(d){
+  const total=Object.values(d.cards||{}).reduce((s,n)=>s+Number(n||0),0);
+  let missing=0,missingValue=0;
+  if(d.leader){
+    const lm=Math.max(0,1-qty(d.leader)); missing+=lm; missingValue+=lm*price(d.leader);
+  }
+  for(const [id,n] of Object.entries(d.cards||{})){
+    const m=Math.max(0,Number(n)-qty(id)); missing+=m; missingValue+=m*price(id);
+  }
+  return {total,missing,missingValue,leaderOwned:d.leader?qty(d.leader):0};
+}
+function deckCardRows(d){
+  const entries=Object.entries(d.cards||{}).filter(([,n])=>Number(n)>0).sort((a,b)=>a[0].localeCompare(b[0]));
+  return entries.map(([id,n])=>{
+    const c=cardById(id); if(!c)return "";
+    const have=qty(id), missing=Math.max(0,Number(n)-have), p=price(id);
+    return '<div class="listrow deckrow">'+imageTags(c,"thumb")+'<div class="deckinfo"><b>'+esc(c.id)+"</b><div>"+esc(c.name)+'</div><div class="muted">Necesitas '+n+" · Tienes "+have+" · Faltan "+missing+(p?' · '+euro(p)+" / ud.":"")+(missing&&p?" · "+euro(missing*p)+" por comprar":"")+"</div></div><button class=\"secondary mini\" data-minusdeck=\""+esc(id)+'">−</button><b>'+n+'</b><button class="primary mini" data-plusdeck="'+esc(id)+'">+</button></div>';
+  }).join("");
+}
+function deckEditor(d){
+  const st=deckStats(d);
+  const leader=cardById(d.leader);
+  const leaders=cards.filter(c=>c.category==="Leader").sort((a,b)=>a.id.localeCompare(b.id));
+  let results=[];
+  const sq=norm(deckSearch);
+  if(sq)results=cards.filter(c=>c.category!=="Don" && norm([c.id,c.name,(c.types||[]).join(" "),(c.colors||[]).join(" ")].join(" ")).includes(sq)).slice(0,12);
+  return '<div class="section"><div class="sectiontitle"><div><h2>'+esc(d.name)+'</h2><span class="muted">Líder + 50 cartas · máximo 4 copias por carta.</span></div><div class="rowBtns"><button class="secondary btn" id="shareDeck">Compartir</button><button class="secondary btn" id="deleteDeck">Eliminar</button></div></div>'+
+    '<div class="deckhero"><div><b>Progreso</b><strong>'+st.total+'/50</strong></div><div><b>Cartas que faltan</b><strong>'+st.missing+'</strong></div><div><b>Coste estimado faltante</b><strong>'+euro(st.missingValue)+'</strong></div></div>'+
+    '<label class="fieldlabel">Líder</label><select id="deckleader"><option value="">Selecciona líder</option>'+leaders.map(c=>'<option value="'+esc(c.id)+'" '+(c.id===d.leader?"selected":"")+'>'+esc(c.id)+" · "+esc(c.name)+" · "+esc((c.colors||[]).join("/"))+"</option>").join("")+'</select>'+
+    '<div class="muted decknote">'+(leader?("Tienes "+qty(leader.id)+" copia(s) del líder."):"Selecciona un líder.")+"</div>"+
+    '<label class="fieldlabel">Añadir cartas rápidamente</label><div class="search"><input id="deckq" value="'+esc(deckSearch)+'" placeholder="Busca Luffy, Zoro, OP17-093..."><button class="secondary btn" id="clearDeckSearch">Limpiar</button></div>"+
+    '<div class="deckresults">'+(results.map(c=>'<div class="listrow"><div style="flex:1"><b>'+esc(c.id)+" · "+esc(c.name)+"</b><div class=\"muted\">Tienes "+qty(c.id)+" · Precio ref. "+(price(c.id)?euro(price(c.id)):"—")+"</div></div>"+(c.category==="Leader"?'<button class="primary btn" data-setleader="'+esc(c.id)+'">Usar líder</button>':'<button class="primary btn" data-deckadd="'+esc(c.id)+'">+ Añadir</button>')+"</div>").join(""))+"</div>"+
+    '<div class="sectiontitle"><h3>Contenido del mazo</h3><span class="muted">'+(leader?"Líder: "+esc(leader.name):"Sin líder")+"</span></div>"+
+    '<div class="list">'+(deckCardRows(d)||'<div class="empty">Añade cartas al mazo.</div>')+"</div></div>";
+}
+function decksView(){
+  let d=decks.find(x=>x.id===activeDeck)||decks[0];
+  if(d)activeDeck=d.id;
+  return '<div class="wrap"><div class="hero"><div><h1>Mazos</h1><p>Construye, controla lo que ya tienes y calcula cuánto te falta comprar.</p></div><button class="primary btn" id="newdeck">+ Nuevo mazo</button></div>'+
+    '<div class="section"><div class="sectiontitle"><h2>Mis mazos</h2><span class="muted">'+decks.length+" guardados</span></div>"+(decks.length?'<div class="decklist">'+decks.map(x=>{const st=deckStats(x);return '<button class="deckcard '+(x.id===activeDeck?"sel":"")+'" data-deck="'+esc(x.id)+'"><b>'+esc(x.name)+'</b><span>'+st.total+'/50 · '+(x.leader||"sin líder")+"</span><small>"+st.missing+" cartas faltantes"+(st.missingValue?" · "+euro(st.missingValue):"")+"</small></button>"}).join("")+'</div>':'<div class="empty">Todavía no tienes mazos.</div>')+"</div>"+(d?deckEditor(d):"")+"</div>";
+}
+
+function accountView(){
+  return '<div class="modalback"><div class="modal"><div class="modaltop"><h2>Cuenta</h2><button class="close" id="closeauth">×</button></div><p class="muted">'+(user?"Tu colección y mazos están sincronizados.":"Puedes usar la app sin cuenta. Con cuenta, se sincroniza en la nube.")+"</p>"+(!user?'<input id="email" placeholder="Email" type="email"><br><br><input id="pass" placeholder="Contraseña" type="password"><div class="actions"><button class="primary btn" id="login">Entrar</button><button class="secondary btn" id="register">Crear cuenta</button></div>':'<div class="section"><b>'+esc(user.email||"Cuenta")+"</b></div><button class=\"secondary btn\" id=\"logout\">Cerrar sesión</button>")+"</div></div>";
+}
+function detailView(){
+  const c=detail;
+  return '<div class="modalback"><div class="modal"><div class="modaltop"><h2>'+esc(c.name)+'</h2><button class="close" id="closedetail">×</button></div><div class="detail">'+imageTags(c,"detailimg")+'<div><div class="muted">'+esc(c.id)+" · "+esc(c.set)+" · "+esc(c.rarity||"—")+"</div><div class=\"pills\">"+(c.colors||[]).map(x=>'<span class="pill">'+esc(x)+"</span>").join("")+"</div><p>"+esc(c.effect||"Sin texto de efecto.")+"</p><p class=\"muted\">Tipo: "+esc(c.category||"—")+" · Coste: "+esc(c.cost??"—")+" · Poder: "+esc(c.power??"—")+" · Tienes: "+qty(c.id)+"</p><div class=\"actions\"><button class=\"secondary btn\" data-remove=\""+esc(c.id)+'">− Quitar</button><button class="primary btn" data-add="'+esc(c.id)+'">+ Añadir</button></div><a class="secondary btn" style="display:inline-block;margin-top:8px" target="_blank" rel="noopener" href="https://www.cardmarket.com/es/OnePiece/Products/Singles?mode=list&searchString='+encodeURIComponent(c.id)+'">Cardmarket ↗</a></div></div></div></div>';
+}
+function sharedDeckView(){
+  if(!sharedDeck)return "";
+  const entries=Object.entries(sharedDeck.cards||{}).reduce((s,[id,n])=>s+Number(n||0),0);
+  const leader=cardById(sharedDeck.leader);
+  return '<div class="modalback"><div class="modal"><div class="modaltop"><h2>Mazo compartido</h2><button class="close" id="closeShared">×</button></div><div class="section"><h3>'+esc(sharedDeck.name||"Mazo")+'</h3><p class="muted">'+entries+"/50 · Líder: "+esc(leader?.name||sharedDeck.leader||"sin líder")+"</p></div><div class=\"list\">"+Object.entries(sharedDeck.cards||{}).map(([id,n])=>{const c=cardById(id);return c?'<div class="listrow">'+imageTags(c,"thumb")+'<div style="flex:1"><b>'+esc(id)+"</b><div>"+esc(c.name)+" · "+n+" copias</div></div></div>":""}).join("")+'</div><div class="actions"><button class="primary btn" id="importShared">Importar a mis mazos</button></div></div></div>';
+}
+function render(){
+  const body=tab==="catalog"?catalog():tab==="collection"?collectionView():decksView();
+  document.getElementById("app").innerHTML='<div class="app"><header class="top"><div class="brand"><b>ONE PIECE</b><span>MiAlbumOnePiece</span></div><button class="account" id="account">'+(user?esc((user.email||"Cuenta").split("@")[0]):"Cuenta")+"</button></header>"+body+
+    '<nav class="nav"><button class="'+(tab==="catalog"?"active":"")+'" data-tab="catalog">⌕<span>Catálogo</span></button><button class="'+(tab==="collection"?"active":"")+'" data-tab="collection">▦<span>Colección</span></button><button class="'+(tab==="decks"?"active":"")+'" data-tab="decks">♟<span>Mazos</span></button><button data-account>◉<span>Cuenta</span></button></nav>'+
+    (auth?accountView():"")+(detail?detailView():"")+(sharedDeck?sharedDeckView():"")+(toast?'<div class="toast">'+esc(toast)+"</div>":"")+"</div>";
+  wire();
+  wireImages();
+}
+function notice(x){toast=x;render();setTimeout(()=>{toast="";render()},1600)}
+function add(id){
+  collection[id]=qty(id)+1; saveLocal(); syncCollection(); notice("Añadida · "+qty(id)+" copia(s)");
+}
+function remove(id){
+  const n=qty(id)-1;
+  if(n>0)collection[id]=n; else delete collection[id];
+  saveLocal(); syncCollection(); notice(n>0?"Quitada una copia":"Carta eliminada de tu colección");
+}
+function newDeck(){
+  const name=prompt("Nombre del mazo","Mi mazo");
+  if(!name)return;
+  const d={id:crypto.randomUUID(),name:name.trim()||"Mi mazo",leader:"",cards:{}};
+  decks.unshift(d);activeDeck=d.id;saveLocal();syncDeck(d);render();
+}
+function deckAdd(id){
+  const d=decks.find(x=>x.id===activeDeck)||decks[0]; if(!d)return;
+  const c=cardById(id); if(!c)return;
+  if(c.category==="Leader"){d.leader=id;saveLocal();syncDeck(d);render();return}
+  const n=Number(d.cards[id]||0);
+  const total=Object.values(d.cards).reduce((s,v)=>s+Number(v||0),0);
+  if(n>=4){notice("Máximo 4 copias de esta carta");return}
+  if(total>=50){notice("El mazo ya tiene 50 cartas");return}
+  d.cards[id]=n+1;saveLocal();syncDeck(d);render();
+}
+function deckRemove(id){
+  const d=decks.find(x=>x.id===activeDeck)||decks[0]; if(!d)return;
+  const n=Number(d.cards[id]||0)-1;
+  if(n>0)d.cards[id]=n; else delete d.cards[id];
+  saveLocal();syncDeck(d);render();
+}
+function shareDeck(){
+  const d=decks.find(x=>x.id===activeDeck)||decks[0];if(!d)return;
+  const payload={name:d.name,leader:d.leader,cards:d.cards||{}};
+  const link=location.origin+location.pathname+"?deck="+b64u(JSON.stringify(payload));
+  if(navigator.share){navigator.share({title:"MiAlbumOnePiece · "+d.name,text:"Mazo de One Piece Card Game",url:link}).catch(()=>copyText(link))}
+  else copyText(link);
+}
+async function copyText(x){
+  try{await navigator.clipboard.writeText(x);notice("Enlace del mazo copiado")}
+  catch(e){prompt("Copia este enlace:",x)}
+}
+function b64u(s){return btoa(unescape(encodeURIComponent(s))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"")}
+function ub64u(s){return decodeURIComponent(escape(atob(s.replace(/-/g,"+").replace(/_/g,"/"))))}
+function importShared(){
+  if(!sharedDeck)return;
+  const d={id:crypto.randomUUID(),name:(sharedDeck.name||"Mazo compartido")+" (copia)",leader:sharedDeck.leader||"",cards:{}};
+  for(const [id,n] of Object.entries(sharedDeck.cards||{})){
+    if(cardById(id)&&cardById(id).category!=="Leader")d.cards[id]=Math.min(4,Math.max(0,Number(n)||0));
+  }
+  let total=Object.values(d.cards).reduce((s,v)=>s+v,0);
+  if(total>50){
+    const kept={};
+    let used=0;
+    for(const [id,n] of Object.entries(d.cards)){if(used>=50)break;const take=Math.min(Number(n),50-used);if(take){kept[id]=take;used+=take}}
+    d.cards=kept;
+  }
+  decks.unshift(d);activeDeck=d.id;sharedDeck=null;saveLocal();syncDeck(d);history.replaceState({},document.title,location.pathname);render();notice("Mazo importado");
+}
+
+function exportCSV(){
+  const rows=[["id","name","set","rarity","quantity"]];
+  cards.filter(c=>qty(c.id)>0).forEach(c=>rows.push([c.id,c.name,c.set,c.rarity||"",String(qty(c.id))]));
+  const csv=rows.map(r=>r.map(v=>{const x=String(v??"");return /[",\n;]/.test(x)?'"'+x.replace(/"/g,'""')+'"':x}).join(";")).join("\n");
+  const blob=new Blob(["\ufeff"+csv],{type:"text/csv;charset=utf-8"});
+  const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="mialbumonepiece-coleccion.csv";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+  notice("CSV exportado");
+}
+function parseCSV(text){
+  const rows=[];let row=[],cell="",q=false;
+  for(let i=0;i<text.length;i++){
+    const ch=text[i],next=text[i+1];
+    if(ch==='"'&&q&&next==='"'){cell+='"';i++;continue}
+    if(ch==='"'){q=!q;continue}
+    if(!q&&(ch===";"||ch===",")){row.push(cell);cell="";continue}
+    if(!q&&(ch==="\n"||ch==="\r")){if(ch==="\r"&&next==="\n")i++;row.push(cell);if(row.some(x=>x!==""))rows.push(row);row=[];cell="";continue}
+    cell+=ch;
+  }
+  if(cell!==""||row.length){row.push(cell);if(row.some(x=>x!==""))rows.push(row)}
+  return rows;
+}
+function importCSV(text){
+  const rows=parseCSV(text);if(rows.length<2)throw new Error("CSV vacío");
+  const head=rows[0].map(norm);
+  const idIndex=head.findIndex(x=>x==="id"||x==="card_id"||x==="codigo");
+  const qtyIndex=head.findIndex(x=>x==="quantity"||x==="cantidad"||x==="qty");
+  if(idIndex<0||qtyIndex<0)throw new Error("El CSV necesita columnas id y quantity/cantidad");
+  let imported=0;
+  const next={};
+  for(const row of rows.slice(1)){
+    const id=String(row[idIndex]||"").trim(),n=Math.max(0,Math.min(99,parseInt(String(row[qtyIndex]||"0").replace(",","."))||0));
+    if(cardById(id)){if(n)next[id]=n;imported++}
+  }
+  collection=next;saveLocal();syncCollection();render();notice(imported+" cartas importadas");
+}
+function bindCollectionControls(){
+  const file=$("#csvFile");
+  $("#csvExport")?.addEventListener("click",exportCSV);
+  $("#csvImportBtn")?.addEventListener("click",()=>file?.click());
+  file?.addEventListener("change",async e=>{const f=e.target.files?.[0];if(!f)return;try{importCSV(await f.text())}catch(err){alert(err.message)}});
+}
+function wire(){
+  document.querySelectorAll("[data-tab]").forEach(b=>b.onclick=()=>{tab=b.dataset.tab;render()});
+  $("[data-account]")?.addEventListener("click",()=>{auth=true;render()});
+  $("#account")?.addEventListener("click",()=>{auth=true;render()});
+  $("#closeauth")?.addEventListener("click",()=>{auth=false;render()});
+  $("#closedetail")?.addEventListener("click",()=>{detail=null;render()});
+  $("#closeShared")?.addEventListener("click",()=>{sharedDeck=null;render()});
+  $("#importShared")?.addEventListener("click",importShared);
+  $("#catalogSearch")?.addEventListener("click",()=>{q=$("#catalogQ").value.trim();page=1;render()});
+  $("#catalogQ")?.addEventListener("keydown",e=>{if(e.key==="Enter"){q=e.target.value.trim();page=1;render()}});
+  $("#clearCatalog")?.addEventListener("click",()=>{q="";filters={cat:"Todos",color:"Todos",rarity:"Todos",set:"Todos",own:"all",sort:"id",dir:"asc"};page=1;render()});
+  $("#loadMore")?.addEventListener("click",()=>{page++;render()});
+  $("#newdeck")?.addEventListener("click",newDeck);
+  $("#deleteDeck")?.addEventListener("click",async()=>{const d=decks.find(x=>x.id===activeDeck);if(!d||!confirm("¿Eliminar este mazo?"))return;decks=decks.filter(x=>x.id!==d.id);activeDeck=decks[0]?.id||null;saveLocal();if(sb&&user)await sb.from("decks").delete().eq("id",d.id);render()});
+  $("#shareDeck")?.addEventListener("click",shareDeck);
+  $("#clearDeckSearch")?.addEventListener("click",()=>{deckSearch="";render()});
+  $("#deckq")?.addEventListener("input",e=>{deckSearch=e.target.value;render()});
+  $("#deckleader")?.addEventListener("change",e=>{const d=decks.find(x=>x.id===activeDeck);if(d){d.leader=e.target.value;saveLocal();syncDeck(d);render()}});
+  document.querySelectorAll("[data-setleader]").forEach(b=>b.onclick=()=>{const d=decks.find(x=>x.id===activeDeck);if(d){d.leader=b.dataset.setleader;saveLocal();syncDeck(d);render()}});
+  document.querySelectorAll("[data-deckadd]").forEach(b=>b.onclick=()=>deckAdd(b.dataset.deckadd));
+  document.querySelectorAll("[data-plusdeck]").forEach(b=>b.onclick=()=>deckAdd(b.dataset.plusdeck));
+  document.querySelectorAll("[data-minusdeck]").forEach(b=>b.onclick=()=>deckRemove(b.dataset.minusdeck));
+  document.querySelectorAll("[data-deck]").forEach(b=>b.onclick=()=>{activeDeck=b.dataset.deck;deckSearch="";render()});
+  document.querySelectorAll("[data-detail]").forEach(b=>b.onclick=()=>{detail=cardById(b.dataset.detail);render()});
+  document.querySelectorAll("[data-add]").forEach(b=>b.onclick=()=>add(b.dataset.add));
+  document.querySelectorAll("[data-remove]").forEach(b=>b.onclick=()=>remove(b.dataset.remove));
+
+  document.querySelectorAll("[data-filter]").forEach(x=>x.onchange=()=>{
+    const k=x.dataset.filter,v=x.value;
+    if(k in filters){filters[k]=v;page=1}
+    else if(k==="own"){filters.own=v}
+    render();
+  });
+
+  $("#collectionQ")?.addEventListener("input",e=>{collectionFilters.q=e.target.value;render()});
+  document.querySelectorAll("select[data-filter]").forEach(()=>{});
+  const collMap={collectionSet:"set",collectionCat:"cat",collectionColor:"color",collectionRarity:"rarity",collectionSort:"sort",collectionDir:"dir"};
+  Object.entries(collMap).forEach(([id,key])=>$("#"+id)?.addEventListener("change",e=>{collectionFilters[key]=e.target.value;render()}));
+  document.querySelectorAll("[data-exp]").forEach(b=>b.onclick=()=>{collectionFilters.set=b.dataset.exp;tab="collection";render()});
+  bindCollectionControls();
+
+  $("#email")?.addEventListener("keydown",e=>{if(e.key==="Enter")login()});
+  $("#login")?.addEventListener("click",login);
+  $("#register")?.addEventListener("click",register);
+  $("#logout")?.addEventListener("click",logout);
+}
+async function fetchJson(url,ms){
+  const c=new AbortController();const t=setTimeout(()=>c.abort(),ms||20000);
+  try{const r=await fetch(url,{cache:"no-store",signal:c.signal});if(!r.ok)throw new Error("HTTP "+r.status);return await r.json()}
+  finally{clearTimeout(t)}
+}
+
+async function initSB(){
+  try{
+    const m=await import("https://esm.sh/@supabase/supabase-js@2");
+    sb=m.createClient(SB_URL,SB_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
+    const s=await sb.auth.getSession();user=s.data.session?.user||null;
+    sb.auth.onAuthStateChange((_e,sess)=>{user=sess?.user||null;loadCloud();render()});
+    await loadCloud();render();
+  }catch(e){console.warn("Supabase no disponible",e);render()}
+}
+async function login(){
+  try{
+    if(!sb)throw new Error("La conexión con la cuenta aún no está lista.");
+    const r=await sb.auth.signInWithPassword({email:$("#email").value.trim(),password:$("#pass").value});
+    if(r.error)throw r.error;
+    user=r.data.user;auth=false;await loadCloud();render();
+  }catch(e){alert(e.message)}
+}
+async function register(){
+  try{
+    if(!sb)throw new Error("La conexión con la cuenta aún no está lista.");
+    const r=await sb.auth.signUp({email:$("#email").value.trim(),password:$("#pass").value});
+    if(r.error)throw r.error;
+    alert("Cuenta creada. Revisa tu email si la confirmación está activada.");
+  }catch(e){alert(e.message)}
+}
+async function logout(){if(sb)await sb.auth.signOut();user=null;auth=false;render()}
+
+async function loadCloud(){
+  if(!sb||!user)return;
+  try{
+    const ci=await sb.from("collection_items").select("card_id,quantity").eq("user_id",user.id);
+    collection={};(ci.data||[]).forEach(x=>collection[x.card_id]=Number(x.quantity)||0);
+    const ds=await sb.from("decks").select("id,name,leader_card_id,created_at").eq("user_id",user.id).order("created_at",{ascending:false});
+    const cloud=[];
+    for(const d of ds.data||[]){
+      const dc=await sb.from("deck_cards").select("card_id,quantity").eq("deck_id",d.id);
+      const map={};(dc.data||[]).forEach(x=>map[x.card_id]=Number(x.quantity)||0);
+      cloud.push({id:d.id,name:d.name,leader:d.leader_card_id||"",cards:map});
+    }
+    decks=cloud;activeDeck=activeDeck&&decks.some(x=>x.id===activeDeck)?activeDeck:decks[0]?.id||null;saveLocal();
+  }catch(e){console.warn("Cloud sync read failed",e)}
+}
+async function syncCollection(){
+  if(!sb||!user)return;
+  try{
+    const existing=await sb.from("collection_items").select("card_id").eq("user_id",user.id);
+    const keep=new Set(Object.keys(collection));
+    for(const r of existing.data||[])if(!keep.has(String(r.card_id)))await sb.from("collection_items").delete().eq("user_id",user.id).eq("card_id",r.card_id);
+    for(const [id,n] of Object.entries(collection))await sb.from("collection_items").upsert({user_id:user.id,card_id:id,quantity:Number(n),updated_at:new Date().toISOString()},{onConflict:"user_id,card_id"});
+  }catch(e){console.warn("Cloud collection write failed",e)}
+}
+async function syncDeck(d){
+  if(!sb||!user)return;
+  try{
+    await sb.from("decks").upsert({id:d.id,user_id:user.id,name:d.name,leader_card_id:d.leader||null,updated_at:new Date().toISOString()});
+    await sb.from("deck_cards").delete().eq("deck_id",d.id);
+    const rows=Object.entries(d.cards||{}).filter(([,n])=>Number(n)>0).map(([card_id,quantity])=>({deck_id:d.id,card_id,quantity:Number(quantity)}));
+    if(rows.length)await sb.from("deck_cards").insert(rows);
+  }catch(e){console.warn("Cloud deck write failed",e)}
+}
+
+async function loadCardmarketPrices(){
+  try{
+    const results=await Promise.allSettled([fetchJson(CARDMARKET_PRODUCTS,25000),fetchJson(CARDMARKET_PRICES,25000)]);
+    if(results[0].status!=="fulfilled"||results[1].status!=="fulfilled")return;
+    const products=Array.isArray(results[0].value)?results[0].value:Object.values(results[0].value||{});
+    const guide=Array.isArray(results[1].value)?results[1].value:Object.values(results[1].value||{});
+    const byProduct=new Map();
+    guide.forEach(r=>{const id=r?.idProduct??r?.productId??r?.id;if(id!=null)byProduct.set(String(id),r)});
+    const codeMap=new Map();
+    const nameSetMap=new Map();
+    cards.forEach(c=>{
+      codeMap.set(norm(c.id),c.id);
+      codeMap.set(norm(baseCardId(c.id)),c.id);
+      nameSetMap.set(norm(c.name)+"|"+norm(c.set),c.id);
+      nameSetMap.set(norm(c.name)+"|"+norm(setLabel(c.set)),c.id);
+    });
+    const getNum=row=>{
+      if(!row)return 0;
+      const entries=Object.entries(row);
+      const low={};entries.forEach(([k,v])=>low[norm(k)]=v);
+      const keys=["pricetrend","trend","avg30","priceaverage","average","priceavg","lowprice","price"];
+      for(const k of keys){const raw=low[k];const n=Number(String(raw??"").replace(",", "."));if(Number.isFinite(n)&&n>0)return n}
+      return 0;
+    };
+    const codeRe=/\b[A-Z]{1,6}\d{0,3}-\d{3}(?:_[A-Z0-9]+\d*)?\b|\bP-\d{3}(?:_[A-Z0-9]+\d*)?\b/gi;
+    for(const p of products){
+      const productId=p?.idProduct??p?.productId??p?.id;
+      const row=productId!=null?byProduct.get(String(productId)):null;
+      const value=getNum(row); if(!value)continue;
+      const text=[p?.name,p?.enName,p?.number,p?.cardNumber,p?.cardId,p?.code].filter(Boolean).join(" ");
+      const codes=text.match(codeRe)||[];
+      let matched=null;
+      for(const code of codes){matched=codeMap.get(norm(code));if(matched)break}
+      if(!matched && p?.name){
+        const nm=norm(String(p.name).replace(codeRe," "));
+        const exp=norm(String(p.expansion??p.expansionName??""));
+        for(const c of cards){
+          if(norm(c.name)===nm || norm(c.name)===norm(String(p.name).split("(")[0].trim())){
+            if(!exp||exp.includes(norm(setLabel(c.set))||"")||norm(setLabel(c.set)).includes(exp)){matched=c.id;break}
+          }
+        }
+      }
+      if(matched)prices.set(matched,value);
+    }
+    render();
+  }catch(e){console.warn("Cardmarket price feed unavailable",e)}
+}
+
+function boot(){
+  const qp=new URLSearchParams(location.search);
+  if(qp.get("deck")){try{sharedDeck=JSON.parse(ub64u(qp.get("deck")))}catch(e){console.warn("Shared deck invalid",e)}}
+  render();
+  load();
+  initSB();
 }
 async function load(){
   try{
-    const raw=await fetchJson(DATA+"/cards.json");
-    cards=(Array.isArray(raw)?raw:Object.values(raw)).map(c=>({...c,id:String(c.card_id||c.id||""),pack_id:String(c.pack_id||c.set||"")})).filter(c=>c.id);
-    try{
-      const ps=await fetchJson(DATA+"/packs.json");
-      (Array.isArray(ps)?ps:Object.values(ps)).forEach(p=>packs[String(p.id||p.pack_id||"")]=String(p.raw_title||p.title||p.name||p.id||""));
-    }catch(e){console.warn("packs.json no disponible",e)}
-    if(!cards.length) throw new Error("El catálogo local está vacío");
-    render(); bootDone=true;
-    setTimeout(loadCardmarketPrices,500);
+    const raw=await fetchJson("./data/cards.json",20000);
+    const obj=Array.isArray(raw)?raw.reduce((m,c)=>(m[c.id]=c,m),{}):raw;
+    cards=Object.values(obj||{}).filter(c=>c&&c.id).map(c=>({...c,id:String(c.id),set:String(c.set||""),colors:Array.isArray(c.colors)?c.colors:[],types:Array.isArray(c.types)?c.types:[]}));
+    const p=await fetchJson("./data/packs.json",15000);
+    packs=Array.isArray(p)?p:Object.values(p||{});
+    packMap=new Map(packs.map(x=>[String(x.code),String(x.name||x.code)]));
+    if(!cards.length)throw new Error("Catálogo vacío");
+    bootDone=true;render();
+    setTimeout(loadCardmarketPrices,600);
   }catch(e){
     console.error("Catalog load failed",e);
-    document.querySelector("#app").innerHTML='<div class="empty"><h2>No se pudo cargar el catálogo</h2><p>La fuente de cartas no responde ahora mismo.</p><button class="primary btn" onclick="location.reload()">Reintentar</button></div>';
+    document.querySelector("#app").innerHTML='<div class="empty"><h2>No se pudo cargar el catálogo</h2><p>La base de datos de cartas no está disponible.</p><button class="primary btn" onclick="location.reload()">Reintentar</button></div>';
   }
 }
-render();load();initSB();
-async function loadCardmarketPrices(){
-  try{
-    const [productsRes,pricesRes]=await Promise.all([
-      fetch("https://downloads.s3.cardmarket.com/productCatalog/productList/products_singles_18.json",{cache:"no-store"}),
-      fetch("https://downloads.s3.cardmarket.com/productCatalog/priceGuide/price_guide_18.json",{cache:"no-store"})
-    ]);
-    if(!productsRes.ok||!pricesRes.ok) return;
-    const products=await productsRes.json(), guide=await pricesRes.json();
-    const rows=x=>Array.isArray(x)?x:(x&&typeof x==="object"?Object.values(x):[]);
-    const guideRows=rows(guide), productRows=rows(products);
-    const byProduct=new Map();
-    for(const p of guideRows){
-      const id=p?.idProduct??p?.productId??p?.id;
-      if(id!=null) byProduct.set(String(id),p);
-    }
-    const wanted=new Map(cards.map(c=>[String(c.id).toUpperCase(),c.id]));
-    for(const p of productRows){
-      const candidates=[p?.number,p?.cardNumber,p?.idCard,p?.enName,p?.name].flatMap(v=>String(v??"").match(/[A-Z]{2,6}-\d{1,4}/gi)||[]);
-      for(const n of candidates){
-        const cid=wanted.get(n.toUpperCase()), gid=p?.idProduct??p?.productId??p?.id;
-        const row=gid!=null?byProduct.get(String(gid)):null;
-        const value=Number(String(row?.priceTrend??row?.price_trend??row?.trend??row?.avg30??row?.lowPrice??row?.average??"").replace(",","."));
-        if(cid&&Number.isFinite(value)){prices.set(cid,value);break;}
-      }
-    }
-    render();
-  }catch(e){console.warn("Cardmarket feed unavailable",e);}
-}
-window.addEventListener("load",()=>{if("serviceWorker" in navigator)navigator.serviceWorker.register("./sw.js").catch(()=>{});});
+boot();
+window.addEventListener("load",()=>{if("serviceWorker" in navigator)navigator.serviceWorker.register("./sw.js").catch(()=>{})});
 </script></body></html>
