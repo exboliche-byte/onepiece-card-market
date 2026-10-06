@@ -214,7 +214,7 @@ function loadCachedPrices(){try{const d=JSON.parse(localStorage.getItem("mialbum
 function cardTile(c,extra=""){
   const q=qty(c.id);const p=state.prices[c.id];
   return '<article class="card">'+(q?'<span class="tag">×'+q+'</span>':'<span class="tag missing">0/4</span>')+
-    '<button class="linkbtn" data-detail="'+esc(c.id)+'" style="display:block;width:100%;padding:0">'+cardImg(c,"cardimg thumb")+'</button>'+
+    '<button class="linkbtn" data-detail="'+esc(c.id)+'" style="display:block;width:100%;padding:0">'+cardImg(c,"cardimg catalogthumb")+'</button>'+
     '<div class="cardbody"><div class="name">'+esc(c.name)+'</div><div class="small">'+esc(c.id)+' · '+esc(c.set)+' · '+esc(c.rarity||"—")+'</div>'+
     '<div class="chips">'+(c.colors||[]).map(x=>'<span class="chip">'+esc(x)+'</span>').join("")+'</div>'+
     '<div class="row"><span>'+ (p!==undefined?money(p):"Precio —")+'</span><span class="small">'+q+'/4</span></div>'+
@@ -225,7 +225,7 @@ function groupedTile(g){
   const c=g.card,q=g.versions.reduce((s,x)=>s+qty(x.id),0);
   const bestPrice=g.versions.map(x=>Number(state.prices[x.id])).filter(Number.isFinite).sort((a,b)=>a-b)[0];
   return '<article class="card">'+(q?'<span class="tag">×'+q+' total</span>':'<span class="tag missing">Falta</span>')+
-    '<button class="linkbtn" data-detail="'+esc(c.id)+'" style="display:block;width:100%;padding:0">'+cardImg(c,"cardimg thumb")+'</button>'+
+    '<button class="linkbtn" data-detail="'+esc(c.id)+'" style="display:block;width:100%;padding:0">'+cardImg(c,"cardimg catalogthumb")+'</button>'+
     '<div class="cardbody"><div class="name">'+esc(c.name)+'</div><div class="small">'+esc(c.category||"")+' · '+g.versions.length+' versión(es)</div>'+
     '<div class="chips">'+g.sets.slice(0,5).map(x=>'<span class="chip">'+esc(x)+'</span>').join("")+(g.sets.length>5?'<span class="chip">+'+(g.sets.length-5)+'</span>':"")+'</div>'+
     '<div class="row"><span>'+(Number.isFinite(bestPrice)?money(bestPrice):"Precio —")+'</span><span class="small">'+q+' copias</span></div>'+
