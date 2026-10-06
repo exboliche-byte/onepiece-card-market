@@ -146,13 +146,15 @@ async function ensureCollectionPrices({refresh=false}={}){
       state.priceDate=d.updatedAt||state.priceDate;
     }catch{}
   }
-  localStorage.setItem("mialbumonepiece_collection_prices",JSON.stringify({prices:state.collectionPrices,updatedAt:state.priceDate}));
+  localStorage.setItem("mialbumonepiece_collection_prices",JSON.stringify({version:COLLECTION_PRICE_CACHE_VERSION,prices:state.collectionPrices,updatedAt:state.priceDate}));
 }
+const COLLECTION_PRICE_CACHE_VERSION=2;
 function loadCachedCollectionPrices(){
   try{
     const d=JSON.parse(localStorage.getItem("mialbumonepiece_collection_prices")||"null");
-    if(d?.prices)state.collectionPrices=d.prices;
-  }catch{}
+    if(d?.version===COLLECTION_PRICE_CACHE_VERSION&&d?.prices)state.collectionPrices=d.prices;
+    else localStorage.removeItem("mialbumonepiece_collection_prices");
+  }catch{localStorage.removeItem("mialbumonepiece_collection_prices")}
 }
 function collectionStats(){
   const distinct=Object.values(state.owned).filter(q=>Number(q)>0).length;
