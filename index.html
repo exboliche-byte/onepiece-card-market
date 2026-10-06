@@ -87,10 +87,10 @@ function filteredCards(mode){
   if(f.type&&f.type!=="Todos")list=list.filter(c=>(c.types||[]).includes(f.type));
   if(f.attribute&&f.attribute!=="Todos")list=list.filter(c=>(c.attributes||[]).includes(f.attribute));
   if(mode==="catalog"){
-    if(f.minCost!==""&&Number(c.cost??-1)<Number(f.minCost))list=list.filter(c=>Number(c.cost??-1)>=Number(f.minCost));
-    if(f.maxCost!==""&&Number(c.cost??9999)>Number(f.maxCost))list=list.filter(c=>Number(c.cost??9999)<=Number(f.maxCost));
-    if(f.minPower!==""&&Number(c.power??-1)<Number(f.minPower))list=list.filter(c=>Number(c.power??-1)>=Number(f.minPower));
-    if(f.maxPower!==""&&Number(c.power??-1)>Number(f.maxPower))list=list.filter(c=>Number(c.power??-1)<=Number(f.maxPower));
+    if(f.minCost!=="")list=list.filter(card=>Number(card.cost??-1)>=Number(f.minCost));
+    if(f.maxCost!=="")list=list.filter(card=>Number(card.cost??9999)<=Number(f.maxCost));
+    if(f.minPower!=="")list=list.filter(card=>Number(card.power??-1)>=Number(f.minPower));
+    if(f.maxPower!=="")list=list.filter(card=>Number(card.power??-1)<=Number(f.maxPower));
   }
   if(mode==="catalog"){
     if(f.ownership==="Tengo")list=list.filter(c=>qty(c.id)>0);
