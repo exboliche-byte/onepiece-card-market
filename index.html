@@ -543,7 +543,7 @@ function bindShell(){
     bindSearch("#catalogSearch",v=>{state.catalog.query=v;state.query=v;state.catalog.page=1;renderCatalogResults()});
     const applyCatalog=()=>{
       const map={catSet:"set",catCategory:"category",catColor:"color",catRarity:"rarity",catType:"type",catAttribute:"attribute",catMinCost:"minCost",catMaxCost:"maxCost",catMinPower:"minPower",catMaxPower:"maxPower",catOwnership:"ownership",catSort:"sort",catDir:"dir"};
-      Object.entries(map).forEach(([id,k])=>{const el=$(id);if(el)state.catalog[k]=el.value});
+      Object.entries(map).forEach(([id,k])=>{const el=$("#"+id);if(el)state.catalog[k]=el.value});
       state.catalog.page=1;renderCatalogResults();notify("Filtros y orden aplicados");
     };
     $("#applyCatalogFilters")?.addEventListener("click",applyCatalog);
