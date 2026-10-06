@@ -94,31 +94,31 @@ function collectionStats(){
 }
 function option(values,current){return values.map(v=>'<option value="'+esc(v)+'" '+(String(v)===String(current)?"selected":"")+'>'+esc(v)+'</option>').join("")}
 function values(key,from=state.cards){return uniqueSorted(from.flatMap(c=>Array.isArray(c[key])?c[key]:[c[key]]))}
+function setCodeKey(v){return String(v||"").toUpperCase().replace(/[_\\s]+/g,"-").replace(/--+/g,"-")}
+function setCodesEqual(a,b){return setCodeKey(a)===setCodeKey(b)}
 function filteredCards(mode){
   const f=state[mode];
   let list=mode==="collection"
-    ? state.cards.filter(c=>qty(c.id)>0)
-    : mode==="album" && f.set ? state.cards.filter(c=>c.set===f.set) : state.cards;
+    ?state.cards.filter(c=>qty(c.id)>0)
+    :mode==="album"&&f.set?state.cards.filter(c=>setCodesEqual(c.set,f.set)):state.cards;
   const q=norm(f.query||state.query||"");
   if(q)list=list.filter(c=>c.search.includes(q));
-  if(mode==="catalog"&&f.set&&f.set!=="Todas")list=list.filter(c=>c.set===f.set);
+  if(mode==="catalog"&&f.set&&f.set!=="Todas")list=list.filter(c=>setCodesEqual(c.set,f.set));
   if(f.category&&f.category!=="Todos")list=list.filter(c=>c.category===f.category);
   if(f.color&&f.color!=="Todos")list=list.filter(c=>(c.colors||[]).includes(f.color));
   if(f.rarity&&f.rarity!=="Todos")list=list.filter(c=>c.rarity===f.rarity);
   if(f.type&&f.type!=="Todos")list=list.filter(c=>(c.types||[]).includes(f.type));
   if(f.attribute&&f.attribute!=="Todos")list=list.filter(c=>(c.attributes||[]).includes(f.attribute));
   if(mode==="catalog"){
-    if(f.minCost!=="")list=list.filter(card=>Number(card.cost??-1)>=Number(f.minCost));
-    if(f.maxCost!=="")list=list.filter(card=>Number(card.cost??9999)<=Number(f.maxCost));
-    if(f.minPower!=="")list=list.filter(card=>Number(card.power??-1)>=Number(f.minPower));
-    if(f.maxPower!=="")list=list.filter(card=>Number(card.power??-1)<=Number(f.maxPower));
-  }
-  if(mode==="catalog"){
+    if(f.minCost!=="")list=list.filter(c=>Number(c.cost??-1)>=Number(f.minCost));
+    if(f.maxCost!=="")list=list.filter(c=>Number(c.cost??9999)<=Number(f.maxCost));
+    if(f.minPower!=="")list=list.filter(c=>Number(c.power??-1)>=Number(f.minPower));
+    if(f.maxPower!=="")list=list.filter(c=>Number(c.power??9999)<=Number(f.maxPower));
     if(f.ownership==="Tengo")list=list.filter(c=>qty(c.id)>0);
     if(f.ownership==="Me faltan")list=list.filter(c=>qty(c.id)<PLAYSET);
   }
   if(mode==="collection"){
-    if(f.set&&f.set!=="Todas")list=list.filter(c=>c.set===f.set);
+    if(f.set&&f.set!=="Todas")list=list.filter(c=>setCodesEqual(c.set,f.set));
     if(f.quantity==="1")list=list.filter(c=>qty(c.id)===1);
     if(f.quantity==="2")list=list.filter(c=>qty(c.id)===2);
     if(f.quantity==="3")list=list.filter(c=>qty(c.id)===3);
@@ -128,12 +128,21 @@ function filteredCards(mode){
   }
   if(mode==="album")list=list.filter(c=>qty(c.id)>0);
   if(mode==="album"&&f.ownership==="Me faltan")list=list.filter(c=>qty(c.id)<PLAYSET);
-  const dir=f.dir==="desc"?-1:1;
-  const p=c=>Number(state.prices[c.id]||0);
+  const dir=f.dir==="desc"?-1:1,p=c=>Number(state.prices[c.id]||0);
+  const cmp=(av,bv)=>{
+    if(typeof av==="number"&&typeof bv==="number")return av-bv;
+    return String(av??"").localeCompare(String(bv??""),"es",{numeric:true,sensitivity:"base"});
+  };
   list.sort((a,b)=>{
+    if(f.sort==="set"){
+      const av=packSortKey(a.set),bv=packSortKey(b.set);
+      for(let i=0;i<av.length;i++){const d=cmp(av[i],bv[i]);if(d)return d*dir}
+      return String(a.id).localeCompare(String(b.id),"es",{numeric:true})*dir;
+    }
     let av,bv;
-    switch(f.sort){case"name":av=norm(a.name);bv=norm(b.name);break;case"set":av=a.set;bv=b.set;break;case"rarity":av=norm(a.rarity);bv=norm(b.rarity);break;case"quantity":av=qty(a.id);bv=qty(b.id);break;case"price":av=p(a);bv=p(b);break;case"power":av=Number(a.power||0);bv=Number(b.power||0);break;case"cost":av=Number(a.cost||0);bv=Number(b.cost||0);break;default:av=a.id;bv=b.id}
-    if(av<bv)return -1*dir;if(av>bv)return 1*dir;return a.id.localeCompare(b.id)*dir;
+    switch(f.sort){case"name":av=norm(a.name);bv=norm(b.name);break;case"rarity":av=norm(a.rarity);bv=norm(b.rarity);break;case"quantity":av=qty(a.id);bv=qty(b.id);break;case"price":av=p(a);bv=p(b);break;case"power":av=Number(a.power??-1);bv=Number(b.power??-1);break;case"cost":av=Number(a.cost??-1);bv=Number(b.cost??-1);break;default:av=a.id;bv=b.id}
+    const d=cmp(av,bv);
+    return d?d*dir:String(a.id).localeCompare(String(b.id),"es",{numeric:true})*dir;
   });
   return list;
 }
