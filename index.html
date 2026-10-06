@@ -35,14 +35,15 @@ const norm=s=>String(s??"").toLowerCase().normalize("NFD").replace(/[\u0300-\u03
 const money=n=>Number.isFinite(Number(n))?Number(n).toLocaleString("es-ES",{style:"currency",currency:"EUR"}):"—";
 const safeId=id=>String(id||"");
 const imagePreloadCache=new Map();
-const officialImageUrl=c=>"https://en.onepiece-cardgame.com/images/cardlist/card/"+encodeURIComponent(c?.id||"")+".png";
+const officialImageUrl=c=>String(c?.image||"").trim()||("https://en.onepiece-cardgame.com/images/cardlist/card/"+encodeURIComponent(c?.id||"")+".png");
 const imageUrl=c=>officialImageUrl(c);
+function proxyImageUrl(u){return "https://images.weserv.nl/?url="+encodeURIComponent(String(u||"").replace(/^https?:\\/\\//,""))}
 function preloadCardImage(c){const u=officialImageUrl(c);if(!u||imagePreloadCache.has(u))return;const im=new Image();im.src=u;imagePreloadCache.set(u,im)}
 function cardImg(c,cls="cardimg"){
-  const official=officialImageUrl(c);
+  const official=officialImageUrl(c),proxy=proxyImageUrl(official);
   const loading=cls.includes("detail")?"eager":"lazy";
   const priority=cls.includes("detail")?' fetchpriority="high"':"";
-  return '<img class="'+cls+'" loading="'+loading+'" decoding="async"'+priority+' referrerpolicy="no-referrer" src="'+esc(official)+'" alt="'+esc(c.name||c.id)+'">';
+  return '<img class="'+cls+'" loading="'+loading+'" decoding="async"'+priority+' src="'+esc(official)+'" alt="'+esc(c.name||c.id)+'" data-image-proxy="'+esc(proxy)+'" onerror="if(this.dataset.imageFallback!==\'1\'){this.dataset.imageFallback=\'1\';this.src=this.dataset.imageProxy;this.removeAttribute(\'data-image-proxy\');}" >';
 }
 function qty(id){return Number(state.owned[id]||0)}
 function card(id){return state.cards.find(c=>c.id===id)}
