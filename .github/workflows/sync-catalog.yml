@@ -1,0 +1,58 @@
+name: Sync One Piece catalog
+
+on:
+  schedule:
+    - cron: "17 4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: true
+
+      - name: Download upstream catalog
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/optcg
+          curl -fsSL https://raw.githubusercontent.com/michalkiral/optcg-data/main/data/index/cards_by_id.json -o /tmp/optcg/cards.json
+          curl -fsSL https://raw.githubusercontent.com/michalkiral/optcg-data/main/data/packs.json -o /tmp/optcg/packs.json
+
+      - name: Normalize and validate
+        run: |
+          node <<'NODE'
+          const fs=require("fs");
+          const raw=JSON.parse(fs.readFileSync("/tmp/optcg/cards.json","utf8"));
+          const cards=(Array.isArray(raw)?raw:Object.values(raw))
+            .map(c=>({...c,id:String(c.id||"").trim()}))
+            .filter(c=>c.id)
+            .sort((a,b)=>a.id.localeCompare(b.id));
+          const packsRaw=JSON.parse(fs.readFileSync("/tmp/optcg/packs.json","utf8"));
+          const packs=(Array.isArray(packsRaw)?packsRaw:Object.values(packsRaw))
+            .map(p=>({...p,code:String(p.code||p.id||"").trim()}))
+            .filter(p=>p.code);
+          if(cards.length<4500)throw new Error("Upstream catalog unexpectedly small: "+cards.length);
+          if(packs.length<40)throw new Error("Upstream pack list unexpectedly small: "+packs.length);
+          if(cards.some(c=>!c.image&&!c.img_full_url&&!c.img_url))console.log("Warning: cards without image URL:",cards.filter(c=>!c.image&&!c.img_full_url&&!c.img_url).length);
+          fs.writeFileSync("data/cards.json",JSON.stringify(cards,null,2)+"\n");
+          fs.writeFileSync("data/packs.json",JSON.stringify(packs,null,2)+"\n");
+          fs.writeFileSync("data/catalog-meta.json",JSON.stringify({updatedAt:new Date().toISOString(),cardCount:cards.length,packCount:packs.length,source:"michalkiral/optcg-data"},null,2)+"\n");
+          NODE
+
+      - name: Commit catalog changes
+        run: |
+          git config user.name "MiAlbumOnePiece Catalog Bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/cards.json data/packs.json data/catalog-meta.json
+          if git diff --cached --quiet; then
+            echo "Catalog unchanged"
+            exit 0
+          fi
+          git commit -m "chore: sync One Piece card catalog"
+          git push
