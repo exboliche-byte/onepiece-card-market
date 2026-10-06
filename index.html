@@ -22,6 +22,7 @@ let booted=false;
 const DATA="./data";
 const SUPABASE_URL="https://zawzbdbdbcshljhlvgjx.supabase.co";
 const SUPABASE_KEY="sb_publishable_TGSNNhx2wvUGteg_pdPg_zkyVP4s-";
+const imageProxy=id=>"https://optcg-api.arjunbansal-ai.workers.dev/images/"+encodeURIComponent(id);
 const officialImage=id=>"https://en.onepiece-cardgame.com/images/cardlist/card/"+encodeURIComponent(id)+".png";
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??"").replace(/[&<>'"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[c]));
@@ -42,7 +43,7 @@ function saveLocal(){localStorage.mialbum_collection=JSON.stringify(collection);
 function qty(id){return Number(collection[id]||0)}
 function setName(code){const p=packs.find(x=>x.code===code);return p?p.name:code}
 function cardImage(c){
-  const src=c.image||c.img_full_url||c.img_url||officialImage(c.id);
+  const src=imageProxy(c.id);
   return '<img class="cardimg" loading="lazy" src="'+esc(src)+'" alt="'+esc(c.name)+'" referrerpolicy="no-referrer" onerror="this.onerror=null;this.src=\''+officialImage(c.id)+'\';this.onerror=function(){this.style.display=\'none\';this.nextElementSibling.style.display=\'grid\'}">';
 }
 function imageFallback(id){return '<div style="display:none;aspect-ratio:.716;place-items:center;background:#0b0d13;color:#687389;font-size:11px;text-align:center;padding:10px">'+esc(id)+'</div>'}
