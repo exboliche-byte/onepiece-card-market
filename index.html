@@ -82,8 +82,7 @@ function expansionType(code){
 }
 function expansionList(){
   const f=state.expansions;
-  let list=state.packs.slice();
-  const q=norm(f.query);
+  let list=state.packs.map(p=>{\n    const cards=state.cards.filter(c=>c.set===p.code);\n    const owned=cards.filter(c=>qty(c.id)>0);\n    const value=owned.reduce((sum,c)=>sum+qty(c.id)*Number(state.prices[c.id]||0),0);\n    return {...p,total:cards.length,owned:owned.length,pct:cards.length?owned.length/cards.length*100:0,playsets:cards.filter(c=>qty(c.id)>=PLAYSET).length,value};\n  });\n  const q=norm(f.query);
   if(q)list=list.filter(p=>norm([packLabel(p),p.name,p.code].join(" ")).includes(q));
   if(f.type&&f.type!=="Todos")list=list.filter(p=>expansionType(p.code)===f.type);
   const dir=f.dir==="desc"?-1:1;
