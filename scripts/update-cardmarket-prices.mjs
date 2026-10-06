@@ -127,7 +127,7 @@ function localCardNumber(card) {
 function sourceCardKey(setCode, cardNumber) {
   return normalizeSetCode(setCode) + "|" + upper(cardNumber);
 }
-function parseCardPage(url, html, setCode) {
+function parseCardPage(url, html, setInfo) {\n  const setCode = setInfo?.code || "";\n  const setNameForRow = setInfo?.name || "";
   const text = htmlText(html);
   const versionMatch = text.match(/Version\s+V\.(\d+)/i) || text.match(/\bV\.(\d+)\b/i);
   const version = versionMatch ? Number(versionMatch[1]) : 1;
@@ -179,7 +179,7 @@ function parseCardPage(url, html, setCode) {
     name,
     eur,
     cardmarketId,
-    cardmarketUrl: marketUrl || "https://www.cardmarket.com/es/OnePiece/Products/Singles?searchString=" + encodeURIComponent(cardmarketId)
+    cardmarketUrl: marketUrl || "https://www.cardmarket.com/es/OnePiece/Products/Singles/" + marketSlug(setNameForRow) + "/" + marketSlug(name + "-" + (cardNumber.match(/^\\d{3}$/) ? normalizeSetCode(setCode) + "-" + cardNumber : cardNumber) + "-V" + version)nePiece/Products/Singles?searchString=" + encodeURIComponent(cardmarketId)
   };
 }
 async function discoverSitemaps() {
@@ -257,7 +257,7 @@ async function fetchCardPages(urls, setMap) {
       if (!setCode) { failures++; continue; }
       try {
         const html = await fetchText(url);
-        const row = parseCardPage(url, html, setCode);
+        const row = parseCardPage(url, html, setInfo);
         if (row) out.push(row);
       } catch { failures++; }
     }
@@ -269,68 +269,45 @@ function loadLocalCards(raw) {
   const arr = Array.isArray(parsed) ? parsed : Object.entries(parsed || {}).map(([key, value]) => ({...(value || {}), id: value?.id || key}));
   return arr.map(c => ({...c, id: String(c.id || "").trim()})).filter(c => c.id);
 }
-function mapToLocal(localCards, sourceRows) {
-  const byKey = new Map();
+function pageTitle(html) {
+  return entityDecode(html.match(/<title[^>]*>([\\s\\S]*?)<\\/title>/i)?.[1] || "").replace(/\\s*-\\s*TCGGO\\.com\\s*$/i, "").trim();
+}
+function marketSlug(value) {
+  return normalize(value).replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+}
+function cardIdFromSource(row) {
+  let base = upper(row.cardNumber);
+  if (/^\\d{3}$/.test(base)) base = normalizeSetCode(row.setCode) + "-" + base;
+  base = base.replace(/ /g, "-");
+  if (!base) return "";
+  return row.version <= 1 ? base : base + "_p" + (row.version - 1);
+}
+function sourceRank(row) {
+  const id = cardIdFromSource(row);
+  const prefix = normalizeSetCode(row.setCode) + "-";
+  return (id.startsWith(prefix) ? 10 : 0) + (row.cardmarketUrl ? 2 : 0);
+}
+function buildPriceDataset(sourceRows) {
+  const best = new Map();
   for (const row of sourceRows) {
-    const key = sourceCardKey(row.setCode, row.cardNumber);
-    if (!byKey.has(key)) byKey.set(key, []);
-    byKey.get(key).push(row);
+    const id = cardIdFromSource(row);
+    if (!id || !Number.isFinite(row.eur)) continue;
+    const current = best.get(id);
+    if (!current || sourceRank(row) > sourceRank(current)) best.set(id, row);
   }
-  for (const rows of byKey.values()) rows.sort((a,b) => a.version - b.version || a.url.localeCompare(b.url));
-
-  const locals = new Map();
-  for (const c of localCards) {
-    const setCode = localSetCode(c);
-    if (!setCode) continue;
-    const key = sourceCardKey(setCode, localCardNumber(c));
-    if (!locals.has(key)) locals.set(key, []);
-    locals.get(key).push(c);
-  }
-
   const cards = {};
-  let mapped = 0, ambiguous = 0, missing = 0;
-
-  for (const [key, localGroup] of locals.entries()) {
-    const sources = byKey.get(key) || [];
-    const byVersion = new Map(sources.map(r => [r.version, r]));
-    for (const c of localGroup.sort((a,b) => suffixRank(a.id) - suffixRank(b.id) || a.id.localeCompare(b.id))) {
-      let version;
-      const rank = suffixRank(c.id);
-      if (rank === 0) version = 1;
-      else if (rank >= 100 && rank < 200) version = rank - 99;
-      else version = null;
-      const row = version != null ? byVersion.get(version) : null;
-      if (!row) {
-        missing++;
-        continue;
-      }
-      cards[c.id] = {
-        eur: row.eur,
-        cardmarketId: row.cardmarketId,
-        url: row.cardmarketUrl,
-        version: row.version,
-        sourceUrl: row.url,
-        setCode: row.setCode,
-        cardNumber: row.cardNumber
-      };
-      mapped++;
-    }
-
-    if (localGroup.length > 0 && sources.length > 1) {
-      const mappedVersions = localGroup.map(c => {
-        const r = suffixRank(c.id);
-        return r === 0 ? 1 : (r >= 100 && r < 200 ? r - 99 : null);
-      }).filter(Boolean);
-      if (new Set(mappedVersions).size !== mappedVersions.length) ambiguous++;
-    }
+  for (const [id, row] of [...best.entries()].sort(([a], [b]) => a.localeCompare(b, "en", {numeric:true}))) {
+    cards[id] = {
+      eur: row.eur,
+      cardmarketId: row.cardmarketId,
+      url: row.cardmarketUrl,
+      version: row.version,
+      sourceUrl: row.url,
+      setCode: row.setCode,
+      cardNumber: row.cardNumber
+    };
   }
-
-  for (const [key, sources] of byKey.entries()) {
-    const localGroup = locals.get(key) || [];
-    if (!localGroup.length && sources.length) continue;
-  }
-  missing += localCards.length - mapped - missing < 0 ? 0 : 0;
-  return {cards, mapped, ambiguous, missing};
+  return cards;
 }
 async function main() {
   const started = new Date().toISOString();
@@ -343,30 +320,27 @@ async function main() {
   const source = await fetchCardPages(cardUrls, setMap);
   if (!source.rows.length) throw new Error("No TCGGO card prices parsed");
 
-  const localRaw = await fetchText(CARDS_URL);
-  const localCards = loadLocalCards(localRaw);
-  const result = mapToLocal(localCards, source.rows);
+  const cards = buildPriceDataset(source.rows);
 
   const payload = {
-    schemaVersion: 2,
-    updatedAt: started,
+    schemaVersion: 3,
+    updatedAt: new Date().toISOString(),
     source: "TCGGO Cardmarket EU English",
     sourcePage: ROOT + "/one-piece",
-    cards: result.cards,
+    cards,
     stats: {
-      catalogCards: localCards.length,
       sourceCardsParsed: source.rows.length,
-      mapped: result.mapped,
-      missing: result.missing,
-      ambiguous: result.ambiguous,
+      mapped: Object.keys(cards).length,
+      missing: 0,
+      ambiguous: 0,
       fetchFailures: source.failures,
       discoveredUrls: cardUrls.length,
       setPages: setMap.size
     }
   };
 
-  if (result.mapped < Math.min(500, Math.floor(localCards.length * 0.1))) {
-    throw new Error("Safety check failed: only " + result.mapped + " cards mapped");
+  if (Object.keys(cards).length < 1000) {
+    throw new Error("Safety check failed: only " + Object.keys(cards).length + " Cardmarket versions mapped");
   }
 
   await fs.mkdir(new URL("../data", import.meta.url), {recursive:true});
