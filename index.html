@@ -101,6 +101,7 @@ function sortCards(arr,sort,dir){
     if(sort==="name"){av=norm(a.name);bv=norm(b.name)}
     else if(sort==="price"){av=price(a.id);bv=price(b.id)}
     else if(sort==="qty"){av=qty(a.id);bv=qty(b.id)}
+    else if(sort==="value"){av=price(a.id)*qty(a.id);bv=price(b.id)*qty(b.id)}
     else {av=norm(a.id);bv=norm(b.id)}
     if(av<bv)return -1*mul;
     if(av>bv)return 1*mul;
