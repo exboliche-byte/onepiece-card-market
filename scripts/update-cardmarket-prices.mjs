@@ -437,7 +437,8 @@ function normalizeOptcgSetCode(raw) {
 }
 
 function normalizeOptcgCatalog(parsed) {
-  const entries = Object.entries(parsed || {});
+  const root = parsed?.data && typeof parsed.data === "object" && !Array.isArray(parsed.data) ? parsed.data : (parsed || {});
+  const entries = Object.entries(root);
   const cards = [];
   const packs = [];
   const seen = new Set();
