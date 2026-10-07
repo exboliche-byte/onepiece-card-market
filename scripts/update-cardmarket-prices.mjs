@@ -281,6 +281,13 @@ function cardmarketSetCodeForProduct(product, expansionNamesById, englishExpansi
   return "";
 }
 
+function printSetFromExpansionName(expansionName) {
+  for (const setCode of Object.keys(CARDMARKET_SET_NAMES)) {
+    if (expansionMatches(setCode, expansionName)) return compactPrintSetCode(setCode);
+  }
+  return "";
+}
+
 function oraclePrintSet(url) {
   const slug = externalExpansionSlug(url);
   if (!slug) return "";
@@ -1007,7 +1014,14 @@ async function main() {
       guide.SELL
     ) : null;
     const previousEur = priceNumber(prior.eur);
-    const eur = cardmarketEur ?? limitlessPrint?.eur ?? oracleEur ?? previousEur;
+    const exactLimitless = !!(limitlessPrint?.url || limitlessPrint?.eur != null);
+    const exactPrintSet = exactLimitless
+      ? (printSetFromExpansionName(limitlessPrint?.expansion) || currentPrintSet)
+      : currentPrintSet;
+    const samePriorExactUrl = !limitlessPrint?.url || String(prior?.url||"").replace("/en/OnePiece/","/es/OnePiece/") === String(limitlessPrint.url).replace("/en/OnePiece/","/es/OnePiece/");
+    const eur = exactLimitless
+      ? (priceNumber(limitlessPrint?.eur) ?? oracleEur ?? (samePriorExactUrl ? previousEur : null))
+      : (cardmarketEur ?? oracleEur ?? previousEur);
 
     mapped++;
     if (eur !== null) priced++;
@@ -1050,26 +1064,38 @@ async function main() {
       avg1: guide ? priceNumber(guide.avg1, guide.AVG1, guide["AVG1"]) : null,
       avg7: guide ? priceNumber(guide.avg7, guide.AVG7, guide["AVG7"]) : null,
       avg30: guide ? priceNumber(guide.avg30, guide.AVG30, guide["AVG30"]) : null,
-      cardmarketId: product ? Number(product.idProduct) : null,
-      expansionId: product ? Number(product.idExpansion) : null,
-      expansion: String(languageMap.expansionNamesById?.get(Number(product?.idExpansion)) || limitlessPrint?.expansion || CARDMARKET_SET_NAMES[sourceSetCode(card)]?.[0] || sourceSetCode(card)),
-      printSet: currentPrintSet,
+      cardmarketId: exactLimitless ? null : (product ? Number(product.idProduct) : null),
+      expansionId: exactLimitless ? null : (product ? Number(product.idExpansion) : null),
+      expansion: String(exactLimitless
+        ? (limitlessPrint?.expansion || CARDMARKET_SET_NAMES[sourceSetCode(card)]?.[0] || sourceSetCode(card))
+        : (languageMap.expansionNamesById?.get(Number(product?.idExpansion)) || CARDMARKET_SET_NAMES[sourceSetCode(card)]?.[0] || sourceSetCode(card))),
+      printSet: exactPrintSet,
       variantKind: currentVariantKind,
-      version: product ? (productVersions?.get(String(product.idProduct)) ?? productVersion(product.name) ?? null) : (limitlessPrint?.limitlessVersion ?? null),
-      url: product
-        ? "https://www.cardmarket.com/es/OnePiece/Products?idProduct=" + encodeURIComponent(String(product.idProduct))
-        : (limitlessPrint?.url || (exactPrintOracle?.urlsByPrint?.get(String(card.id))?.[0]
-          ? exactPrintOracle.urlsByPrint.get(String(card.id))[0].replace("/en/OnePiece/", "/es/OnePiece/")
-          : cardmarketCardUrl(baseCard))),
+      version: exactLimitless ? (limitlessPrint?.limitlessVersion ?? desiredMarketVersion) : (product ? (productVersions?.get(String(product.idProduct)) ?? productVersion(product.name) ?? null) : desiredMarketVersion),
+      url: exactLimitless && limitlessPrint?.url
+        ? limitlessPrint.url
+        : (product
+          ? "https://www.cardmarket.com/es/OnePiece/Products?idProduct=" + encodeURIComponent(String(product.idProduct))
+          : (exactPrintOracle?.urlsByPrint?.get(String(card.id))?.[0]
+            ? exactPrintOracle.urlsByPrint.get(String(card.id))[0].replace("/en/OnePiece/", "/es/OnePiece/")
+            : cardmarketCardUrl(baseCard))),
       collections,
       launchPrice,
       launchPriceDate,
       variantOf: isVariant && baseCard.id !== card.id ? baseCard.id : null,
-      stalePrice: limitlessPrint?.eur == null && cardmarketEur === null && oracleEur === null && previousEur !== null,
-      source: cardmarketEur !== null
-        ? "Cardmarket public English product catalog + daily price guide"
-        : limitlessPrint?.eur != null
-          ? "Limitless/Cardmarket exact-print fallback"
+      stalePrice: exactLimitless
+        ? (limitlessPrint?.eur == null && oracleEur === null && samePriorExactUrl && previousEur !== null)
+        : (cardmarketEur === null && oracleEur === null && previousEur !== null),
+      source: exactLimitless
+        ? (limitlessPrint?.eur != null
+          ? "Limitless/Cardmarket exact-print mapping"
+          : oracleEur !== null
+            ? "Automatic exact-print market summary fallback"
+            : samePriorExactUrl && previousEur !== null
+              ? "Previous exact-print price retained"
+              : "Exact print mapped; current price unavailable")
+        : cardmarketEur !== null
+          ? "Cardmarket public English product catalog + daily price guide"
           : oracleEur !== null
             ? "Automatic exact-print market summary fallback"
             : "Previous successful daily Cardmarket price retained",
@@ -1078,12 +1104,17 @@ async function main() {
   }
 
   let oracleOnly = 0;
-  for (const [id, eurRaw] of exactPrintOracle.priceByPrint.entries()) {
-    if (outputCards[id]) continue;
-    const eur = priceNumber(eurRaw);
-    if (eur === null) continue;
+  const oraclePrintIds = new Set([
+    ...exactPrintOracle.urlsByPrint.keys(),
+    ...exactPrintOracle.priceByPrint.keys()
+  ]);
+  for (const id of oraclePrintIds) {
+    if (outputCards[id] || /_jp\d+$/i.test(id)) continue;
+    if (!/^(?:P-\d{3}|(?:OP|EB|ST|PRB)\d{2}-\d{3})(?:_(?:p|r|c)\d+)?$/i.test(id)) continue;
+    const eur = priceNumber(exactPrintOracle.priceByPrint.get(id));
     const urls = exactPrintOracle.urlsByPrint.get(id) || [];
     const url = urls[0] ? String(urls[0]).replace("/en/OnePiece/", "/es/OnePiece/") : "";
+    if (eur === null && !url) continue;
     outputCards[id] = {
       eur,
       trend:null, low:null, avg:null, avg1:null, avg7:null, avg30:null,
@@ -1095,10 +1126,12 @@ async function main() {
       url,
       collections:[],
       launchPrice:eur,
-      launchPriceDate:pricesRaw?.createdAt || new Date().toISOString(),
+      launchPriceDate:eur !== null ? (pricesRaw?.createdAt || new Date().toISOString()) : null,
       variantOf:baseId(id)!==id?baseId(id):null,
       stalePrice:false,
-      source:"Automatic exact-print market summary fallback",
+      source:eur !== null
+        ? "Automatic exact-print market summary fallback"
+        : "Automatic exact-print Cardmarket map; current price unavailable",
       sourceUrl:"https://www.cardmarket.com/es/OnePiece/Data"
     };
     oracleOnly++;
@@ -1108,7 +1141,7 @@ async function main() {
 
   const createdAt = pricesRaw?.createdAt || new Date().toISOString();
   const payload = {
-    schemaVersion: 9,
+    schemaVersion: 10,
     updatedAt: createdAt,
     source: "Cardmarket public English One Piece product catalog + daily price guide",
     sourcePage: "https://www.cardmarket.com/es/OnePiece/Data",

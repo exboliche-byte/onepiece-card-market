@@ -40,12 +40,14 @@ const norm=s=>String(s??"").toLowerCase().normalize("NFD").replace(/[\u0300-\u03
 const money=n=>Number.isFinite(Number(n))?Number(n).toLocaleString("es-ES",{style:"currency",currency:"EUR"}):"—";
 const safeId=id=>String(id||"");
 const imagePreloadCache=new Map();
+const visualPrintId=c=>String(c?.importVariantId||c?.id||"").trim().replace(/_base$/i,"")||String(c?.id||"");
 const officialImageUrl=c=>{
-  const source=importedSourceCard(c)||c;
-  return String(source?.image||source?.imageUrl||c?.image||"").trim()||("https://en.onepiece-cardgame.com/images/cardlist/card/"+encodeURIComponent(source?.id||c?.id||"")+".png");
+  const id=visualPrintId(c);
+  if(c?.syntheticImport||c?.importVariantId)return "https://asia-en.onepiece-cardgame.com/images/cardlist/card/"+encodeURIComponent(id)+".png";
+  return String(c?.image||c?.imageUrl||"").trim()||("https://en.onepiece-cardgame.com/images/cardlist/card/"+encodeURIComponent(id)+".png");
 };
 const imageUrl=c=>officialImageUrl(c);
-const imageCdnUrl=c=>{const source=importedSourceCard(c)||c;return "https://optcg-api.arjunbansal-ai.workers.dev/images/"+encodeURIComponent(source?.id||c?.id||"")};
+const imageCdnUrl=c=>"https://optcg-api.arjunbansal-ai.workers.dev/images/"+encodeURIComponent(visualPrintId(c));
 const fallbackImageUrl=c=>"https://images.weserv.nl/?url="+encodeURIComponent(officialImageUrl(c).replace("https://","").replace("http://",""));
 function preloadCardImage(c){const u=imageCdnUrl(c);if(!u||imagePreloadCache.has(u))return;const im=new Image();im.src=u;imagePreloadCache.set(u,im)}
 function cardImg(c,cls="cardimg"){
@@ -103,6 +105,60 @@ function printSetOf(c){
 }
 function groupKey(c){
   return norm(baseId(c?.id));
+}
+function rebuildCardGroups(){
+  const map=new Map();
+  for(const c of state.cards){
+    c.search=norm([c.id,c.name,c.set,c.set_name,c.category,c.rarity,...(c.colors||[]),...(c.types||[]),...(c.attributes||[]),c.effect,c.trigger].join(" "));
+    const k=groupKey(c);
+    if(!map.has(k))map.set(k,{key:k,card:c,ids:[],sets:new Set()});
+    const g=map.get(k);g.ids.push(c.id);g.sets.add(cardExpansionCode(c));
+  }
+  state.groups=[...map.values()].map(g=>({...g,sets:[...g.sets].sort(),versions:g.ids.map(id=>card(id)).filter(Boolean)}));
+  state.groupByKey=map;
+}
+let marketDatasetCards={};
+function catalogSetForMarketPrint(printSet,base){
+  const wanted=normalizePrintSet(printSet);
+  const exact=state.packs.find(p=>normalizePrintSet(p?.code)===wanted);
+  if(exact)return exact.code;
+  if(wanted==="P"){
+    const promo=state.packs.find(p=>expansionType(p?.code)==="PROMO"||/PROMO|PROMOTION/i.test(String(p?.code||"")+" "+String(p?.name||"")));
+    if(promo)return promo.code;
+  }
+  const m=wanted.match(/^(OP|EB|ST|PRB)(\d{2})$/);
+  if(m)return m[1]+"-"+m[2];
+  return String(base?.source_set||base?.set||"");
+}
+function augmentCatalogWithMarketPrints(){
+  if(!state.cards.length||!marketDatasetCards||typeof marketDatasetCards!=="object")return false;
+  const byId=new Map(state.cards.map(c=>[norm(c.id),c]));
+  let changed=false;
+  for(const [rawId,entry] of Object.entries(marketDatasetCards)){
+    const id=String(rawId||"").trim();
+    if(!id||/_jp\d+$/i.test(id)||byId.has(norm(id)))continue;
+    if(!/^(?:P-\d{3}|(?:OP|EB|ST|PRB)\d{2}-\d{3})(?:_(?:p|r|c)\d+)?$/i.test(id))continue;
+    const logical=baseId(id);
+    const base=state.cards.find(c=>norm(c.id)===norm(logical))||state.cards.find(c=>norm(baseId(c.id))===norm(logical));
+    if(!base)continue;
+    const setCode=catalogSetForMarketPrint(entry?.printSet,base)||String(base?.set||"");
+    const copy={
+      ...base,
+      id,
+      number:logical,
+      set:setCode,
+      source_set:setCode,
+      set_name:String(entry?.expansion||base?.set_name||setCode),
+      image:"",
+      isParallel:String(entry?.variantKind||"").toLowerCase()==="parallel"||/_(?:p|c)\d+$/i.test(id),
+      marketAugmented:true
+    };
+    state.cards.push(copy);
+    byId.set(norm(id),copy);
+    changed=true;
+  }
+  if(changed)rebuildCardGroups();
+  return changed;
 }
 function logicalQty(c){
   const ids=state.groupByKey?.get(groupKey(c))?.ids||[c?.id];
@@ -254,6 +310,7 @@ function prepareCatalog(raw,packs){
   for(const c of state.cards){c.search=norm([c.id,c.name,c.set,c.set_name,c.category,c.rarity,...(c.colors||[]),...(c.types||[]),...(c.attributes||[]),c.effect,c.trigger].join(" "));const k=groupKey(c);if(!map.has(k))map.set(k,{key:k,card:c,ids:[],sets:new Set()});const g=map.get(k);g.ids.push(c.id);g.sets.add(cardExpansionCode(c))}
   state.groups=[...map.values()].map(g=>({...g,sets:[...g.sets].sort(),versions:g.ids.map(id=>card(id))}));
   state.groupByKey=map;
+  augmentCatalogWithMarketPrints();
   if(!state.album.set)state.album.set="";
 }
 let supabaseConfigPromise=null;
@@ -521,13 +578,10 @@ const PRICE_CACHE_VERSION=18;
 const MARKET_DATA_URL="/data/cardmarket-prices.json";
 function priceOf(c){
   const key=c?.id;
-  const source=importedSourceCard(c);
-  const meta=priceMeta(c);
+  const meta=directMarketMeta(c);
   const candidates=[
     state.prices?.[key],
     state.prices?.[norm(key)],
-    source?state.prices?.[source.id]:null,
-    source?state.prices?.[norm(source.id)]:null,
     meta.eur,
     meta.trend,
     meta.avg,
@@ -550,6 +604,7 @@ function selectPrimaryMarketEntry(id,entry){
 }
 
 function mergePriceDataset(d){
+  marketDatasetCards=d?.cards||{};
   state.prices={};state.collectionPrices={};state.marketMeta={};state.priceDate=d?.updatedAt||null;
   for(const [id,rawEntry] of Object.entries(d?.cards||{})){
     const entry=selectPrimaryMarketEntry(id,rawEntry);
@@ -560,6 +615,7 @@ function mergePriceDataset(d){
       cardmarketId:entry?.cardmarketId||null,
       version:Number(entry?.version||1),
       printSet:String(entry?.printSet||""),
+      expansion:String(entry?.expansion||""),
       variantKind:String(entry?.variantKind||""),
       stalePrice:!!entry?.stalePrice,
       launchPrice:Number.isFinite(Number(entry?.launchPrice))?Number(entry.launchPrice):null,
@@ -580,6 +636,7 @@ function mergePriceDataset(d){
     };
     state.marketMeta[id]=meta;state.marketMeta[norm(id)]=meta;
   }
+  augmentCatalogWithMarketPrints();
 }
 async function loadMarketPrices({refresh=false}={}){
   if(!refresh&&priceDatasetPromise)return priceDatasetPromise;
@@ -650,10 +707,9 @@ function directMarketMeta(c){
   return state.marketMeta?.[c?.id] || state.marketMeta?.[norm(c?.id)] || {};
 }
 function priceMeta(c){
-  const own=directMarketMeta(c);
-  if(own&&Object.keys(own).length)return own;
-  const source=importedSourceCard(c);
-  return source?directMarketMeta(source):{};
+  // The exact print ID is authoritative for price, URL and expansion metadata.
+  // Missing metadata stays missing instead of borrowing a sibling printing.
+  return directMarketMeta(c);
 }
 function cardmarketUrl(c){
   const meta=priceMeta(c);
@@ -2080,7 +2136,7 @@ function csvPrintSetMatches(c,value){
   const wantedName=csvSetNameKey(raw),candidateName=csvSetNameKey(c?.set_name);
   return wantedName.length>=5&&candidateName.includes(wantedName);
 }
-function importMarketSource(logicalId,kind,printSet,rawVariant="",priceHint=null){
+function importMarketSource(logicalId,kind,printSet,rawVariant=""){
   const logical=String(logicalId||"").trim().toUpperCase();
   const wantedKind=String(kind||"").trim().toLowerCase()||"base";
   const wantedSet=String(printSet||"").trim();
@@ -2102,16 +2158,6 @@ function importMarketSource(logicalId,kind,printSet,rawVariant="",priceHint=null
   if(normalizedVariant)return null;
   if(candidates.length===1)return candidates[0];
 
-  const hint=Number(priceHint);
-  if(Number.isFinite(hint)&&hint>0&&candidates.length>1){
-    const ranked=candidates.map(c=>({
-      card:c,
-      price:Number(state.prices?.[c.id]??state.prices?.[norm(c.id)])
-    })).filter(x=>Number.isFinite(x.price)&&x.price>0)
-      .map(x=>({...x,diff:Math.abs(Math.log(x.price/hint))}))
-      .sort((a,b)=>a.diff-b.diff);
-    if(ranked.length===1||(ranked.length>1&&ranked[1].diff-ranked[0].diff>0.08))return ranked[0].card;
-  }
   return null;
 }
 function importedSourceCard(c){
@@ -2126,8 +2172,7 @@ function importedSourceCard(c){
     baseId(c?.id||c?.importVariantId),
     c?.importVariantKind||"base",
     wantedSet,
-    c?.importVariantId||"",
-    c?.importUnitPrice
+    c?.importVariantId||""
   );
 }
 function resolveCSVPrint(logicalId,rawVariant,kind,printSet){
@@ -2160,9 +2205,7 @@ function syntheticCSVCard(row,logicalId,variantId,kind,printSet){
   let id=originalVariant.replace(/_base$/i,"")||logical;
   const base=state.cards.find(c=>norm(c.id)===norm(logical))||state.cards.find(c=>norm(baseId(c.id))===norm(logical))||null;
   const wantedSet=normalizePrintSet(printSet);
-  const rawPrice=Number(String(row?.unit_price||"").replace(",","."));
-  const priceHint=Number.isFinite(rawPrice)&&rawPrice>0?rawPrice:null;
-  const marketSource=importMarketSource(logical,kind,printSet,originalVariant,priceHint);
+  const marketSource=importMarketSource(logical,kind,printSet,originalVariant);
 
   // Una misma carta base puede existir en otra expansión con el mismo variant_id.
   // Usamos una clave interna distinta para no mezclar cantidades, pero el
@@ -2187,17 +2230,14 @@ function syntheticCSVCard(row,logicalId,variantId,kind,printSet){
     types:Array.isArray(base?.types)?base.types:[],
     image:(()=>{
       const visualId=originalVariant.replace(/_base$/i,"")||logical;
-      const exactVisual=state.cards.find(c=>norm(c.id)===norm(visualId));
-      const visual=marketSource||exactVisual;
-      return String(visual?.image||visual?.imageUrl||"https://asia-en.onepiece-cardgame.com/images/cardlist/card/"+encodeURIComponent(visual?.id||visualId)+".png");
+      return "https://asia-en.onepiece-cardgame.com/images/cardlist/card/"+encodeURIComponent(visualId)+".png";
     })(),
     isParallel:kind==="parallel",
     syntheticImport:true,
     importVariantId:originalVariant,
     importPrintSet:String(printSet||""),
     importVariantKind:String(kind||"base"),
-    importResolvedCardId:String(marketSource?.id||""),
-    importUnitPrice:priceHint
+    importResolvedCardId:String(marketSource?.id||"")
   };
 }
 function previewImport(text){
