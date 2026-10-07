@@ -7,9 +7,6 @@ on:
   push:
     paths:
       - ".github/workflows/sync-card-data.yml"
-  push:
-    paths:
-      - ".github/workflows/sync-card-data.yml"
 
 permissions:
   contents: write
