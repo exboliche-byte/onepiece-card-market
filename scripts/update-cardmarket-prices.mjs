@@ -161,12 +161,14 @@ async function loadCardmarketExpansionLanguageMap() {
 
     const grouped = new Map();
     const japaneseIds = new Set();
+    const expansionNamesById = new Map();
     const englishExpansionIdsBySet = new Map();
 
     for (const entry of entries) {
       const id = Number(entry?.expansionId);
       if (!Number.isFinite(id)) continue;
-      const expansionName = String(entry?.expansionName || "");
+      const expansionName = String(entry?.expansionName || "").trim();
+      if (expansionName) expansionNamesById.set(id, expansionName);
       if (isJapaneseExpansion(expansionName) || isJapaneseExpansion(entry?.file)) japaneseIds.add(id);
 
       const normalized = norm(expansionName);
@@ -211,10 +213,10 @@ async function loadCardmarketExpansionLanguageMap() {
       }
     }
 
-    return {latest, japaneseExpansionIds:japaneseIds, englishExpansionIdsBySet};
+    return {latest, japaneseExpansionIds:japaneseIds, expansionNamesById, englishExpansionIdsBySet};
   } catch (error) {
     console.warn("Cardmarket expansion-language map unavailable:", error?.message || error);
-    return {latest:null, japaneseExpansionIds:new Set(), englishExpansionIdsBySet:new Map()};
+    return {latest:null, japaneseExpansionIds:new Set(), expansionNamesById:new Map(), englishExpansionIdsBySet:new Map()};
   }
 }
 
@@ -646,7 +648,7 @@ async function main() {
         collectionGuide.SELL
       ) : null;
       return {
-        expansion: String(collectionProduct.expansionName || "").trim(),
+        expansion: String(collectionProduct.expansionName || languageMap.expansionNamesById?.get(Number(collectionProduct.idExpansion)) || "").trim(),
         expansionId: Number(collectionProduct.idExpansion),
         cardmarketId: Number(collectionProduct.idProduct),
         version: productVersions?.get(String(collectionProduct.idProduct)) ?? productVersion(collectionProduct.name) ?? 1,
@@ -665,7 +667,7 @@ async function main() {
       avg30: guide ? priceNumber(guide.avg30, guide.AVG30, guide["AVG30"]) : null,
       cardmarketId: Number(product.idProduct),
       expansionId: Number(product.idExpansion),
-      expansion: String(CARDMARKET_SET_NAMES[sourceSetCode(card)]?.[0] || sourceSetCode(card)),
+      expansion: String(languageMap.expansionNamesById?.get(Number(product.idExpansion)) || CARDMARKET_SET_NAMES[sourceSetCode(card)]?.[0] || sourceSetCode(card)),
       version: localVersion(card.id),
       url: "https://www.cardmarket.com/es/OnePiece/Products?idProduct=" + encodeURIComponent(String(product.idProduct)),
       collections,
