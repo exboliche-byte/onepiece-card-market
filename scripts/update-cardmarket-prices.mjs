@@ -398,6 +398,26 @@ function buildProductIndex(products) {
   return groups;
 }
 
+function allCardmarketProductsForCard(card, products) {
+  const matches = [];
+  const base = baseId(card.id).toUpperCase();
+  const code = extractCardCode(base);
+  const number = numberPart(base);
+  for (const product of products) {
+    if (!product?.idProduct || !isEnglishProduct(product)) continue;
+    const pCode = extractCardCode(product.name);
+    if (pCode && code) {
+      if (pCode !== code) continue;
+    } else {
+      if (!number) continue;
+      const pNumber = String(product.number ?? "").trim().replace(/^0+/, "");
+      if (pNumber !== number.replace(/^0+/, "")) continue;
+    }
+    matches.push(product);
+  }
+  return matches;
+}
+
 function allProductsForCard(card, products, englishExpansionIdsBySet) {
   const preferred = [];
   const fallback = [];
@@ -608,6 +628,33 @@ async function main() {
     const launchPrice = priceNumber(prior.launchPrice) ?? eur;
     const launchPriceDate = prior.launchPriceDate || (launchPrice !== null ? pricesRaw?.createdAt || new Date().toISOString() : null);
 
+    const collectionProducts = allCardmarketProductsForCard(card, products)
+      .sort((a,b) =>
+        String(a?.expansionName||"").localeCompare(String(b?.expansionName||""),"en",{numeric:true}) ||
+        String(a?.dateAdded||"").localeCompare(String(b?.dateAdded||"")) ||
+        Number(a?.idProduct||0)-Number(b?.idProduct||0)
+      );
+    const collections = collectionProducts.map(collectionProduct => {
+      const collectionGuide = prices.get(String(collectionProduct.idProduct));
+      const collectionEur = collectionGuide ? priceNumber(
+        collectionGuide.trend,
+        collectionGuide.TREND,
+        collectionGuide["Trend Price"],
+        collectionGuide.avg,
+        collectionGuide.AVG,
+        collectionGuide.sell,
+        collectionGuide.SELL
+      ) : null;
+      return {
+        expansion: String(collectionProduct.expansionName || "").trim(),
+        expansionId: Number(collectionProduct.idExpansion),
+        cardmarketId: Number(collectionProduct.idProduct),
+        version: productVersions?.get(String(collectionProduct.idProduct)) ?? productVersion(collectionProduct.name) ?? 1,
+        eur: collectionEur,
+        url: "https://www.cardmarket.com/es/OnePiece/Products?idProduct=" + encodeURIComponent(String(collectionProduct.idProduct))
+      };
+    });
+
     outputCards[card.id] = {
       eur,
       trend: guide ? priceNumber(guide.trend, guide.TREND, guide["Trend Price"]) : null,
@@ -621,6 +668,7 @@ async function main() {
       expansion: String(CARDMARKET_SET_NAMES[sourceSetCode(card)]?.[0] || sourceSetCode(card)),
       version: localVersion(card.id),
       url: "https://www.cardmarket.com/es/OnePiece/Products?idProduct=" + encodeURIComponent(String(product.idProduct)),
+      collections,
       launchPrice,
       launchPriceDate,
       source: "Cardmarket public English product catalog + daily price guide",
@@ -632,7 +680,7 @@ async function main() {
 
   const createdAt = pricesRaw?.createdAt || new Date().toISOString();
   const payload = {
-    schemaVersion: 7,
+    schemaVersion: 8,
     updatedAt: createdAt,
     source: "Cardmarket public English One Piece product catalog + daily price guide",
     sourcePage: "https://www.cardmarket.com/es/OnePiece/Data",

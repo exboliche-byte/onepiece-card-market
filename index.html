@@ -248,7 +248,7 @@ function cmpPrice(a,b){
   return d*(state.catalog.dir==="desc"?-1:1);
 }
 let priceDatasetPromise=null;
-const PRICE_CACHE_VERSION=7;
+const PRICE_CACHE_VERSION=8;
 const MARKET_DATA_URL="/data/cardmarket-prices.json";
 function priceOf(c){const raw=state.prices[c?.id]??state.prices[norm(c?.id)];const n=Number(raw);return Number.isFinite(n)?n:null}
 function mergePriceDataset(d){
@@ -262,7 +262,15 @@ function mergePriceDataset(d){
       version:Number(entry?.version||1),
       launchPrice:Number.isFinite(Number(entry?.launchPrice))?Number(entry.launchPrice):null,
       launchPriceDate:entry?.launchPriceDate||null,
-      sourceUrl:String(entry?.sourceUrl||"")
+      sourceUrl:String(entry?.sourceUrl||""),
+      collections:Array.isArray(entry?.collections)?entry.collections.map(collection=>({
+        expansion:String(collection?.expansion||"").trim(),
+        expansionId:Number.isFinite(Number(collection?.expansionId))?Number(collection.expansionId):null,
+        cardmarketId:Number.isFinite(Number(collection?.cardmarketId))?Number(collection.cardmarketId):null,
+        version:Number.isFinite(Number(collection?.version))?Number(collection.version):1,
+        eur:Number.isFinite(Number(collection?.eur))?Number(collection.eur):null,
+        url:String(collection?.url||"")
+      })).filter(collection=>collection.expansion||collection.cardmarketId):[]
     };
     state.marketMeta[id]=meta;state.marketMeta[norm(id)]=meta;
   }
@@ -629,28 +637,38 @@ function openCardDetail(id,{replace=false}={}){
 function closeCardDetail({fromHistory=false}={}){
   if(!state.detail)return;
   if(!fromHistory&&detailHistoryActive){
-    historyfunction detailView(c){
-  const group=state.groups.find(g=>g.ids.includes(c.id));
-  const versions=(group?.versions||[c]).filter(Boolean);
-  const q=qty(c.id);
-  const collectionRows=versions.map(v=>{
-    const price=priceOf(v);
-    const meta=priceMeta(v);
-    const collectionName=String(v?.set_name||setName(v?.set)||v?.set||"Colección");
-    const label=packLabel({code:v?.set})||v?.set||"";
-    const version=cardmarketVersionLabel(v);
-    const url=cardmarketUrl(v);
+    history.back();
+    return;
+  }
+  detailHistoryActive=false;
+  state.detail=null;
+  renderShell();
+}
+function renderCardmarketCollections(c){
+  const collections=priceMeta(c).collections||[];
+  if(!collections.length)return "";
+  const rows=collections.map(collection=>{
+    const label=collection.expansion||"Cardmarket";
+    const version=Number(collection.version)>1?" · V."+Number(collection.version):"";
+    const price=collection.eur!==null&&collection.eur!==undefined?money(collection.eur):"Precio —";
+    const href=collection.url||"";
     return '<div class="collection-row">'+
       '<div class="collection-main">'+
-        '<div class="collection-title"><b>'+esc(collectionName)+'</b><span class="chip">'+esc(label)+'</span></div>'+
-        '<div class="small">'+esc(v.id)+' · '+esc(version)+'</div>'+
+        '<div class="collection-title"><b>'+esc(label)+'</b><span class="chip">'+esc(c.id)+esc(version)+'</span></div>'+
+        '<div class="small">Edición de Cardmarket · expansión #'+esc(collection.expansionId??"—")+'</div>'+
       '</div>'+
-      '<div class="collection-price"><b>'+(price!==null?money(price):"Precio —")+'</b>'+
-        (url?'<a class="secondary btn collection-link" target="_blank" rel="noopener" href="'+esc(url)+'">Cardmarket ↗</a>':'')+
+      '<div class="collection-price"><b>'+price+'</b>'+
+        (href?'<a class="secondary btn collection-link" target="_blank" rel="noopener" href="'+esc(href)+'">Cardmarket ↗</a>':"")+
       '</div>'+
     '</div>';
   }).join("");
-  const uniqueCollections=[...new Map(versions.map(v=>[String(v.set||v.set_name||v.id),v])).values()];
+  return '<h3 style="margin-top:18px">Colecciones</h3><p class="muted">Esta carta aparece en '+collections.length+' edición(es) de Cardmarket. Cada una conserva su precio y enlace independiente.</p><div class="collection-list">'+rows+'</div>';
+}
+function detailView(c){
+  const group=state.groups.find(g=>g.ids.includes(c.id));
+  const versions=(group?.versions||[c]).filter(Boolean);
+  const q=qty(c.id);
+  const collections=priceMeta(c).collections||[];
   return '<div class="modalback"><div class="modal"><div class="sectionhead"><div><b>'+esc(c.id)+'</b><div class="small">'+esc(c.name)+'</div></div><button class="close" data-close>×</button></div>'+
     '<div class="detail"><div>'+cardImg(c,"cardimg detailimg")+'</div><div>'+
       '<h2 style="margin-top:0">'+esc(c.name)+'</h2>'+
@@ -661,11 +679,10 @@ function closeCardDetail({fromHistory=false}={}){
       '<div class="row" style="margin-top:10px"><b>Mi colección: '+q+'</b><b>'+(priceOf(c)!==null?money(priceOf(c)):"Precio —")+'</b></div>'+
       '<div class="small" style="margin-top:5px">Precio de salida (referencia): '+(priceMeta(c)?.launchPrice!==null&&priceMeta(c)?.launchPrice!==undefined?money(priceMeta(c).launchPrice):"—")+'</div>'+
       '<div class="quick"><button class="secondary" data-qty="'+esc(c.id)+'" data-d="-1">−</button><div class="qty">'+q+'</div><button class="primary" data-qty="'+esc(c.id)+'" data-d="1">+</button></div>'+
-      '<h3 style="margin-top:18px">Colecciones</h3>'+
-      '<p class="muted">Esta carta aparece en '+uniqueCollections.length+' colección(es). Cada edición conserva su precio y su enlace de Cardmarket.</p>'+
-      '<div class="collection-list">'+collectionRows+'</div>'+
+      '<a class="secondary btn" style="display:block;text-align:center;margin-top:8px;text-decoration:none" target="_blank" rel="noopener" href="'+esc(cardmarketUrl(c))+'">Cardmarket ↗</a>'+
+      '<h3 style="margin-top:18px">Versiones / reimpresiones</h3><div class="version-list">'+versions.map(v=>'<button class="version secondary" data-detail="'+esc(v.id)+'">'+cardImg(v,"versionImg")+'<small>'+esc(v.set)+' · '+(priceOf(v)!==null?money(priceOf(v)):"Precio —")+' · ×'+qty(v.id)+'</small></button>').join("")+'</div>'+
+      renderCardmarketCollections(c)+
     '</div></div></div></div>';
-}"Precio —")+' · ×'+qty(v.id)+'</small></button>').join("")+'</div></div></div></div></div>';
 }
 function accountView(){
   return '<div class="wrap"><div class="hero"><div><h1>Cuenta</h1><p>'+(state.user?("Sesión: "+esc(state.user.email||"")):"Usa la app sin cuenta o sincroniza tu colección con Supabase.")+'</p></div></div>'+
