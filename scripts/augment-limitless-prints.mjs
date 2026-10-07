@@ -21,12 +21,19 @@ function titleOf(html,fallback){
 function productLinks(html){
   const out=new Set();
   const text=String(html||"");
-  // Limitless has used absolute, root-relative and bare relative links over time.
-  // Parse the route itself instead of depending on one HTML href shape.
-  for(const m of text.matchAll(/(?:https?:\/\/onepiece\.limitlesstcg\.com)?\/?cards\/en\/([a-z0-9][a-z0-9-]+)/gi)){
-    const slug=m[1];
-    if(/^(?:P-\d{3}|(?:OP|ST|EB|PRB)\d{2}-\d{3})$/i.test(slug))continue;
-    out.add("https://onepiece.limitlesstcg.com/cards/en/"+slug);
+  // Promo index routes are /cards/<product-slug>; some pages also expose
+  // /cards/en/<product-slug>. Accept both while excluding actual card IDs.
+  const patterns=[
+    /(?:https?:\/\/onepiece\.limitlesstcg\.com)?\/?cards\/en\/([a-z0-9][a-z0-9-]+)/gi,
+    /(?:https?:\/\/onepiece\.limitlesstcg\.com)?\/?cards\/([a-z0-9][a-z0-9-]+)/gi
+  ];
+  for(const re of patterns){
+    for(const m of text.matchAll(re)){
+      const slug=m[1];
+      if(/^(?:promos|products|advanced|search)$/i.test(slug))continue;
+      if(/^(?:P-\d{3}|(?:OP|ST|EB|PRB)\d{2}-\d{3})$/i.test(slug))continue;
+      out.add("https://onepiece.limitlesstcg.com/cards/"+slug);
+    }
   }
   return [...out];
 }
@@ -52,10 +59,7 @@ async function main(){
   }
   const links=productLinks(indexHtml);
   if(!links.length){
-    const title=titleOf(indexHtml,"");
-    const probe=indexHtml.toLowerCase().indexOf("welcome pack 2026 vol.1");
-    const sample=probe>=0?indexHtml.slice(Math.max(0,probe-350),probe+550).replace(/\s+/g," "):indexHtml.slice(0,900).replace(/\s+/g," ");
-    console.warn("Limitless promo index returned no product links; title=",title,"length=",indexHtml.length,"sample=",sample);
+    console.warn("Limitless promo index returned no product links; keeping existing catalog");
     return;
   }
 
