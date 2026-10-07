@@ -35,7 +35,7 @@ const state={
   catalog:{set:"Todas",category:"Todos",color:"Todos",rarity:"Todos",type:"Todos",attribute:"Todos",ownership:"Todas",sort:"id",dir:"asc",page:1,grouped:true,minCost:"",maxCost:"",minPower:"",maxPower:"",minPrice:"",maxPrice:"",query:"",filtersOpen:false},
   owned:{},collection:{query:"",set:"Todas",category:"Todos",color:"Todos",rarity:"Todos",type:"Todos",attribute:"Todos",quantity:"Todas",playset:"Todas",sort:"id",dir:"asc",page:1,filtersOpen:false},
   album:{set:"",query:"",ownership:"Todas",sort:"id",dir:"asc",page:1},expansions:{query:"",type:"Todos",sort:"set",dir:"asc"},
-  deckQuery:"",deckPage:1,deckLibrary:true,deckChoosingLeader:false,deckDiscover:false,deckDiscoverLeader:"",deckDiscoverLeaderQuery:"",deckDiscoverResults:[],deckDiscoverLoading:false,deckDiscoverError:"",deckDiscoverDays:90,deckDiscoverMinPlayers:32,deckDiscoverMeta:null,deckFilters:{set:"Todas",category:"Todos",color:"Todos",rarity:"Todos",type:"Todos",attribute:"Todos",ownership:"Todas",sort:"id",dir:"asc",filtersOpen:false},auth:false,authReady:false,authBusy:false,authError:"",authNotice:"",authRecovery:false,scanner:{active:false,busy:false,status:"Cámara detenida",error:"",code:"",groupKey:"",ocrText:"",confidence:null,lastSeen:0},toast:"",loading:true
+  deckQuery:"",deckPage:1,deckLibrary:true,deckChoosingLeader:false,deckDiscover:false,deckDiscoverLeader:"",deckDiscoverLeaderQuery:"",deckDiscoverResults:[],deckDiscoverLoading:false,deckDiscoverError:"",deckDiscoverDays:90,deckDiscoverMinPlayers:32,deckDiscoverMeta:null,deckFilters:{set:"Todas",category:"Todos",color:"Todos",rarity:"Todos",type:"Todos",attribute:"Todos",ownership:"Todas",sort:"id",dir:"asc",filtersOpen:false},auth:false,authReady:false,authBusy:false,authError:"",authNotice:"",authRecovery:false,scanner:{active:false,busy:false,locked:false,status:"Cámara detenida",error:"",code:"",groupKey:"",ocrText:"",confidence:null,lastSeen:0},toast:"",loading:true
 };
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??"").replace(/[&<>'"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[c]));
@@ -1581,9 +1581,10 @@ function scannerResultHtml(){
   const owned=total>0;
   const status='<div class="scanner-owned '+(owned?"ok":"missing")+'">'+(owned?("La tienes · "+total+" copia"+(total===1?"":"s")):"Te falta")+'</div>';
   const exactNote=versions.length>1?'<div class="notice" style="margin-top:10px">El OCR identifica el número de carta, pero las paralelas y reimpresiones comparten ese número. Elige la impresión exacta antes de añadirla.</div>':"";
-  const one=versions.length===1?'<div class="scanner-main">'+cardImg(versions[0],"cardimg")+'<div><b>'+esc(versions[0].id)+' · '+esc(versions[0].name)+'</b><div class="small" style="margin-top:4px">'+esc(cardPrintLabel(versions[0]))+'</div><div class="small" style="margin-top:4px">En tu colección: ×'+qty(versions[0].id)+'</div><button class="primary btn" data-scanner-add="'+esc(versions[0].id)+'" style="margin-top:10px">Añadir +1</button><button class="secondary btn" data-scanner-detail="'+esc(versions[0].id)+'" style="margin-top:10px;margin-left:6px">Ver carta</button></div></div>':"";
-  const many=versions.length>1?'<div class="scanner-versions">'+versions.map(v=>'<div class="scanner-version">'+cardImg(v,"cardimg")+'<b style="margin-top:5px">'+esc(v.id)+'</b><span class="small">'+esc(cardPrintLabel(v))+'</span><span class="small">Tengo ×'+qty(v.id)+'</span><button class="primary btn" data-scanner-add="'+esc(v.id)+'">Añadir +1</button><button class="secondary btn" data-scanner-detail="'+esc(v.id)+'" style="margin-top:5px;width:100%">Ver</button></div>').join("")+'</div>':"";
-  return '<div class="scanner-result-head"><div><div class="small">'+esc(state.scanner.code||baseId(c?.id))+'</div><h2 style="margin:2px 0 0">'+esc(c?.name||"Carta detectada")+'</h2></div>'+status+'</div>'+exactNote+one+many+(state.scanner.ocrText?'<details class="scanner-debug"><summary>Texto leído por OCR</summary><pre style="white-space:pre-wrap">'+esc(state.scanner.ocrText.slice(0,700))+'</pre></details>':"");
+  const discard='<button class="secondary btn" data-scanner-discard style="margin-top:10px">Descartar y seguir</button>';
+  const one=versions.length===1?'<div class="scanner-main">'+cardImg(versions[0],"cardimg")+'<div><b>'+esc(versions[0].id)+' · '+esc(versions[0].name)+'</b><div class="small" style="margin-top:4px">'+esc(cardPrintLabel(versions[0]))+'</div><div class="small" style="margin-top:4px">En tu colección: ×'+qty(versions[0].id)+'</div><button class="primary btn" data-scanner-add="'+esc(versions[0].id)+'" style="margin-top:10px">Añadir +1 y seguir</button>'+discard+'<button class="secondary btn" data-scanner-detail="'+esc(versions[0].id)+'" style="margin-top:10px;margin-left:6px">Ver carta</button></div></div>':"";
+  const many=versions.length>1?'<div class="scanner-versions">'+versions.map(v=>'<div class="scanner-version">'+cardImg(v,"cardimg")+'<b style="margin-top:5px">'+esc(v.id)+'</b><span class="small">'+esc(cardPrintLabel(v))+'</span><span class="small">Tengo ×'+qty(v.id)+'</span><button class="primary btn" data-scanner-add="'+esc(v.id)+'">Añadir +1 y seguir</button><button class="secondary btn" data-scanner-detail="'+esc(v.id)+'" style="margin-top:5px;width:100%">Ver</button></div>').join("")+'</div><div style="margin-top:10px">'+discard+'</div>':"";
+  return '<div class="scanner-result-head"><div><div class="small">'+esc(state.scanner.code||baseId(c?.id))+'</div><h2 style="margin:2px 0 0">'+esc(c?.name||"Carta detectada")+'</h2></div>'+status+'</div><div class="validation ok" style="margin-top:10px"><b>Lectura bloqueada.</b> Añade la impresión correcta o descarta para continuar escaneando.</div>'+exactNote+one+many+(state.scanner.ocrText?'<details class="scanner-debug"><summary>Texto leído por OCR</summary><pre style="white-space:pre-wrap">'+esc(state.scanner.ocrText.slice(0,700))+'</pre></details>':"");
 }
 function scannerStatusHtml(){
   const s=state.scanner;
@@ -1592,15 +1593,16 @@ function scannerStatusHtml(){
 }
 function updateScannerControls(){
   const start=$("#scannerStart"),stop=$("#scannerStop"),now=$("#scannerNow");
-  if(start){start.textContent=state.scanner.active?"Cámara activa":"Iniciar cámara";start.disabled=state.scanner.active}
+  if(start){start.textContent=state.scanner.active?(state.scanner.locked?"Carta bloqueada":"Escaneando…"):"Iniciar cámara";start.disabled=state.scanner.active}
   if(stop)stop.disabled=!state.scanner.active;
-  if(now)now.disabled=!state.scanner.active;
+  if(now)now.disabled=!state.scanner.active||state.scanner.locked;
 }
 function renderScannerResult(){
   const host=$("#scannerResult");if(host)host.innerHTML=scannerResultHtml();
   const status=$("#scannerStatus");if(status)status.innerHTML=scannerStatusHtml();
   updateScannerControls();
   document.querySelectorAll("[data-scanner-add]").forEach(b=>b.onclick=()=>scannerAdd(b.dataset.scannerAdd));
+  document.querySelectorAll("[data-scanner-discard]").forEach(b=>b.onclick=scannerDiscard);
   document.querySelectorAll("[data-scanner-detail]").forEach(b=>b.onclick=()=>openCardDetail(b.dataset.scannerDetail));
 }
 function scannerView(){
@@ -1654,14 +1656,14 @@ async function startScanner(){
     renderScannerResult();
   }
 }
-function scheduleScanner(delay=900){
+function scheduleScanner(delay=650){
   clearTimeout(scannerTimer);
-  if(!state.scanner.active||state.tab!=="scanner")return;
+  if(!state.scanner.active||state.tab!=="scanner"||state.scanner.locked)return;
   scannerTimer=setTimeout(scanScannerFrame,delay);
 }
 async function scanScannerFrame(){
-  if(!state.scanner.active||state.tab!=="scanner")return;
-  if(state.detail||state.scanner.busy){scheduleScanner(500);return}
+  if(!state.scanner.active||state.tab!=="scanner"||state.scanner.locked)return;
+  if(state.detail||state.scanner.busy){scheduleScanner(350);return}
   const video=$("#scannerVideo"),canvas=$("#scannerCanvas");
   if(!video||!canvas||video.readyState<2){scheduleScanner(350);return}
   state.scanner.busy=true;state.scanner.status="Leyendo carta…";renderScannerResult();
@@ -1708,26 +1710,45 @@ async function scanScannerFrame(){
       state.scanner.code=resolved.code;
       state.scanner.groupKey=resolved.group.key;
       state.scanner.lastSeen=Date.now();
-      state.scanner.status=resolved.method+" · "+resolved.code;
+      state.scanner.locked=true;
+      state.scanner.status="Carta detectada · "+resolved.code;
+      clearTimeout(scannerTimer);
     }else state.scanner.status="Buscando número de carta…";
     state.scanner.error="";
   }catch(e){
     console.warn("scanner OCR",e);
     state.scanner.error="OCR no disponible: "+String(e?.message||e);
   }finally{
-    state.scanner.busy=false;renderScannerResult();scheduleScanner(950);
+    state.scanner.busy=false;renderScannerResult();
+    if(!state.scanner.locked)scheduleScanner(650);
   }
 }
 function scannerManualSearch(){
   const value=$("#scannerManual")?.value||"";
   const resolved=scannerResolveText(value);
   if(!resolved){state.scanner.error="No encuentro esa carta en el catálogo.";renderScannerResult();return}
-  state.scanner.error="";state.scanner.code=resolved.code;state.scanner.groupKey=resolved.group.key;state.scanner.ocrText=value;state.scanner.confidence=null;state.scanner.status="Búsqueda manual · "+resolved.code;renderScannerResult();
+  state.scanner.error="";state.scanner.code=resolved.code;state.scanner.groupKey=resolved.group.key;state.scanner.ocrText=value;state.scanner.confidence=null;state.scanner.locked=true;state.scanner.status="Carta seleccionada · "+resolved.code;clearTimeout(scannerTimer);renderScannerResult();
+}
+function scannerUnlock(message="Buscando siguiente carta…"){
+  state.scanner.locked=false;
+  state.scanner.code="";
+  state.scanner.groupKey="";
+  state.scanner.ocrText="";
+  state.scanner.confidence=null;
+  state.scanner.status=message;
+  state.scanner.error="";
+  renderScannerResult();
+  if(state.scanner.active)scheduleScanner(250);
+}
+function scannerDiscard(){
+  scannerUnlock("Descartada · buscando siguiente carta…");
 }
 function scannerAdd(id){
   const c=card(id);if(!c)return notify("No encuentro esa impresión");
   const n=Math.max(0,Math.min(99,qty(id)+1));
-  state.owned[id]=n;saveLocal();syncOne(id,n);renderScannerResult();updateLiveCollectionCount();notify("Añadida "+id+" · ahora tienes "+n);
+  state.owned[id]=n;saveLocal();syncOne(id,n);updateLiveCollectionCount();
+  notify("Añadida "+id+" · ahora tienes "+n);
+  scannerUnlock("Añadida · buscando siguiente carta…");
 }
 function bindScanner(){
   $("#scannerStart")?.addEventListener("click",startScanner);
