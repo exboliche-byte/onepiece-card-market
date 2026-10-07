@@ -965,8 +965,9 @@ async function main() {
 
     if (!product && !limitlessPrint) {
       unmatched.push(card.id);
-      const previousEur = priceNumber(prior.eur);
-      const fallbackEur = oracleEur ?? previousEur;
+      // Identity is more important than coverage: never carry forward a legacy
+      // price or URL when this run cannot verify the exact printing.
+      const fallbackEur = oracleEur;
       if (fallbackEur !== null) priced++;
       outputCards[card.id] = {
         eur: fallbackEur,
@@ -978,22 +979,18 @@ async function main() {
         avg30: null,
         cardmarketId: null,
         expansionId: null,
-        expansion: String(CARDMARKET_SET_NAMES[sourceSetCode(card)]?.[0] || card.set_name || sourceSetCode(card)),
+        expansion: String(card.set_name || CARDMARKET_SET_NAMES[sourceSetCode(card)]?.[0] || sourceSetCode(card)),
         printSet: currentPrintSet,
         variantKind: currentVariantKind,
         version: desiredMarketVersion,
-        url: oracleUrl
-          ? oracleUrl.replace("/en/OnePiece/", "/es/OnePiece/")
-          : String(prior.url || cardmarketCardUrl(baseCard)),
+        url: oracleUrl ? oracleUrl.replace("/en/OnePiece/", "/es/OnePiece/") : null,
         variantOf: isVariant && baseCard.id !== card.id ? baseCard.id : null,
-        launchPrice: priceNumber(prior.launchPrice) ?? fallbackEur,
-        launchPriceDate: prior.launchPriceDate || (fallbackEur !== null ? new Date().toISOString() : null),
-        stalePrice: oracleEur === null && previousEur !== null,
+        launchPrice: fallbackEur,
+        launchPriceDate: fallbackEur !== null ? new Date().toISOString() : null,
+        stalePrice: false,
         source: oracleEur !== null
           ? "Automatic exact-print market summary fallback"
-          : previousEur !== null
-            ? "Previous successful daily Cardmarket price retained"
-            : "Cardmarket public product catalog; fallback to card page when no exact product is published",
+          : "No verified exact-print Cardmarket product",
         sourceUrl: "https://www.cardmarket.com/es/OnePiece/Data"
       };
       continue;
@@ -1135,16 +1132,6 @@ async function main() {
   const priceCoverage = priced / Math.max(1, cards.length);
   if (coverage < MIN_COVERAGE) {
     throw new Error("Safety check failed: only " + mapped + "/" + cards.length + " cards matched to an exact Cardmarket product (" + (coverage * 100).toFixed(1) + "%)");
-  }
-  if (previous?.cards) {
-    const lostPreviouslyPriced = cards.filter(card => {
-      const before = priceNumber(previous.cards?.[card.id]?.eur);
-      const after = priceNumber(outputCards?.[card.id]?.eur);
-      return before !== null && after === null;
-    });
-    if (lostPreviouslyPriced.length) {
-      throw new Error("Safety check failed: daily update would remove " + lostPreviouslyPriced.length + " previously known prices");
-    }
   }
   if (priceCoverage < MIN_COVERAGE) {
     throw new Error("Safety check failed: only " + priced + "/" + cards.length + " catalog cards have a usable EUR price (" + (priceCoverage * 100).toFixed(1) + "%)");
