@@ -22,3 +22,12 @@ Si el usuario pide **"restaura la copia de seguridad de este proyecto"**:
 ## Alcance
 
 Esta restauración revierte el código del repositorio. No borra ni modifica datos persistentes de Supabase, cuentas, colecciones o mazos guardados por usuarios.
+
+
+## Backup antes de corregir identidad/precios de cartas — 2026-10-07
+
+- Rama: `backup-before-card-identity-fix-2026-10-07`
+- Commit: `39d5d02183c008e4d95b9abe5e30dbb96f0733d8`
+- Motivo: estado inmediatamente anterior a corregir expansiones de impresión, precios/enlaces exactos y versiones promocionales.
+
+Si el usuario pide restaurar **la copia anterior a la corrección de cartas/precios**, restaurar este commit en `main` con actualización protegida y desplegarlo de nuevo en Vercel. No modificar Supabase ni datos persistentes.
