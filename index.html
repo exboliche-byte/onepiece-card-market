@@ -112,9 +112,25 @@ function expansionList(){
   const f=state.expansions;
   let list=state.packs.map(p=>{
     const cards=cardsForExpansion(p.code);
-    const owned=cards.filter(c=>qty(c.id)>0);
-    const value=owned.reduce((sum,c)=>sum+qty(c.id)*(priceOf(c)??0),0);
-    return {...p,total:cards.length,owned:owned.length,pct:cards.length?owned.length/cards.length*100:0,playsets:cards.filter(c=>qty(c.id)>=PLAYSET).length,value};
+    // The expansion overview must use the same logical-card grouping as the
+    // album view. Parallel/reprint versions are one card, not extra cards to
+    // complete the expansion.
+    const groups=new Map();
+    for(const c of cards){
+      const k=groupKey(c);
+      if(!groups.has(k))groups.set(k,{card:c});
+    }
+    const logical=[...groups.values()];
+    const owned=logical.filter(g=>logicalQty(g.card)>0);
+    const value=cards.filter(c=>qty(c.id)>0).reduce((sum,c)=>sum+qty(c.id)*(priceOf(c)??0),0);
+    return {
+      ...p,
+      total:logical.length,
+      owned:owned.length,
+      pct:logical.length?owned.length/logical.length*100:0,
+      playsets:logical.filter(g=>logicalQty(g.card)>=playsetTarget(g.card)).length,
+      value
+    };
   });
   const q=norm(f.query);
   if(q)list=list.filter(p=>norm([packLabel(p),p.name,p.code].join(" ")).includes(q));
