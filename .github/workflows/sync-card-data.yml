@@ -4,6 +4,9 @@ on:
   schedule:
     - cron: "17 */12 * * *"
   workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/sync-card-data.yml"
 
 permissions:
   contents: write
@@ -47,7 +50,23 @@ jobs:
               if(Array.isArray(c.languages)&&c.languages.length&&!c.languages.some(x=>/^English$/i.test(String(x))))continue;
               seen.add(id);
               const m=id.toUpperCase().match(/^(OP|EB|ST|PRB)(\d{2})-/);
-              cards.push({...c,id,set:m?normalizeSetCode(m[1]+m[2]):setCode,set_name:setName,rarity:c.rarity==="L"?"Leader":c.rarity,category:c.cardClass==="LEADER"?"Leader":c.cardClass==="EVENT"?"Event":c.cardClass==="STAGE"?"Stage":c.cardClass==="DON"?"Don":"Character",colors:c.color||[],attributes:c.attribute||[],types:c.feature||[],image:c.imageUrl||""});
+              const originSet=m?normalizeSetCode(m[1]+m[2]):setCode;
+              const printName=String(c.card_set||setName||setCode).trim();
+              cards.push({
+                ...c,
+                id,
+                set:setCode,
+                source_set:setCode,
+                origin_set:originSet,
+                set_name:printName,
+                pack_name:setName,
+                rarity:c.rarity==="L"?"Leader":c.rarity,
+                category:c.cardClass==="LEADER"?"Leader":c.cardClass==="EVENT"?"Event":c.cardClass==="STAGE"?"Stage":c.cardClass==="DON"?"Don":"Character",
+                colors:c.color||[],
+                attributes:c.attribute||[],
+                types:c.feature||[],
+                image:c.imageUrl||""
+              });
             }
           }
           if(cards.length<4500)throw new Error("optcgjson catalog unexpectedly small: "+cards.length);
