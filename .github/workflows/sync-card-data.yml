@@ -7,14 +7,9 @@ on:
   push:
     paths:
       - ".github/workflows/sync-card-data.yml"
-      - "scripts/augment-limitless-prints.mjs"
 
 permissions:
   contents: write
-
-concurrency:
-  group: onepiece-card-catalog-sync
-  cancel-in-progress: true
 
 jobs:
   sync:
@@ -126,9 +121,6 @@ jobs:
           fs.writeFileSync("data/packs.json",JSON.stringify(packs,null,2)+"\n");
           fs.writeFileSync("data/catalog-meta.json",JSON.stringify({updatedAt:new Date().toISOString(),cardCount:cards.length,packCount:packs.length,source:"hugoprudente/optcgjson"},null,2)+"\n");
           NODE
-
-      - name: Augment exact promotional printings
-        run: node scripts/augment-limitless-prints.mjs
 
       - name: Commit catalog changes
         run: |

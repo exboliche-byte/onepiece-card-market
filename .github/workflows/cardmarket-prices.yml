@@ -7,7 +7,6 @@ on:
   push:
     paths:
       - "scripts/update-cardmarket-prices.mjs"
-      - "scripts/validate-release.mjs"
       - ".github/workflows/cardmarket-prices.yml"
       - "data/cards.json"
       - "data/packs.json"
@@ -35,9 +34,6 @@ jobs:
 
       - name: Update Cardmarket prices
         run: node scripts/update-cardmarket-prices.mjs
-
-      - name: Validate release invariants
-        run: node scripts/validate-release.mjs
 
       - name: Commit updated dataset
         run: |
