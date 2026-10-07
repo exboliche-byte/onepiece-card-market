@@ -60,8 +60,11 @@ function cardImg(c,cls="cardimg"){
   const canonicalAsia="https://asia-en.onepiece-cardgame.com/images/cardlist/card/"+encodeURIComponent(id)+".png";
   const proxyEn="https://images.weserv.nl/?url="+encodeURIComponent(canonicalEn.replace("https://",""));
   const competitive=cls.includes("competitive-");
-  const loading=(cls.includes("detail")||competitive)?"eager":"lazy";
-  const priority=(cls.includes("detail")||competitive)?' fetchpriority="high"':"";
+  // Native lazy-loading was deferring images inside several grid/scroll views
+  // until hover or other interaction. Each view already limits rendered cards,
+  // so eagerly load the images that are actually present in the DOM.
+  const loading="eager";
+  const priority=(cls.includes("detail")||competitive)?' fetchpriority="high"':' fetchpriority="auto"';
   return '<img class="'+cls+'" loading="'+loading+'" decoding="async"'+priority+' src="'+esc(cdn)+'" alt="'+esc(c.name||c.id)+'" data-image-official="'+esc(official)+'" data-image-en="'+esc(canonicalEn)+'" data-image-asia="'+esc(canonicalAsia)+'" data-image-proxy="'+esc(proxyEn)+'" onerror="const s=Number(this.dataset.imageStep||0)+1;this.dataset.imageStep=String(s);if(s===1&&this.dataset.imageOfficial&&this.src!==this.dataset.imageOfficial){this.src=this.dataset.imageOfficial}else if(s<=2){this.src=this.dataset.imageEn}else if(s===3){this.src=this.dataset.imageAsia}else if(s===4){this.src=this.dataset.imageProxy}else{this.style.visibility=\'hidden\'}">';
 }
 function deckOwnedImg(c,have,required){
