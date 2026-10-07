@@ -591,7 +591,12 @@ async function renderCatalogResults(){
   const mode="versiones agrupadas",active=catalogActiveFilterCount();
   host.innerHTML='<div class="grid">'+visible.map(g=>state.catalog.grouped?groupedTile(g):cardTile(g.card)).join("")+'</div>'+pagination(data.length,state.catalog.page,"catalog");
   bindResultEvents(host);
-  if(state.catalog.sort!=="price")ensurePrices(visible.flatMap(g=>g.versions||[g.card]).map(c=>c.id));
+  if(state.catalog.sort!=="price"){
+    const hadPrices=Object.keys(state.prices||{}).length>0;
+    ensurePrices(visible.flatMap(g=>g.versions||[g.card]).map(c=>c.id)).then(()=>{
+      if(!hadPrices&&state.tab==="catalog"&&!state.detail)renderCatalogResults();
+    }).catch(()=>{});
+  }
 }
 function catalogView(){
   return '<div class="wrap"><div class="hero"><div><h1>Catálogo</h1><p>Todas las cartas disponibles. Busca por nombre, ID o expansión; usa FILTRO para acotar resultados.</p></div></div><div id="liveCollectionCount" class="notice">Mi colección: '+collectionStats().distinct.toLocaleString("es-ES")+' cartas · '+collectionStats().copies.toLocaleString("es-ES")+' copias</div>'+catalogToolbar()+'<div id="catalogResults"></div></div>';
@@ -652,7 +657,12 @@ async function renderCollectionResults(){
   const start=(state.collection.page-1)*PAGE,visible=list.slice(start,start+PAGE),active=collectionActiveFilterCount();
   host.innerHTML='<div class="notice">'+list.length.toLocaleString("es-ES")+' cartas en tu colección · '+collectionStats().copies.toLocaleString("es-ES")+' copias totales.'+(active?' Filtros activos: '+active+'.':'')+'</div><div class="grid">'+visible.map(c=>cardTile(c)).join("")+'</div>'+pagination(list.length,state.collection.page,"collection");
   bindResultEvents(host);
-  if(state.collection.sort!=="price")ensurePrices(visible.map(c=>c.id)).catch(()=>{});
+  if(state.collection.sort!=="price"){
+    const hadPrices=Object.keys(state.prices||{}).length>0;
+    ensurePrices(visible.map(c=>c.id)).then(()=>{
+      if(!hadPrices&&state.tab==="collection"&&!state.detail)renderCollectionResults();
+    }).catch(()=>{});
+  }
 }
 function collectionView(){
   const s=collectionStats();
@@ -689,7 +699,12 @@ function renderAlbumResults(){
   const owned=groups.filter(g=>logicalQty(g.card)>0).length, none=groups.filter(g=>logicalQty(g.card)===0).length, missing=groups.filter(g=>logicalQty(g.card)>0&&logicalQty(g.card)<playsetTarget(g.card)).length;
   host.innerHTML='<div class="stats"><div class="stat"><b>'+groups.length+'</b><span>Cartas de '+esc(packLabel({code:state.album.set}))+'</span></div><div class="stat"><b>'+owned+'</b><span>Tengo</span></div><div class="stat"><b>'+none+'</b><span>No tengo</span></div><div class="stat"><b>'+missing+'</b><span>Me faltan copias</span></div></div><div class="grid">'+visible.map(g=>groupedTile(g)).join("")+'</div>'+pagination(groups.length,state.album.page,"album");
   bindResultEvents(host);
-  ensurePrices(visible.flatMap(g=>g.versions).map(c=>c.id));
+  {
+    const hadPrices=Object.keys(state.prices||{}).length>0;
+    ensurePrices(visible.flatMap(g=>g.versions).map(c=>c.id)).then(()=>{
+      if(!hadPrices&&state.tab==="album"&&state.album.set&&!state.detail)renderAlbumResults();
+    }).catch(()=>{});
+  }
 }
 function expansionStats(){
   return state.packs.slice().sort(comparePacks).map(p=>{const list=cardsForExpansion(p.code),owned=list.filter(c=>qty(c.id)>0),value=owned.reduce((s,c)=>s+qty(c.id)*(priceOf(c)??0),0),missingCost=list.reduce((s,c)=>s+Math.max(0,playsetTarget(c)-qty(c.id))*(priceOf(c)??0),0);return {...p,total:list.length,owned:owned.length,pct:list.length?owned.length/list.length*100:0,playsets:list.filter(c=>qty(c.id)>=playsetTarget(c)).length,value,missingCost}})
