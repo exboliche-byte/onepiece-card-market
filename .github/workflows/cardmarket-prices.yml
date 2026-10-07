@@ -52,3 +52,4 @@ jobs:
 # Keep the updater workflow active when its matching script changes.
 
 # Catalog-sync compatible exact-print pricing.
+# Refresh uses the merged catalog committed by sync.
