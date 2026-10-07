@@ -18,6 +18,7 @@
 <script>
 let SUPABASE_URL="";
 let SUPABASE_KEY="";
+const AUTH_RETURN_URL="https://onepiece-card-market.vercel.app/auth/confirm";
 const DATA="/data/";
 const PLAYSET=4;
 const LEADER_PLAYSET=1;
@@ -178,6 +179,20 @@ function prepareCatalog(raw,packs){
   for(const imported of Object.values(state.importedCards||{})){
     if(!imported?.id||byId.has(imported.id))continue;
     byId.set(imported.id,{...imported,syntheticImport:true});
+  }
+  for(const [ownedId,ownedQty] of Object.entries(state.owned||{})){
+    if(Number(ownedQty)<=0||byId.has(ownedId))continue;
+    const saved=state.importedCards?.[ownedId];
+    if(saved?.id){byId.set(ownedId,{...saved,id:ownedId,syntheticImport:true});continue}
+    const logical=baseId(ownedId);
+    const base=catalogCards.find(x=>norm(baseId(x.id))===norm(logical));
+    const kind=/_r\d+$/i.test(ownedId)?"reprint":/_(?:p|c)\d+$/i.test(ownedId)?"parallel":"base";
+    if(base){
+      byId.set(ownedId,{...base,id:ownedId,syntheticImport:true,importVariantId:ownedId,importVariantKind:kind,importResolvedCardId:base.id});
+    }else{
+      const setCode=String(logical).split("-")[0]||"";
+      byId.set(ownedId,{id:ownedId,number:logical,name:logical,set:setCode,set_name:setCode,rarity:"",category:"Character",colors:[],attributes:[],types:[],effect:"",trigger:null,image:"",syntheticImport:true,importVariantId:ownedId,importVariantKind:kind});
+    }
   }
   state.cards=[...byId.values()];
   const map=new Map();
@@ -1353,7 +1368,7 @@ async function registerUser(email,password){
   state.authBusy=true;state.authError="";renderShell();
   try{
     const sb=state.sb||await initSupabase();if(!sb)throw Error("No se pudo conectar con Supabase");
-    const r=await sb.auth.signUp({email,password,options:{emailRedirectTo:location.origin+"/"}});if(r.error)throw r.error;
+    const r=await sb.auth.signUp({email,password,options:{emailRedirectTo:AUTH_RETURN_URL}});if(r.error)throw r.error;
     if(r.data.session&&r.data.user){state.user=r.data.user;state.authError="";loadAccountLocal({migrateLegacy:true});await syncCloud();state.tab="decks";state.deckLibrary=true;notify("Cuenta creada y sesión iniciada")}
     else notify("Cuenta creada. Revisa tu email para confirmarla y después inicia sesión.");
   }catch(e){state.authError=authMessage(e);notify(state.authError)}
@@ -1421,6 +1436,7 @@ async function initSupabase(){
       state.authReady=true;state.authError="";renderShell();
       state.sb.auth.onAuthStateChange((event,session)=>setTimeout(async()=>{
         const previous=state.user?.id||null;state.user=session?.user||null;
+        if(state.user&&location.pathname.startsWith("/auth/"))history.replaceState(null,"","/");
         if(state.user){loadAccountLocal({migrateLegacy:true});await syncCloud()}
         else if(previous){state.deckId=null;state.deckLibrary=true;loadAccountLocal()}
         state.authReady=true;renderShell();
