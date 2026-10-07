@@ -517,7 +517,7 @@ function cmpPrice(a,b){
   return d*(state.catalog.dir==="desc"?-1:1);
 }
 let priceDatasetPromise=null;
-const PRICE_CACHE_VERSION=17;
+const PRICE_CACHE_VERSION=18;
 const MARKET_DATA_URL="/data/cardmarket-prices.json";
 function priceOf(c){
   const key=c?.id;
@@ -539,12 +539,8 @@ function priceOf(c){
     if(Number.isFinite(n)&&n>0)return n;
   }
 
-  // Never borrow a price from another printing of the same logical card.
-  // For imported synthetic prints, the CSV value is only a last-known fallback
-  // until an exact dynamic mapping exists.
-  const saved=state.importedCards?.[c?.id]||{};
-  const importedPrice=Number(c?.importUnitPrice??saved?.importUnitPrice);
-  if((c?.syntheticImport||c?.importVariantId)&&Number.isFinite(importedPrice)&&importedPrice>0)return importedPrice;
+  // Never borrow a price from another printing and never use CSV unit_price
+  // as the current market price. If the exact print cannot be priced, show —.
   return null;
 }
 function selectPrimaryMarketEntry(id,entry){
