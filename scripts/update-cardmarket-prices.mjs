@@ -3,7 +3,9 @@ import fs from "node:fs/promises";
 const PRODUCT_URL = "https://downloads.s3.cardmarket.com/productCatalog/productList/products_singles_18.json";
 const PRICE_URL = "https://downloads.s3.cardmarket.com/productCatalog/priceGuide/price_guide_18.json";
 const REQUEST_TIMEOUT = 120000;
-const MIN_COVERAGE = 0.90;
+// Exact-print sources intentionally prefer missing data over cross-print guesses.
+// Keep a floor that catches source outages while allowing conservative unmapped prints.
+const MIN_COVERAGE = 0.80;
 const REMOTE_ALLSETS_URL = "https://raw.githubusercontent.com/hugoprudente/optcgjson/main/output/AllSets.json";
 const OPASSETS_HISTORY_DIR_URL = "https://api.github.com/repos/ryscode/OPASSETS/contents/CM-Data/Final/PriceHistory?ref=main";
 const EXACT_PRINTMAP_URL = "https://raw.githubusercontent.com/michalkiral/optcg-data/main/data/prices/printmap.json";
