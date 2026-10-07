@@ -766,7 +766,7 @@ function collectionToolbar(){
   '<div class="row" style="margin-bottom:10px"><span class="hint">Aquí solo aparecen las cartas que tienes.</span><details class="io-details"><summary>Gestionar datos</summary><div class="inline-actions" style="margin-top:8px"><button class="secondary btn" id="exportCsv">Exportar CSV</button><button class="secondary btn" id="importCsv">Importar CSV</button><button class="danger btn" id="clearCollection">Borrar colección completa</button><input id="csvFile" type="file" class="fileinput" accept=".csv,text/csv"></div></details></div>';
 }
 
-async async function renderCollectionResults(){
+async function renderCollectionResults(){
   const host=$("#collectionResults");if(!host)return;
   // Never block the collection UI on the market-price feed. The cards must render
   // from the local/cloud collection even when prices are temporarily unavailable.
