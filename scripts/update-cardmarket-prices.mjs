@@ -347,11 +347,11 @@ function candidateScore(card, product, productVersions, primaryExpansionBySet) {
   return score;
 }
 
-function chooseProduct(card, productsBySetAndNumber, primaryExpansionBySet, productVersions) {
+function chooseProduct(card, productsBySetAndNumber, primaryExpansionBySet, productVersions, desiredVersion = localVersion(card.id)) {
   const base = baseId(card.id).toUpperCase();
   const cardCode = extractCardCode(base);
   const number = numberPart(base);
-  const desiredVersion = localVersion(card.id);
+  const requestedVersion = Number(desiredVersion) || 1;
 
   const pool = [];
   for (const product of productsBySetAndNumber) {
@@ -380,7 +380,7 @@ function chooseProduct(card, productsBySetAndNumber, primaryExpansionBySet, prod
   pool.sort((a, b) => b.score - a.score || Number(a.product.idProduct) - Number(b.product.idProduct));
   if (!pool.length) return null;
 
-  return pool.find(x => x.version === desiredVersion)?.product || pool[0].product;
+  return pool.find(x => x.version === requestedVersion)?.product || pool[0].product;
 }
 
 function buildProductIndex(products) {
@@ -584,13 +584,21 @@ async function main() {
   let priced = 0;
   let mapped = 0;
 
-  const cardByBaseId = new Map(cards.map(card => [baseId(card.id).toUpperCase(), card]));
+  const cardByBaseId = new Map();
+  for (const candidate of cards) {
+    const key = baseId(candidate.id).toUpperCase();
+    const exactBase = candidate.id.toUpperCase() === key;
+    const existing = cardByBaseId.get(key);
+    const existingIsExactBase = existing ? existing.id.toUpperCase() === key : false;
+    if (!existing || (exactBase && !existingIsExactBase)) cardByBaseId.set(key, candidate);
+  }
   for (const card of cards) {
     const isParallelVariant = Boolean(card.isParallel) || /_p\d+$/i.test(String(card.id));
     const marketCard = isParallelVariant ? (cardByBaseId.get(baseId(card.id).toUpperCase()) || card) : card;
     const exactCandidates = allProductsForCard(marketCard, products, languageMap.englishExpansionIdsBySet);
     const productPool = exactCandidates.length ? exactCandidates : products;
-    const product = chooseProduct(marketCard, productPool, primaryExpansionBySet, productVersions);
+    const desiredMarketVersion = localVersion(card.id);
+    const product = chooseProduct(marketCard, productPool, primaryExpansionBySet, productVersions, desiredMarketVersion);
     if (!product) {
       unmatched.push(card.id);
       const prior = oldCards[card.id] || {};
@@ -606,7 +614,7 @@ async function main() {
         cardmarketId: null,
         expansionId: null,
         expansion: String(CARDMARKET_SET_NAMES[sourceSetCode(marketCard)]?.[0] || marketCard.set_name || sourceSetCode(marketCard)),
-        version: localVersion(marketCard.id),
+        version: desiredMarketVersion,
         url: cardmarketCardUrl(marketCard),
         variantOf: isParallelVariant && marketCard.id !== card.id ? marketCard.id : null,
         launchPrice: priceNumber(prior.launchPrice),
@@ -672,7 +680,7 @@ async function main() {
       cardmarketId: Number(product.idProduct),
       expansionId: Number(product.idExpansion),
       expansion: String(languageMap.expansionNamesById?.get(Number(product.idExpansion)) || CARDMARKET_SET_NAMES[sourceSetCode(marketCard)]?.[0] || sourceSetCode(marketCard)),
-      version: localVersion(marketCard.id),
+      version: desiredMarketVersion,
       url: "https://www.cardmarket.com/es/OnePiece/Products?idProduct=" + encodeURIComponent(String(product.idProduct)),
       collections,
       launchPrice,

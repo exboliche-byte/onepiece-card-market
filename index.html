@@ -53,11 +53,9 @@ function isJapaneseCatalogCard(c){
   );
 }
 function card(id){return state.cards.find(c=>c.id===id)}
-function baseId(id){return safeId(id).replace(/_(?:p\\d+|r\\d+|c\\d+|jp\\d+)$/i,"")}
+function baseId(id){return safeId(id).replace(/_(?:p\d+|r\d+|c\d+|jp\d+)$/i,"")}
 function groupKey(c){
-  const variantBase=baseId(c.id);
-  const displayName=String(c.name||"").replace(/\s*\((?:parallel|alt(?:ernate)? art|alternate art)\)\s*$/i,"").trim();
-  return norm([variantBase,displayName,c.category,c.cost,c.power,c.counter,(c.colors||[]).join(","),(c.types||[]).join(","),c.effect,c.trigger].join("|"));
+  return norm(baseId(c?.id));
 }
 function uniqueSorted(arr){return [...new Set(arr.filter(v=>v!==null&&v!==undefined&&String(v)!==""))].sort((a,b)=>String(a).localeCompare(String(b),"es"))}
 function packSortKey(code){
