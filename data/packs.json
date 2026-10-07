@@ -1,356 +1,312 @@
 [
   {
     "code": "EB-01",
-    "name": "MEMORIAL COLLECTION",
-    "vegapullId": "569201",
+    "name": "EXTRA BOOSTER -Memorial Collection- [EB-01]",
     "cardCount": 80
   },
   {
     "code": "EB-02",
-    "name": "Anime 25th Collection",
-    "vegapullId": "569202",
+    "name": "EXTRA BOOSTER -Anime 25th collection- [EB-02]",
     "cardCount": 105
   },
   {
     "code": "EB-03",
-    "name": "ONE PIECE HEROINES EDITION",
-    "vegapullId": "569203",
+    "name": "EXTRA BOOSTER -ONE PIECE Heroines Edition- [EB-03]",
     "cardCount": 90
   },
   {
+    "code": "EB-04",
+    "name": "EXTRA BOOSTER -EGGHEAD CRISIS- [EB-04]",
+    "cardCount": 85
+  },
+  {
+    "code": "FAMILYDECKSET",
+    "name": "Family Deck Set",
+    "cardCount": 51
+  },
+  {
+    "code": "LIMITEDPRODUCTCARD",
+    "name": "Limited Product Card",
+    "cardCount": 192
+  },
+  {
     "code": "OP-01",
-    "name": "ROMANCE DAWN",
-    "vegapullId": "569101",
+    "name": "BOOSTER PACK -ROMANCE DAWN- [OP-01]",
     "cardCount": 154
   },
   {
     "code": "OP-02",
-    "name": "PARAMOUNT WAR",
-    "vegapullId": "569102",
+    "name": "BOOSTER PACK -Paramount War- [OP-02]",
     "cardCount": 154
   },
   {
     "code": "OP-03",
-    "name": "PILLARS OF STRENGTH",
-    "vegapullId": "569103",
+    "name": "BOOSTER PACK -Pillars of Strength- [OP-03]",
     "cardCount": 154
   },
   {
     "code": "OP-04",
-    "name": "KINGDOMS OF INTRIGUE",
-    "vegapullId": "569104",
+    "name": "BOOSTER PACK -Kingdoms of Intrigue- [OP-04]",
     "cardCount": 149
   },
   {
     "code": "OP-05",
-    "name": "AWAKENING OF THE NEW ERA",
-    "vegapullId": "569105",
+    "name": "BOOSTER PACK -Awakening of the New Era- [OP-05]",
     "cardCount": 154
   },
   {
     "code": "OP-06",
-    "name": "WINGS OF THE CAPTAIN",
-    "vegapullId": "569106",
-    "cardCount": 151
+    "name": "BOOSTER PACK -Wings of Captain- [OP-06]",
+    "cardCount": 150
   },
   {
     "code": "OP-07",
-    "name": "500 YEARS IN THE FUTURE",
-    "vegapullId": "569107",
-    "cardCount": 151
+    "name": "BOOSTER PACK -500 Years in the Future- [OP-07]",
+    "cardCount": 150
   },
   {
     "code": "OP-08",
-    "name": "TWO LEGENDS",
-    "vegapullId": "569108",
-    "cardCount": 151
+    "name": "BOOSTER PACK -Two Legends- [OP-08]",
+    "cardCount": 150
   },
   {
     "code": "OP-09",
-    "name": "EMPERORS IN THE NEW WORLD",
-    "vegapullId": "569109",
-    "cardCount": 159
+    "name": "BOOSTER PACK -Emperors in the New World- [OP-09]",
+    "cardCount": 158
   },
   {
     "code": "OP-10",
-    "name": "ROYAL BLOOD",
-    "vegapullId": "569110",
-    "cardCount": 151
+    "name": "BOOSTER PACK -Royal Blood- [OP-10]",
+    "cardCount": 150
   },
   {
     "code": "OP-11",
-    "name": "A FIST OF DIVINE SPEED",
-    "vegapullId": "569111",
-    "cardCount": 156
+    "name": "BOOSTER PACK -A Fist of Divine Speed- [OP-11]",
+    "cardCount": 155
   },
   {
     "code": "OP-12",
-    "name": "LEGACY OF THE MASTER",
-    "vegapullId": "569112",
-    "cardCount": 155
+    "name": "BOOSTER PACK -Legacy of the Master- [OP-12]",
+    "cardCount": 154
   },
   {
     "code": "OP-13",
-    "name": "CARRYING ON HIS WILL",
-    "vegapullId": "569113",
-    "cardCount": 175
-  },
-  {
-    "code": "OP-16",
-    "name": "THE TIME OF BATTLE",
-    "vegapullId": "569116",
-    "cardCount": 155
+    "name": "BOOSTER PACK -Carrying on His Will- [OP-13]",
+    "cardCount": 174
   },
   {
     "code": "OP14-EB04",
-    "name": "THE AZURE SEA’S SEVEN",
-    "vegapullId": "569114",
-    "cardCount": 199
+    "name": "BOOSTER PACK -The Azure Sea’s Seven- [OP-14]",
+    "cardCount": 156
   },
   {
     "code": "OP15-EB04",
-    "name": "BOOSTER PACK",
-    "vegapullId": "569115",
-    "cardCount": 196
+    "name": "BOOSTER PACK -Adventure on KAMI’s Island- [OP-15]",
+    "cardCount": 152
   },
   {
-    "code": "OTHER-PRODUCT-CARD",
-    "name": "Other Product Card",
-    "vegapullId": "569801",
-    "cardCount": 189
+    "code": "OP-16",
+    "name": "-THE TIME OF BATTLE- [OP-16]",
+    "cardCount": 155
+  },
+  {
+    "code": "OP-17",
+    "name": "BOOSTER PACK -The World's Strongest Warriors- [OP-17]",
+    "cardCount": 169
   },
   {
     "code": "PRB-01",
-    "name": "ONE PIECE CARD THE BEST",
-    "vegapullId": "569301",
+    "name": "PREMIUM BOOSTER -ONE PIECE CARD THE BEST- [PRB-01]",
     "cardCount": 319
   },
   {
     "code": "PRB-02",
-    "name": "ONE PIECE CARD THE BEST vol.2",
-    "vegapullId": "569302",
+    "name": "PREMIUM BOOSTER -ONE PIECE CARD THE BEST vol.2- [PRB-02]",
     "cardCount": 316
   },
   {
-    "code": "PROMOTION-CARD",
+    "code": "PROMOTIONCARD",
     "name": "Promotion card",
-    "vegapullId": "569901",
-    "cardCount": 467
+    "cardCount": 389
   },
   {
     "code": "ST-01",
-    "name": "Straw Hat Crew",
-    "vegapullId": "569001",
+    "name": "STARTER DECK -Straw Hat Crew- [ST-01]",
     "cardCount": 17
   },
   {
     "code": "ST-02",
-    "name": "Worst Generation",
-    "vegapullId": "569002",
+    "name": "STARTER DECK -Worst Generation- [ST-02]",
     "cardCount": 17
   },
   {
     "code": "ST-03",
-    "name": "The Seven Warlords of the Sea",
-    "vegapullId": "569003",
+    "name": "STARTER DECK -The Seven Warlords of the Sea- [ST-03]",
     "cardCount": 17
   },
   {
     "code": "ST-04",
-    "name": "Animal Kingdom Pirates",
-    "vegapullId": "569004",
+    "name": "STARTER DECK -Animal Kingdom Pirates- [ST-04]",
     "cardCount": 17
   },
   {
     "code": "ST-05",
-    "name": "ONE PIECE FILM edition",
-    "vegapullId": "569005",
+    "name": "STARTER DECK -ONE PIECE FILM edition- [ST-05]",
     "cardCount": 17
   },
   {
     "code": "ST-06",
-    "name": "Absolute Justice",
-    "vegapullId": "569006",
+    "name": "STARTER DECK -The Navy- [ST-06]",
     "cardCount": 17
   },
   {
     "code": "ST-07",
-    "name": "Big Mom Pirates",
-    "vegapullId": "569007",
+    "name": "STARTER DECK -Big Mom Pirates- [ST-07]",
     "cardCount": 17
   },
   {
     "code": "ST-08",
-    "name": "Monkey D. Luffy",
-    "vegapullId": "569008",
+    "name": "STARTER DECK -Side Monkey.D.Luffy- [ST-08]",
     "cardCount": 15
   },
   {
     "code": "ST-09",
-    "name": "Yamato",
-    "vegapullId": "569009",
+    "name": "STARTER DECK -Side Yamato- [ST-09]",
     "cardCount": 15
   },
   {
     "code": "ST-10",
-    "name": "The Three Captains",
-    "vegapullId": "569010",
+    "name": "ULTIMATE DECK -The Three Captains- [ST-10]",
     "cardCount": 19
   },
   {
     "code": "ST-11",
-    "name": "Uta",
-    "vegapullId": "569011",
+    "name": "STARTER DECK -Side Uta- [ST-11]",
     "cardCount": 15
   },
   {
     "code": "ST-12",
-    "name": "Zoro and Sanji",
-    "vegapullId": "569012",
+    "name": "STARTER DECK -Zoro & Sanji- [ST-12]",
     "cardCount": 17
   },
   {
     "code": "ST-13",
-    "name": "The Three Brothers",
-    "vegapullId": "569013",
+    "name": "ULTIMATE DECK -The Three Brothers Bond- [ST-13]",
     "cardCount": 35
   },
   {
     "code": "ST-14",
-    "name": "3D2Y",
-    "vegapullId": "569014",
+    "name": "STARTER DECK -3D2Y- [ST-14]",
     "cardCount": 17
   },
   {
     "code": "ST-15",
-    "name": "Red Edward.Newgate",
-    "vegapullId": "569015",
+    "name": "STARTER DECK -Red Edward.Newgate- [ST-15]",
     "cardCount": 15
   },
   {
     "code": "ST-16",
-    "name": "Green Uta",
-    "vegapullId": "569016",
+    "name": "STARTER DECK -Green Uta- [ST-16]",
     "cardCount": 15
   },
   {
     "code": "ST-17",
-    "name": "Blue Donquixote Doflamingo",
-    "vegapullId": "569017",
+    "name": "STARTER DECK -Blue Donquixote Doflamingo- [ST-17]",
     "cardCount": 15
   },
   {
     "code": "ST-18",
-    "name": "Purple Monkey.D.Luffy",
-    "vegapullId": "569018",
+    "name": "STARTER DECK -Purple Monkey.D.Luffy- [ST-18]",
     "cardCount": 15
   },
   {
     "code": "ST-19",
-    "name": "Black Smoker",
-    "vegapullId": "569019",
+    "name": "STARTER DECK -Black Smoker- [ST-19]",
     "cardCount": 15
   },
   {
     "code": "ST-20",
-    "name": "Yellow Charlotte Katakuri",
-    "vegapullId": "569020",
+    "name": "STARTER DECK -Yellow Charlotte Katakuri- [ST-20]",
     "cardCount": 15
   },
   {
     "code": "ST-21",
-    "name": "GEAR5",
-    "vegapullId": "569021",
+    "name": "STARTER DECK EX  -GEAR5- [ST-21]",
     "cardCount": 32
   },
   {
     "code": "ST-22",
-    "name": "Ace & Newgate",
-    "vegapullId": "569022",
+    "name": "STARTER DECK  -Ace & Newgate- [ST-22]",
     "cardCount": 31
   },
   {
     "code": "ST-23",
-    "name": "RED Shanks",
-    "vegapullId": "569023",
+    "name": "STARTER DECK  -Red Shanks- [ST-23]",
     "cardCount": 15
   },
   {
     "code": "ST-24",
-    "name": "GREEN Jewelry Bonney",
-    "vegapullId": "569024",
+    "name": "STARTER DECK  -Green Jewelry Bonney- [ST-24]",
     "cardCount": 15
   },
   {
     "code": "ST-25",
-    "name": "BLUE Buggy",
-    "vegapullId": "569025",
+    "name": "STARTER DECK  -Blue Buggy- [ST-25]",
     "cardCount": 15
   },
   {
     "code": "ST-26",
-    "name": "PURPLE/BLACK Monkey.D.Luffy",
-    "vegapullId": "569026",
+    "name": "STARTER DECK  -Purple/Black Monkey.D.Luffy- [ST-26]",
     "cardCount": 15
   },
   {
     "code": "ST-27",
-    "name": "BLACK Marshall.D.Teach",
-    "vegapullId": "569027",
+    "name": "STARTER DECK  -Black Marshall.D.Teach- [ST-27]",
     "cardCount": 15
   },
   {
     "code": "ST-28",
-    "name": "GREEN/YELLOW Yamato",
-    "vegapullId": "569028",
+    "name": "STARTER DECK  -Green/Yellow Yamato- [ST-28]",
     "cardCount": 15
   },
   {
     "code": "ST-29",
-    "name": "Egghead",
-    "vegapullId": "569029",
+    "name": "STARTER DECK  -EGGHEAD- [ST-29]",
     "cardCount": 31
   },
   {
     "code": "ST-30",
-    "name": "Luffy & Ace",
-    "vegapullId": "569030",
+    "name": "STARTER DECK EX -Luffy & Ace- [ST-30]",
     "cardCount": 34
   },
   {
     "code": "ST-31",
-    "name": "RED Monkey.D.Luffy",
-    "vegapullId": "569031",
+    "name": "STARTER DECK -Red Monkey.D.Luffy- [ST-31]",
     "cardCount": 15
   },
   {
     "code": "ST-32",
-    "name": "GREEN Roronoa Zoro",
-    "vegapullId": "569032",
+    "name": "STARTER DECK -Green Roronoa Zoro- [ST-32]",
     "cardCount": 15
   },
   {
     "code": "ST-33",
-    "name": "BLUE Kuzan",
-    "vegapullId": "569033",
+    "name": "STARTER DECK -Blue Kuzan- [ST-33]",
     "cardCount": 15
   },
   {
     "code": "ST-34",
-    "name": "PURPLE Charlotte Katakuri",
-    "vegapullId": "569034",
+    "name": "STARTER DECK -Purple Charlotte Katakuri- [ST-34]",
     "cardCount": 15
   },
   {
     "code": "ST-35",
-    "name": "RED/BLACK Sabo",
-    "vegapullId": "569035",
+    "name": "STARTER DECK -Red/Black Sabo- [ST-35]",
     "cardCount": 15
   },
   {
     "code": "ST-36",
-    "name": "YELLOW Eustass\"Captain\"Kid",
-    "vegapullId": "569036",
+    "name": "STARTER DECK -Yellow Eustass\"Captain\"Kid- [ST-36]",
     "cardCount": 15
   }
 ]
