@@ -12,7 +12,7 @@ async function fetchText(url){
     return await r.text();
   }finally{clearTimeout(timer)}
 }
-function decode(v){return String(v||"").replace(/&amp;/g,"&").replace(/&#39;/g,"'").replace(/&quot;/g,'"')}
+function decode(v){return String(v||"").replace(/&amp;/g,"&").replace(/&#0*39;/g,"'").replace(/&quot;/g,'"').replace(/&#x27;/gi,"'")}
 function titleOf(html,fallback){
   const h=String(html||"");
   const m=h.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i)||h.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
@@ -84,11 +84,21 @@ async function main(){
     if(!baseMap.has(base)||String(c?.id||"").toUpperCase()===base)baseMap.set(base,c);
   }
 
-  const added=[];
+  const added=[],updated=[];
+  const genericSetName=v=>/^(?:PROMOTION-?CARD|OTHER-?PRODUCT-?CARD|LIMITED-?PRODUCT-?CARD|PROMOTIONCARD)$/i.test(String(v||"").trim());
   for(const page of pages){
     for(const [id,image] of page.images){
       const key=id.toUpperCase();
-      if(byId.has(key))continue;
+      const existing=byId.get(key);
+      if(existing){
+        let changed=false;
+        if(image&&existing.image!==image){existing.image=image;existing.imageUrl=image;changed=true}
+        if(page.title&&(!existing.set_name||genericSetName(existing.set_name))){
+          existing.set_name=page.title;existing.pack_name=page.title;changed=true;
+        }
+        if(changed){existing.limitlessPrint=true;updated.push({id,set_name:existing.set_name})}
+        continue;
+      }
       const base=baseMap.get(baseId(id).toUpperCase());
       if(!base)continue;
       const copy={
@@ -112,9 +122,9 @@ async function main(){
   }
 
   cards.sort((a,b)=>String(a?.id||"").localeCompare(String(b?.id||""),"en",{numeric:true}));
-  if(added.length)await fs.writeFile(path,JSON.stringify(cards,null,2)+"\n","utf8");
+  if(added.length||updated.length)await fs.writeFile(path,JSON.stringify(cards,null,2)+"\n","utf8");
 
   const op13043=cards.filter(c=>/^OP13-043(?:_|$)/i.test(String(c?.id||""))).map(c=>({id:c.id,set_name:c.set_name,image:c.image}));
-  console.log(JSON.stringify({promoPages:pages.length,added:added.length,sampleAdded:added.slice(0,20),op13043}));
+  console.log(JSON.stringify({promoPages:pages.length,added:added.length,updated:updated.length,sampleAdded:added.slice(0,20),sampleUpdated:updated.slice(0,20),op13043}));
 }
 main().catch(error=>{console.error(error);process.exit(1)});
