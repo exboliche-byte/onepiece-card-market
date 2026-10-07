@@ -123,7 +123,8 @@ function catalogSetForMarketPrint(printSet,base){
   const exact=state.packs.find(p=>normalizePrintSet(p?.code)===wanted);
   if(exact)return exact.code;
   if(wanted==="P"){
-    const promo=state.packs.find(p=>expansionType(p?.code)==="PROMO"||/PROMO|PROMOTION/i.test(String(p?.code||"")+" "+String(p?.name||"")));
+    const promo=state.packs.find(p=>setCodeKey(p?.code)==="PROMOTIONCARD")
+      ||state.packs.find(p=>expansionType(p?.code)==="PROMO"||/PROMO|PROMOTION/i.test(String(p?.code||"")+" "+String(p?.name||"")));
     if(promo)return promo.code;
   }
   const m=wanted.match(/^(OP|EB|ST|PRB)(\d{2})$/);
@@ -190,6 +191,10 @@ function expansionFamilyKey(code){
   const s=setCodeKey(code);
   if(s==="OP14"||s==="OP-14"||s==="OP14-EB04")return "OP14";
   if(s==="OP15"||s==="OP-15"||s==="OP15-EB04")return "OP15";
+  // These upstream buckets are promotional product printings, not separate
+  // logical expansions. Group them in the Promos view while preserving the
+  // exact source_set on every card for identity/import/pricing.
+  if(["PROMOTIONCARD","PROMOTION-CARD","LIMITEDPRODUCTCARD","LIMITED-PRODUCT-CARD","OTHERPRODUCTCARD","OTHER-PRODUCT-CARD"].includes(s))return "PROMOTIONCARD";
   return s;
 }
 function sameExpansion(a,b){return expansionFamilyKey(a)===expansionFamilyKey(b)}
@@ -210,12 +215,15 @@ function expansionType(code){
   if(/^EB-?\\d+$/i.test(s)||/^OP\\d+-EB\\d+$/i.test(s))return "EB";
   if(/^ST-?\\d+$/i.test(s))return "ST";
   if(/^PRB-?\\d+$/i.test(s))return "PRB";
-  if(/^P(ROMO)?[-_]/i.test(s)||/PROMOTION/i.test(s))return "PROMO";
+  if(/^P(ROMO)?[-_]/i.test(s)||/PROMOTION/i.test(s)||/LIMITED.?PRODUCT.?CARD|OTHER.?PRODUCT.?CARD/i.test(s))return "PROMO";
   return "OTROS";
 }
 function expansionList(){
   const f=state.expansions;
-  let list=state.packs.map(p=>{
+  const canonicalPromoPack=state.packs.find(p=>setCodeKey(p?.code)==="PROMOTIONCARD")
+    ||state.packs.find(p=>expansionFamilyKey(p?.code)==="PROMOTIONCARD");
+  const visiblePacks=state.packs.filter(p=>expansionFamilyKey(p?.code)!=="PROMOTIONCARD"||p===canonicalPromoPack);
+  let list=visiblePacks.map(p=>{
     const cards=cardsForExpansion(p.code);
     // The expansion overview must use the same logical-card grouping as the
     // album view. Parallel/reprint versions are one card, not extra cards to
