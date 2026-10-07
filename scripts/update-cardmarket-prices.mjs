@@ -227,16 +227,15 @@ async function loadCardmarketExpansionLanguageMap() {
 
 function sourceSetCode(card) {
   const cardBase = baseId(card?.id);
-  if (/^P-\d{3}$/i.test(cardBase)) return "P";
   const rawSet = String(card?.source_set || card?.set || "").trim().toUpperCase();
-  // Some One Piece datasets encode EB-04/EB-05 cards as OP14-EB04 / OP15-EB04.
-  // Preserve that source-set identity instead of deriving it from the printed
-  // card number prefix (OP14 / OP15).
+  // Reprints of P-xxx cards can live in PRB/ST products. The source set from
+  // the upstream catalog is therefore more specific than the printed P code.
   if (/^OP\d{2}-EB\d{2}$/i.test(rawSet)) return rawSet;
   if (/^(EB|OP|ST|PRB)-?\d{2}$/i.test(rawSet)) {
     const m = rawSet.match(/^(EB|OP|ST|PRB)-?(\d{2})$/i);
     return m[1].toUpperCase() + "-" + m[2];
   }
+  if (/^P-\d{3}$/i.test(cardBase)) return "P";
   const code = extractCardCode(baseId(card?.id));
   if (!code) return rawSet;
   const prefix = code.split("-")[0];
@@ -316,6 +315,13 @@ function expansionMatches(setCode, expansionName, localSetName = "") {
     .map(norm)
     .filter(Boolean);
   if (wanted.includes(target)) return true;
+
+  const stripProductPrefix = value => norm(value)
+    .replace(/^(starter deck|ultra deck|ultimate deck|extra booster|booster pack|premium booster)\s+/, "")
+    .trim();
+  const compactTarget = stripProductPrefix(target);
+  if (compactTarget && wanted.some(value => stripProductPrefix(value) === compactTarget)) return true;
+
   if (setCode === "P") {
     return target.startsWith("promos: ")
       || target === "promos"
@@ -640,6 +646,13 @@ function candidateScore(card, product, productVersions, primaryExpansionBySet, e
   if (explicitVersion !== null) {
     if (wantedVersion === explicitVersion) score += 25;
     else score -= 15;
+  }
+
+  const inferredVersion = Number(productVersions?.get(String(product?.idProduct)));
+  if (Number.isFinite(inferredVersion) && inferredVersion > 0) {
+    const kind = variantKind(card);
+    if (kind === "parallel") score += inferredVersion > 1 ? 25 : -25;
+    else score += inferredVersion === 1 ? 25 : -20;
   }
 
   const guide = prices?.get(String(product?.idProduct));
@@ -986,7 +999,7 @@ async function main() {
       guide.SELL
     ) : null;
     const previousEur = priceNumber(prior.eur);
-    const eur = limitlessPrint?.eur ?? cardmarketEur ?? oracleEur ?? previousEur;
+    const eur = cardmarketEur ?? limitlessPrint?.eur ?? oracleEur ?? previousEur;
 
     mapped++;
     if (eur !== null) priced++;
@@ -1031,23 +1044,27 @@ async function main() {
       avg30: guide ? priceNumber(guide.avg30, guide.AVG30, guide["AVG30"]) : null,
       cardmarketId: product ? Number(product.idProduct) : null,
       expansionId: product ? Number(product.idExpansion) : null,
-      expansion: limitlessPrint?.expansion || String(languageMap.expansionNamesById?.get(Number(product?.idExpansion)) || CARDMARKET_SET_NAMES[sourceSetCode(card)]?.[0] || sourceSetCode(card)),
+      expansion: String(languageMap.expansionNamesById?.get(Number(product?.idExpansion)) || limitlessPrint?.expansion || CARDMARKET_SET_NAMES[sourceSetCode(card)]?.[0] || sourceSetCode(card)),
       printSet: currentPrintSet,
       variantKind: currentVariantKind,
-      version: limitlessPrint?.limitlessVersion ?? (product ? productVersion(product.name) ?? null : null),
-      url: limitlessPrint?.url || (exactPrintOracle?.urlsByPrint?.get(String(card.id))?.[0]
-        ? exactPrintOracle.urlsByPrint.get(String(card.id))[0].replace("/en/OnePiece/", "/es/OnePiece/")
-        : (product ? "https://www.cardmarket.com/es/OnePiece/Products?idProduct=" + encodeURIComponent(String(product.idProduct)) : cardmarketCardUrl(baseCard))),
+      version: product ? (productVersions?.get(String(product.idProduct)) ?? productVersion(product.name) ?? null) : (limitlessPrint?.limitlessVersion ?? null),
+      url: product
+        ? "https://www.cardmarket.com/es/OnePiece/Products?idProduct=" + encodeURIComponent(String(product.idProduct))
+        : (limitlessPrint?.url || (exactPrintOracle?.urlsByPrint?.get(String(card.id))?.[0]
+          ? exactPrintOracle.urlsByPrint.get(String(card.id))[0].replace("/en/OnePiece/", "/es/OnePiece/")
+          : cardmarketCardUrl(baseCard))),
       collections,
       launchPrice,
       launchPriceDate,
       variantOf: isVariant && baseCard.id !== card.id ? baseCard.id : null,
       stalePrice: limitlessPrint?.eur == null && cardmarketEur === null && oracleEur === null && previousEur !== null,
-      source: limitlessPrint?.eur != null || cardmarketEur !== null
+      source: cardmarketEur !== null
         ? "Cardmarket public English product catalog + daily price guide"
-        : oracleEur !== null
-          ? "Automatic exact-print market summary fallback"
-          : "Previous successful daily Cardmarket price retained",
+        : limitlessPrint?.eur != null
+          ? "Limitless/Cardmarket exact-print fallback"
+          : oracleEur !== null
+            ? "Automatic exact-print market summary fallback"
+            : "Previous successful daily Cardmarket price retained",
       sourceUrl: "https://www.cardmarket.com/es/OnePiece/Data"
     };
   }

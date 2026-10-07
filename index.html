@@ -324,7 +324,7 @@ function cmpPrice(a,b){
   return d*(state.catalog.dir==="desc"?-1:1);
 }
 let priceDatasetPromise=null;
-const PRICE_CACHE_VERSION=13;
+const PRICE_CACHE_VERSION=14;
 const MARKET_DATA_URL="/data/cardmarket-prices.json";
 function priceOf(c){
   const key=c?.id;
@@ -352,7 +352,7 @@ function priceOf(c){
     const matches=(base.collections||[]).filter(x=>normalizePrintSet(x?.setCode)===wantedSet);
     const exactVersion=Number(meta?.version);
     const match=(Number.isFinite(exactVersion)&&exactVersion>0
-      ?matches.find(x=>Number(x?.version)===exactVersion)
+      ?matches.find(x=>Number(x?.version)===exactVersion&&Number(x?.eur)>0)
       :null)||matches.find(x=>Number(x?.eur)>0);
     const n=Number(match?.eur);
     if(Number.isFinite(n)&&n>0)return n;
@@ -443,6 +443,19 @@ function priceMeta(c){
 function cardmarketUrl(c){
   const meta=priceMeta(c);
   const direct=String(meta?.url||"").trim();
+  const wantedSet=normalizePrintSet(printSetOf(c));
+  if(wantedSet){
+    const baseMeta=state.marketMeta?.[baseId(c?.id)]||state.marketMeta?.[norm(baseId(c?.id))]||{};
+    const matches=(baseMeta.collections||[]).filter(x=>normalizePrintSet(x?.setCode)===wantedSet);
+    const exactVersion=Number(meta?.version);
+    const edition=(Number.isFinite(exactVersion)&&exactVersion>0
+      ?matches.find(x=>Number(x?.version)===exactVersion&&/^https?:\/\//i.test(String(x?.url||"")))
+      :null)||matches.find(x=>/^https?:\/\//i.test(String(x?.url||"")));
+    const editionUrl=String(edition?.url||"").trim();
+    // A generic /Cards/ URL means the updater did not identify a sellable
+    // product for this print, so the exact collection product is preferable.
+    if(/^https?:\/\//i.test(editionUrl)&&(!/^https?:\/\//i.test(direct)||/\/Cards\//i.test(direct)))return editionUrl;
+  }
   if(/^https?:\/\//i.test(direct))return direct;
   const importedSet=normalizePrintSet(c?.importPrintSet);
   if(importedSet){
@@ -1133,6 +1146,17 @@ function csvPrintSetMatches(c,value){
   const wantedCode=printSetCodeFromText(raw)||normalizePrintSet(raw);
   const candidateCode=catalogPrintSetOf(c);
   if(wantedCode&&candidateCode&&wantedCode===candidateCode)return true;
+
+  // Some official catalog entries keep the printed card under its EB code while
+  // Cardmarket/CSV identifies the release as OP14/OP15. Accept any set code
+  // explicitly attached to this exact print by the live market dataset.
+  const meta=priceMeta(c);
+  const marketCodes=[
+    normalizePrintSet(meta?.printSet),
+    ...(meta?.collections||[]).map(x=>normalizePrintSet(x?.setCode))
+  ].filter(Boolean);
+  if(wantedCode&&marketCodes.includes(wantedCode))return true;
+
   const wantedName=csvSetNameKey(raw),candidateName=csvSetNameKey(c?.set_name);
   return wantedName.length>=5&&candidateName.includes(wantedName);
 }
