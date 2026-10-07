@@ -584,10 +584,13 @@ async function main() {
   let priced = 0;
   let mapped = 0;
 
+  const cardByBaseId = new Map(cards.map(card => [baseId(card.id).toUpperCase(), card]));
   for (const card of cards) {
-    const exactCandidates = allProductsForCard(card, products, languageMap.englishExpansionIdsBySet);
+    const isParallelVariant = Boolean(card.isParallel) || /_p\d+$/i.test(String(card.id));
+    const marketCard = isParallelVariant ? (cardByBaseId.get(baseId(card.id).toUpperCase()) || card) : card;
+    const exactCandidates = allProductsForCard(marketCard, products, languageMap.englishExpansionIdsBySet);
     const productPool = exactCandidates.length ? exactCandidates : products;
-    const product = chooseProduct(card, productPool, primaryExpansionBySet, productVersions);
+    const product = chooseProduct(marketCard, productPool, primaryExpansionBySet, productVersions);
     if (!product) {
       unmatched.push(card.id);
       const prior = oldCards[card.id] || {};
@@ -602,9 +605,10 @@ async function main() {
         avg30: null,
         cardmarketId: null,
         expansionId: null,
-        expansion: String(CARDMARKET_SET_NAMES[sourceSetCode(card)]?.[0] || card.set_name || sourceSetCode(card)),
-        version: localVersion(card.id),
-        url: cardmarketCardUrl(card),
+        expansion: String(CARDMARKET_SET_NAMES[sourceSetCode(marketCard)]?.[0] || marketCard.set_name || sourceSetCode(marketCard)),
+        version: localVersion(marketCard.id),
+        url: cardmarketCardUrl(marketCard),
+        variantOf: isParallelVariant && marketCard.id !== card.id ? marketCard.id : null,
         launchPrice: priceNumber(prior.launchPrice),
         launchPriceDate: prior.launchPriceDate || null,
         source: "Cardmarket public product catalog; fallback to card page when no exact product is published",
@@ -630,7 +634,7 @@ async function main() {
     const launchPrice = priceNumber(prior.launchPrice) ?? eur;
     const launchPriceDate = prior.launchPriceDate || (launchPrice !== null ? pricesRaw?.createdAt || new Date().toISOString() : null);
 
-    const collectionProducts = allCardmarketProductsForCard(card, products)
+    const collectionProducts = allCardmarketProductsForCard(marketCard, products)
       .sort((a,b) =>
         String(a?.expansionName||"").localeCompare(String(b?.expansionName||""),"en",{numeric:true}) ||
         String(a?.dateAdded||"").localeCompare(String(b?.dateAdded||"")) ||
@@ -667,12 +671,13 @@ async function main() {
       avg30: guide ? priceNumber(guide.avg30, guide.AVG30, guide["AVG30"]) : null,
       cardmarketId: Number(product.idProduct),
       expansionId: Number(product.idExpansion),
-      expansion: String(languageMap.expansionNamesById?.get(Number(product.idExpansion)) || CARDMARKET_SET_NAMES[sourceSetCode(card)]?.[0] || sourceSetCode(card)),
-      version: localVersion(card.id),
+      expansion: String(languageMap.expansionNamesById?.get(Number(product.idExpansion)) || CARDMARKET_SET_NAMES[sourceSetCode(marketCard)]?.[0] || sourceSetCode(marketCard)),
+      version: localVersion(marketCard.id),
       url: "https://www.cardmarket.com/es/OnePiece/Products?idProduct=" + encodeURIComponent(String(product.idProduct)),
       collections,
       launchPrice,
       launchPriceDate,
+      variantOf: isParallelVariant && marketCard.id !== card.id ? marketCard.id : null,
       source: "Cardmarket public English product catalog + daily price guide",
       sourceUrl: "https://www.cardmarket.com/es/OnePiece/Data"
     };

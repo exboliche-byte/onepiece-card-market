@@ -53,9 +53,11 @@ function isJapaneseCatalogCard(c){
   );
 }
 function card(id){return state.cards.find(c=>c.id===id)}
-function baseId(id){return safeId(id).replace(/_(?:p\\d+|r\\d+)$/i,"")}
+function baseId(id){return safeId(id).replace(/_(?:p\\d+|r\\d+|c\\d+|jp\\d+)$/i,"")}
 function groupKey(c){
-  return norm([c.name,c.category,c.cost,c.power,c.counter,(c.colors||[]).join(","),(c.types||[]).join(","),c.effect,c.trigger].join("|"));
+  const variantBase=baseId(c.id);
+  const displayName=String(c.name||"").replace(/\s*\((?:parallel|alt(?:ernate)? art|alternate art)\)\s*$/i,"").trim();
+  return norm([variantBase,displayName,c.category,c.cost,c.power,c.counter,(c.colors||[]).join(","),(c.types||[]).join(","),c.effect,c.trigger].join("|"));
 }
 function uniqueSorted(arr){return [...new Set(arr.filter(v=>v!==null&&v!==undefined&&String(v)!==""))].sort((a,b)=>String(a).localeCompare(String(b),"es"))}
 function packSortKey(code){
@@ -248,7 +250,7 @@ function cmpPrice(a,b){
   return d*(state.catalog.dir==="desc"?-1:1);
 }
 let priceDatasetPromise=null;
-const PRICE_CACHE_VERSION=8;
+const PRICE_CACHE_VERSION=9;
 const MARKET_DATA_URL="/data/cardmarket-prices.json";
 function priceOf(c){const raw=state.prices[c?.id]??state.prices[norm(c?.id)];const n=Number(raw);return Number.isFinite(n)?n:null}
 function mergePriceDataset(d){
@@ -323,6 +325,14 @@ function cardmarketUrl(c){
   const meta=priceMeta(c);
   const direct=String(meta?.url||"").trim();
   if(/^https?:\/\//i.test(direct))return direct;
+  const base=card(baseId(c?.id));
+  if(base&&base.id!==c.id){
+    const baseMeta=priceMeta(base);
+    const baseDirect=String(baseMeta?.url||"").trim();
+    if(/^https?:\/\//i.test(baseDirect))return baseDirect;
+    const baseIdProduct=String(baseMeta?.cardmarketId||"").trim();
+    if(baseIdProduct)return "https://www.cardmarket.com/es/OnePiece/Products?idProduct="+encodeURIComponent(baseIdProduct);
+  }
   const id=String(meta?.cardmarketId||"").trim();
   if(id)return "https://www.cardmarket.com/es/OnePiece/Products?idProduct="+encodeURIComponent(id);
   return "";
