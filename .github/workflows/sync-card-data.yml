@@ -128,4 +128,6 @@ jobs:
           git add data/cards.json data/packs.json data/catalog-meta.json
           if git diff --cached --quiet; then echo "Catalog unchanged"; exit 0; fi
           git commit -m "chore: sync One Piece card catalog"
+          git fetch origin main
+          git rebase origin/main
           git push
