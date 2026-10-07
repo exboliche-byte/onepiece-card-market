@@ -77,9 +77,23 @@ function comparePacks(a,b){
 function setName(code){return state.packs.find(p=>p.code===code)?.name||code}
 function packLabel(p){
   const code=String(p?.code||"");
-  if(/^OP14-EB04$/i.test(code))return "EB-04";
-  if(/^OP15-EB04$/i.test(code))return "EB-05";
+  if(/^OP14-EB04$/i.test(code))return "OP14";
+  if(/^OP15-EB04$/i.test(code))return "OP15";
   return code;
+}
+function expansionFamilyKey(code){
+  const s=setCodeKey(code);
+  if(s==="OP14"||s==="OP-14"||s==="OP14-EB04")return "OP14";
+  if(s==="OP15"||s==="OP-15"||s==="OP15-EB04")return "OP15";
+  return s;
+}
+function sameExpansion(a,b){return expansionFamilyKey(a)===expansionFamilyKey(b)}
+function cardsForExpansion(code){
+  const family=expansionFamilyKey(code);
+  return state.cards.filter(c=>{
+    const idFamily=String(c?.id||"").toUpperCase().match(/^(OP14|OP15)-/i)?.[1];
+    return (idFamily||expansionFamilyKey(c?.set))===family;
+  });
 }
 function expansionType(code){
   const s=String(code||"").toUpperCase();
@@ -93,7 +107,7 @@ function expansionType(code){
 function expansionList(){
   const f=state.expansions;
   let list=state.packs.map(p=>{
-    const cards=state.cards.filter(c=>c.set===p.code);
+    const cards=cardsForExpansion(p.code);
     const owned=cards.filter(c=>qty(c.id)>0);
     const value=owned.reduce((sum,c)=>sum+qty(c.id)*(priceOf(c)??0),0);
     return {...p,total:cards.length,owned:owned.length,pct:cards.length?owned.length/cards.length*100:0,playsets:cards.filter(c=>qty(c.id)>=PLAYSET).length,value};
@@ -173,10 +187,10 @@ function filteredCards(mode){
   const f=state[mode];
   let list=mode==="collection"
     ?state.cards.filter(c=>qty(c.id)>0)
-    :mode==="album"&&f.set?state.cards.filter(c=>setCodesEqual(c.set,f.set)):state.cards;
+    :mode==="album"&&f.set?cardsForExpansion(f.set):state.cards;
   const q=norm(f.query||state.query||"");
   if(q)list=list.filter(c=>searchMatchesCard(c,q));
-  if(mode==="catalog"&&f.set&&f.set!=="Todas")list=list.filter(c=>setCodesEqual(c.set,f.set));
+  if(mode==="catalog"&&f.set&&f.set!=="Todas")list=list.filter(c=>sameExpansion(c.set,f.set));
   if(f.category&&f.category!=="Todos")list=list.filter(c=>filterValueMatches(c.category,f.category));
   if(f.color&&f.color!=="Todos")list=list.filter(c=>filterValueMatches(c.colors,f.color));
   if(f.rarity&&f.rarity!=="Todos")list=list.filter(c=>filterValueMatches(c.rarity,f.rarity));
@@ -193,7 +207,7 @@ function filteredCards(mode){
     if(f.ownership==="Me faltan")list=list.filter(c=>qty(c.id)<playsetTarget(c));
   }
   if(mode==="collection"){
-    if(f.set&&f.set!=="Todas")list=list.filter(c=>setCodesEqual(c.set,f.set));
+    if(f.set&&f.set!=="Todas")list=list.filter(c=>sameExpansion(c.set,f.set));
     if(f.quantity==="1")list=list.filter(c=>qty(c.id)===1);
     if(f.quantity==="2")list=list.filter(c=>qty(c.id)===2);
     if(f.quantity==="3")list=list.filter(c=>qty(c.id)===3);
@@ -226,13 +240,21 @@ function filteredCards(mode){
   });
   return list;
 }
-function groupFiltered(){
-  const arr=filteredCards("catalog");
+function groupCardList(arr){
   state.catalog.grouped=true;
   if(!state.catalog.grouped)return arr.map(c=>({key:c.id,card:c,versions:[c],sets:[c.set]}));
   const by=new Map();
-  for(const c of arr){const k=groupKey(c);if(!by.has(k))by.set(k,{key:k,card:c,versions:[],sets:[]});const g=by.get(k);g.versions.push(c);if(!g.sets.includes(c.set))g.sets.push(c.set)}
-  const groups=[...by.values()];
+  for(const c of arr){
+    const k=groupKey(c);
+    if(!by.has(k))by.set(k,{key:k,card:c,versions:[],sets:[]});
+    const g=by.get(k);
+    g.versions.push(c);
+    if(!g.sets.includes(c.set))g.sets.push(c.set);
+  }
+  return [...by.values()];
+}
+function groupFiltered(){
+  const groups=groupCardList(filteredCards("catalog"));
   if(state.catalog.sort==="price"){
     const groupPrice=g=>{
       const ps=g.versions.map(priceOf).filter(v=>v!==null);
@@ -352,10 +374,11 @@ function cardTile(c,extra=""){
 }
 function groupedTile(g){
   const c=g.card,q=g.versions.reduce((s,x)=>s+qty(x.id),0);
+  const albumMissing=state.tab==="album"&&!g.versions.some(v=>qty(v.id)>0);
   const versionPrices=g.versions.map(priceOf).filter(v=>v!==null);
   const minPrice=versionPrices.length?Math.min(...versionPrices):null;
   const maxPrice=versionPrices.length?Math.max(...versionPrices):null;
-  return '<article class="card">'+(q?'<span class="tag">×'+q+' total</span>':'<span class="tag missing">Falta</span>')+
+  return '<article class="card '+(albumMissing?"missing-card":"")+'">'+(q?'<span class="tag">×'+q+' total</span>':'<span class="tag missing">Falta</span>')+
     '<button class="linkbtn" data-detail="'+esc(c.id)+'" style="display:block;width:100%;padding:0">'+cardImg(c,"cardimg catalogthumb")+'</button>'+
     '<div class="cardbody"><div class="name">'+esc(c.name)+'</div><div class="small">'+esc(c.id)+'</div><div class="small">'+esc(c.category||"")+' · '+g.versions.length+' versión(es)</div>'+
     '<div class="chips">'+g.sets.slice(0,5).map(x=>'<span class="chip">'+esc(x)+'</span>').join("")+(g.sets.length>5?'<span class="chip">+'+(g.sets.length-5)+'</span>':"")+'</div>'+
@@ -525,15 +548,15 @@ function albumView(){
 }
 function renderAlbumResults(){
   const host=$("#albumResults");if(!host)return;
-  const list=filteredCards("album"),pages=Math.max(1,Math.ceil(list.length/PAGE));state.album.page=Math.min(state.album.page,pages);
-  const start=(state.album.page-1)*PAGE,visible=list.slice(start,start+PAGE);
+  const list=filteredCards("album"),groups=groupCardList(list),pages=Math.max(1,Math.ceil(groups.length/PAGE));state.album.page=Math.min(state.album.page,pages);
+  const start=(state.album.page-1)*PAGE,visible=groups.slice(start,start+PAGE);
   const owned=list.filter(c=>qty(c.id)>0).length, none=list.filter(c=>qty(c.id)===0).length, missing=list.filter(c=>qty(c.id)>0&&qty(c.id)<playsetTarget(c)).length;
-  host.innerHTML='<div class="stats"><div class="stat"><b>'+list.length+'</b><span>Cartas de '+esc(state.album.set)+'</span></div><div class="stat"><b>'+owned+'</b><span>Tengo</span></div><div class="stat"><b>'+none+'</b><span>No tengo</span></div><div class="stat"><b>'+missing+'</b><span>Me faltan copias</span></div></div><div class="grid">'+visible.map(c=>cardTile(c)).join("")+'</div>'+pagination(list.length,state.album.page,"album");
+  host.innerHTML='<div class="stats"><div class="stat"><b>'+groups.length+'</b><span>Cartas de '+esc(packLabel({code:state.album.set}))+'</span></div><div class="stat"><b>'+owned+'</b><span>Tengo</span></div><div class="stat"><b>'+none+'</b><span>No tengo</span></div><div class="stat"><b>'+missing+'</b><span>Me faltan copias</span></div></div><div class="grid">'+visible.map(g=>groupedTile(g)).join("")+'</div>'+pagination(groups.length,state.album.page,"album");
   bindResultEvents(host);
-  ensurePrices(visible.map(c=>c.id));
+  ensurePrices(visible.flatMap(g=>g.versions).map(c=>c.id));
 }
 function expansionStats(){
-  return state.packs.slice().sort(comparePacks).map(p=>{const list=state.cards.filter(c=>c.set===p.code),owned=list.filter(c=>qty(c.id)>0),value=owned.reduce((s,c)=>s+qty(c.id)*(priceOf(c)??0),0),missingCost=list.reduce((s,c)=>s+Math.max(0,playsetTarget(c)-qty(c.id))*(priceOf(c)??0),0);return {...p,total:list.length,owned:owned.length,pct:list.length?owned.length/list.length*100:0,playsets:list.filter(c=>qty(c.id)>=playsetTarget(c)).length,value,missingCost}})
+  return state.packs.slice().sort(comparePacks).map(p=>{const list=cardsForExpansion(p.code),owned=list.filter(c=>qty(c.id)>0),value=owned.reduce((s,c)=>s+qty(c.id)*(priceOf(c)??0),0),missingCost=list.reduce((s,c)=>s+Math.max(0,playsetTarget(c)-qty(c.id))*(priceOf(c)??0),0);return {...p,total:list.length,owned:owned.length,pct:list.length?owned.length/list.length*100:0,playsets:list.filter(c=>qty(c.id)>=playsetTarget(c)).length,value,missingCost}})
 }
 function homeView(){
   const s=collectionStats(), ex=expansionStats().slice(0,6);
