@@ -26,6 +26,8 @@ const CARDMARKET_SET_NAMES = {
   "OP14-EB04": ["The Azure Sea's Seven", "The Azure Sea’s Seven"],
   "OP15-EB04": ["Adventure on Kamis Island", "Adventure on Kami's Island", "Adventure on Kami’s Island"],
   "OP-16": ["The Time of Battle"],
+  "OP-17": ["The World's Strongest Warriors", "The World’s Strongest Warriors"],
+  "OP-18": ["The Dominance of God"],
   "EB-01": ["Memorial Collection"],
   "EB-02": ["Anime 25th Collection"],
   "EB-03": ["One Piece Heroines Edition"],
@@ -138,7 +140,7 @@ function isJapaneseCard(card) {
   return isJapaneseExpansion(card?.id) || isJapaneseExpansion(card?.set) || isJapaneseExpansion(card?.set_name);
 }
 
-function isEnglishProduct(product, japaneseExpansionIds = null) {
+function isEnglishProduct(product = null) {
   if (isJapaneseExpansion(product?.expansionName) || isJapaneseExpansion(product?.name)) return false;
   if (japaneseExpansionIds && japaneseExpansionIds.has(Number(product?.idExpansion))) return false;
   return true;
@@ -157,8 +159,17 @@ function collectJapaneseExpansionIds(products) {
 }
 
 function sourceSetCode(card) {
+  const rawSet = String(card?.set || "").trim().toUpperCase();
+  // Some One Piece datasets encode EB-04/EB-05 cards as OP14-EB04 / OP15-EB04.
+  // Preserve that source-set identity instead of deriving it from the printed
+  // card number prefix (OP14 / OP15).
+  if (/^OP\d{2}-EB\d{2}$/i.test(rawSet)) return rawSet;
+  if (/^(EB|OP|ST|PRB)-?\d{2}$/i.test(rawSet)) {
+    const m = rawSet.match(/^(EB|OP|ST|PRB)-?(\d{2})$/i);
+    return m[1].toUpperCase() + "-" + m[2];
+  }
   const code = extractCardCode(baseId(card?.id));
-  if (!code) return String(card?.set || "").toUpperCase();
+  if (!code) return rawSet;
   const prefix = code.split("-")[0];
   const m = prefix.match(/^(OP|EB|ST|PRB)(\d{2})$/i);
   return m ? m[1].toUpperCase() + "-" + m[2] : prefix.toUpperCase();
@@ -333,33 +344,38 @@ function buildProductIndex(products) {
   return groups;
 }
 
-function allProductsForCard(card, products, primaryExpansionBySet, japaneseExpansionIds) {
-  const out = [];
+function allProductsForCard(card, products) {
+  const exact = [];
+  const fallback = [];
   const base = baseId(card.id).toUpperCase();
   const code = extractCardCode(base);
   const number = numberPart(base);
-  const sourceSet = sourceSetCode(card);
-  const primaryExpansionId = primaryExpansionBySet.get(sourceSet);
 
   for (const product of products) {
-    if (!product?.idProduct || !isEnglishProduct(product, japaneseExpansionIds)) continue;
+    if (!product?.idProduct || !isEnglishProduct(product)) continue;
     const pCode = extractCardCode(product.name);
     if (pCode && code) {
       if (pCode !== code) continue;
     } else {
-      if (number) {
-        const pNumber = String(product.number ?? "").trim().replace(/^0+/, "");
-        if (pNumber !== number.replace(/^0+/, "")) continue;
-      } else {
-        continue;
-      }
+      if (!number) continue;
+      const pNumber = String(product.number ?? "").trim().replace(/^0+/, "");
+      if (pNumber !== number.replace(/^0+/, "")) continue;
     }
-    if (primaryExpansionId && Number(product.idExpansion) !== Number(primaryExpansionId)) continue;
-    if (cardNameMatches(card, product) <= 0 && !pCode) continue;
-    out.push(product);
+
+    const expansionOk = expansionMatches(
+      sourceSetCode(card),
+      product?.expansionName,
+      String(card?.set_name || "")
+    );
+    (expansionOk ? exact : fallback).push(product);
   }
-  return out;
+
+  // Prefer the product(s) in the exact Cardmarket expansion for this printing.
+  // Only fall back to broader matching when Cardmarket does not expose a
+  // recognizable expansion name for the source card.
+  return exact.length ? exact : fallback;
 }
+
 function normalizeCardCatalog(parsed) {
   const values = Array.isArray(parsed) ? parsed : Object.values(parsed || {});
   return values.map(card => ({
@@ -445,8 +461,7 @@ async function main() {
   const ids = new Set(normalized17.map(card => card.id));
   cards = cards.filter(card => !ids.has(card.id)).concat(normalized17).filter(card => !isJapaneseCard(card));
   const allProducts = readProducts(productsRaw);
-  const japaneseExpansionIds = collectJapaneseExpansionIds(allProducts);
-  const products = allProducts.filter(product => isEnglishProduct(product, japaneseExpansionIds));
+  const products = allProducts.filter(product => isEnglishProduct(product));
   const productVersions = buildProductVersionIndex(products);
   const prices = priceGuideIndex(readPrices(pricesRaw));
   if (!cards.length) throw new Error("Local card catalog is empty");
@@ -460,7 +475,7 @@ async function main() {
   let mapped = 0;
 
   for (const card of cards) {
-    const exactCandidates = allProductsForCard(card, products, primaryExpansionBySet, japaneseExpansionIds);
+    const exactCandidates = allProductsForCard(card, products, primaryExpansionBySet);
     const productPool = exactCandidates.length ? exactCandidates : products;
     const product = chooseProduct(card, productPool, primaryExpansionBySet, productVersions);
     if (!product) {
