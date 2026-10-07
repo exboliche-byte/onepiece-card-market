@@ -19,6 +19,7 @@ const SUPABASE_URL="https://zawzbdbdbcshljhlvgjx.supabase.co";
 const SUPABASE_KEY="sb_publishable_TGSNNhx2wvUGteg_pdPg_zkyVP4s-";
 const DATA="/data/";
 const PLAYSET=4;
+const LEADER_PLAYSET=1;
 const PAGE=60;
 const state={
   cards:[],packs:[],groups:[],groupByKey:new Map(),prices:{},priceDate:null,
@@ -47,6 +48,7 @@ function cardImg(c,cls="cardimg"){
   return '<img class="'+cls+'" loading="'+loading+'" decoding="async"'+priority+' src="'+esc(cdn)+'" alt="'+esc(c.name||c.id)+'" data-image-official="'+esc(official)+'" data-image-fallback="'+esc(fallback)+'" onerror="if(this.dataset.imageStep!==\'1\'){this.dataset.imageStep=\'1\';this.src=this.dataset.imageOfficial}else if(this.dataset.imageStep!==\'2\'){this.dataset.imageStep=\'2\';this.src=this.dataset.imageFallback}else{this.style.visibility=\'hidden\'}">';
 }
 function qty(id){return Number(state.owned[id]||0)}
+function playsetTarget(c){return c?.category==="Leader"?LEADER_PLAYSET:PLAYSET}
 function isJapaneseCatalogCard(c){
   return /(?:^|[-_ ])JP(?:$|[-_ ])|\bJAPANESE\b|NON-ENGLISH|ASIA REGION LEGAL/i.test(
     String(c?.id||"")+" "+String(c?.set||"")+" "+String(c?.set_name||"")
@@ -137,8 +139,8 @@ async function ensureCollectionPrices({refresh=false}={}){
 function collectionStats(){
   const distinct=Object.values(state.owned).filter(q=>Number(q)>0).length;
   const copies=Object.values(state.owned).reduce((a,b)=>a+Number(b||0),0);
-  const playsets=state.cards.filter(c=>qty(c.id)>=4).length;
-  const incomplete=state.cards.filter(c=>qty(c.id)>0&&qty(c.id)<4).length;
+  const playsets=state.cards.filter(c=>qty(c.id)>=playsetTarget(c)).length;
+  const incomplete=state.cards.filter(c=>qty(c.id)>0&&qty(c.id)<playsetTarget(c)).length;
   const distinctTotal=state.cards.length;
   const completePct=distinctTotal?distinct/distinctTotal*100:0;
   let value=0;
@@ -188,16 +190,16 @@ function filteredCards(mode){
     if(f.minPrice!=="")list=list.filter(c=>{const p=priceOf(c);return p!==null&&p>=Number(f.minPrice)});
     if(f.maxPrice!=="")list=list.filter(c=>{const p=priceOf(c);return p!==null&&p<=Number(f.maxPrice)});
     if(f.ownership==="Tengo")list=list.filter(c=>qty(c.id)>0);
-    if(f.ownership==="Me faltan")list=list.filter(c=>qty(c.id)<PLAYSET);
+    if(f.ownership==="Me faltan")list=list.filter(c=>qty(c.id)<playsetTarget(c));
   }
   if(mode==="collection"){
     if(f.set&&f.set!=="Todas")list=list.filter(c=>setCodesEqual(c.set,f.set));
     if(f.quantity==="1")list=list.filter(c=>qty(c.id)===1);
     if(f.quantity==="2")list=list.filter(c=>qty(c.id)===2);
     if(f.quantity==="3")list=list.filter(c=>qty(c.id)===3);
-    if(f.quantity==="4+")list=list.filter(c=>qty(c.id)>=4);
-    if(f.playset==="Completo")list=list.filter(c=>qty(c.id)>=4);
-    if(f.playset==="Incompleto")list=list.filter(c=>qty(c.id)>0&&qty(c.id)<4);
+    if(f.quantity==="4+")list=list.filter(c=>qty(c.id)>=playsetTarget(c));
+    if(f.playset==="Completo")list=list.filter(c=>qty(c.id)>=playsetTarget(c));
+    if(f.playset==="Incompleto")list=list.filter(c=>qty(c.id)>0&&qty(c.id)<playsetTarget(c));
   }
   if(mode==="album")list=list.filter(c=>qty(c.id)>0);
   if(mode==="album"&&f.ownership==="Me faltan")list=list.filter(c=>qty(c.id)<PLAYSET);
@@ -337,11 +339,11 @@ function cardmarketUrl(c){
 }
 function cardTile(c,extra=""){
   const q=qty(c.id);const p=priceOf(c);
-  return '<article class="card">'+(q?'<span class="tag">×'+q+'</span>':'<span class="tag missing">0/4</span>')+
+  return '<article class="card">'+(q?'<span class="tag">×'+q+'</span>':'<span class="tag missing">0/'+playsetTarget(c)+'</span>')+
     '<button class="linkbtn" data-detail="'+esc(c.id)+'" style="display:block;width:100%;padding:0">'+cardImg(c,"cardimg catalogthumb")+'</button>'+
     '<div class="cardbody"><div class="name">'+esc(c.name)+'</div><div class="small">'+esc(c.id)+' · '+esc(c.set)+' · '+esc(c.rarity||"—")+'</div>'+
     '<div class="chips">'+(c.colors||[]).map(x=>'<span class="chip">'+esc(x)+'</span>').join("")+'</div>'+
-    '<div class="row"><span>'+ (p!==null?money(p):"Precio —")+'</span><span class="small">'+q+'/4</span></div>'+
+    '<div class="row"><span>'+ (p!==null?money(p):"Precio —")+'</span><span class="small">'+q+'/'+playsetTarget(c)+'</span></div>'+
     '<div class="quick"><button class="secondary" data-qty="'+esc(c.id)+'" data-d="-1">−</button><div class="qty">'+q+'</div><button class="primary" data-qty="'+esc(c.id)+'" data-d="1">+</button></div>'+
     extra+'</div></article>';
 }
@@ -472,7 +474,7 @@ function collectionToolbar(){
     '</div>'+
     '<button class="secondary btn filter-toggle" id="collectionFilterToggle" type="button" aria-expanded="'+(f.filtersOpen?"true":"false")+'">🔽 FILTRO'+(n?' ('+n+')':'')+'</button>'+
   '</div>'+collectionFilterPanel()+
-  '<div class="row" style="margin-bottom:10px"><span class="hint">Aquí solo aparecen las cartas que tienes.</span><details class="io-details"><summary>Gestionar datos</summary><div class="inline-actions" style="margin-top:8px"><button class="secondary btn" id="exportCsv">Exportar CSV</button><button class="secondary btn" id="importCsv">Importar CSV</button><input id="csvFile" type="file" class="fileinput" accept=".csv,text/csv"></div></details></div>';
+  '<div class="row" style="margin-bottom:10px"><span class="hint">Aquí solo aparecen las cartas que tienes.</span><details class="io-details"><summary>Gestionar datos</summary><div class="inline-actions" style="margin-top:8px"><button class="secondary btn" id="exportCsv">Exportar CSV</button><button class="secondary btn" id="importCsv">Importar CSV</button><button class="danger btn" id="clearCollection">Borrar colección completa</button><input id="csvFile" type="file" class="fileinput" accept=".csv,text/csv"></div></details></div>';
 }
 
 async function renderCollectionResults(){
@@ -522,13 +524,13 @@ function renderAlbumResults(){
   const host=$("#albumResults");if(!host)return;
   const list=filteredCards("album"),pages=Math.max(1,Math.ceil(list.length/PAGE));state.album.page=Math.min(state.album.page,pages);
   const start=(state.album.page-1)*PAGE,visible=list.slice(start,start+PAGE);
-  const owned=list.filter(c=>qty(c.id)>0).length, missing=list.filter(c=>qty(c.id)<4).length;
-  host.innerHTML='<div class="stats"><div class="stat"><b>'+list.length+'</b><span>Cartas de '+esc(state.album.set)+'</span></div><div class="stat"><b>'+owned+'</b><span>Cartas que tengo</span></div><div class="stat"><b>'+missing+'</b><span>Cartas a las que les faltan copias</span></div><div class="stat"><b>'+list.filter(c=>qty(c.id)>=4).length+'</b><span>Playsets completos</span></div></div><div class="grid">'+visible.map(c=>cardTile(c)).join("")+'</div>'+pagination(list.length,state.album.page,"album");
+  const owned=list.filter(c=>qty(c.id)>0).length, missing=list.filter(c=>qty(c.id)<playsetTarget(c)).length;
+  host.innerHTML='<div class="stats"><div class="stat"><b>'+list.length+'</b><span>Cartas de '+esc(state.album.set)+'</span></div><div class="stat"><b>'+owned+'</b><span>Cartas que tengo</span></div><div class="stat"><b>'+missing+'</b><span>Cartas a las que les faltan copias</span></div><div class="stat"><b>'+list.filter(c=>qty(c.id)>=playsetTarget(c)).length+'</b><span>Playsets completos</span></div></div><div class="grid">'+visible.map(c=>cardTile(c)).join("")+'</div>'+pagination(list.length,state.album.page,"album");
   bindResultEvents(host);
   ensurePrices(visible.map(c=>c.id));
 }
 function expansionStats(){
-  return state.packs.slice().sort(comparePacks).map(p=>{const list=state.cards.filter(c=>c.set===p.code),owned=list.filter(c=>qty(c.id)>0),value=owned.reduce((s,c)=>s+qty(c.id)*(priceOf(c)??0),0),missingCost=list.reduce((s,c)=>s+Math.max(0,4-qty(c.id))*(priceOf(c)??0),0);return {...p,total:list.length,owned:owned.length,pct:list.length?owned.length/list.length*100:0,playsets:list.filter(c=>qty(c.id)>=4).length,value,missingCost}})
+  return state.packs.slice().sort(comparePacks).map(p=>{const list=state.cards.filter(c=>c.set===p.code),owned=list.filter(c=>qty(c.id)>0),value=owned.reduce((s,c)=>s+qty(c.id)*(priceOf(c)??0),0),missingCost=list.reduce((s,c)=>s+Math.max(0,playsetTarget(c)-qty(c.id))*(priceOf(c)??0),0);return {...p,total:list.length,owned:owned.length,pct:list.length?owned.length/list.length*100:0,playsets:list.filter(c=>qty(c.id)>=playsetTarget(c)).length,value,missingCost}})
 }
 function homeView(){
   const s=collectionStats(), ex=expansionStats().slice(0,6);
@@ -613,10 +615,29 @@ function changeQty(id,d){
   else{
     document.querySelectorAll('[data-qty="'+CSS.escape(id)+'"]').forEach(btn=>{
       const q=btn.closest(".quick")?.querySelector(".qty");if(q)q.textContent=n;
-      const tile=btn.closest(".card");if(tile){const tag=tile.querySelector(".tag");if(tag)tag.textContent=n?"×"+n:"0/4";}
+      const tile=btn.closest(".card");if(tile){const tag=tile.querySelector(".tag");if(tag)tag.textContent=n?"×"+n:"0/"+playsetTarget(card(id));}
     });
   }
   notify(n?"Colección actualizada":"Carta quitada");
+}
+async function clearCollection(){
+  if(!confirm("¿Borrar TODA tu colección?\n\nSe eliminarán todas las cantidades guardadas en este dispositivo y, si tienes sesión iniciada, también de la nube.\n\nEsta acción no se puede deshacer."))return;
+  state.owned={};
+  saveLocal();
+  if(state.user&&state.sb){
+    try{
+      const r=await state.sb.from("collection_items").delete().eq("user_id",state.user.id);
+      if(r.error)throw r.error;
+    }catch(e){
+      notify("Colección local borrada, pero no se pudo borrar la nube");
+      console.warn("clear collection cloud",e);
+      renderShell();
+      return;
+    }
+  }
+  state.collection.page=1;
+  renderShell();
+  notify("Colección borrada");
 }
 function setQty(id,n){n=Math.max(0,Math.min(99,Number(n)||0));if(n===0)delete state.owned[id];else state.owned[id]=n;saveLocal();syncOne(id,n);renderVisibleOnly()}
 function changeDeckQty(id,d){
@@ -777,6 +798,7 @@ function bindShell(){
     $("#clearCollectionFilters")?.addEventListener("click",()=>{Object.assign(state.collection,{set:"Todas",category:"Todos",color:"Todos",rarity:"Todos",type:"Todos",attribute:"Todos",quantity:"Todas",playset:"Todas",page:1});renderShell()});
     $("#exportCsv")?.addEventListener("click",exportCollectionCSV);
     $("#importCsv")?.addEventListener("click",()=>$("#csvFile").click());
+    $("#clearCollection")?.addEventListener("click",clearCollection);
     $("#csvFile")?.addEventListener("change",e=>{const f=e.target.files?.[0];if(f)f.text().then(t=>previewImport(t))});
   }
   if(state.tab==="album"&&!state.album.set){
