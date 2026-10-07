@@ -7,6 +7,7 @@ const MIN_COVERAGE = 0.90;
 const REMOTE_CARDS_URL = "https://raw.githubusercontent.com/michalkiral/optcg-data/main/data/index/cards_by_id.json";
 const REMOTE_PACKS_URL = "https://raw.githubusercontent.com/michalkiral/optcg-data/main/data/packs.json";
 const REMOTE_OP17_URL = "https://raw.githubusercontent.com/hugoprudente/optcgjson/main/output/OP17.json";
+const OPASSETS_HISTORY_DIR_URL = "https://api.github.com/repos/ryscode/OPASSETS/contents/CM-Data/Final/PriceHistory?ref=main";
 
 const CARDMARKET_SET_NAMES = {
   "OP-01": ["Romance Dawn"],
@@ -140,8 +141,83 @@ function isJapaneseCard(card) {
   return isJapaneseExpansion(card?.id) || isJapaneseExpansion(card?.set) || isJapaneseExpansion(card?.set_name);
 }
 
-function isEnglishProduct(product = null) {
-  return !isJapaneseExpansion(product?.expansionName) && !isJapaneseExpansion(product?.name);
+function isEnglishProduct(product = null, japaneseExpansionIds = null) {
+  if (isJapaneseExpansion(product?.expansionName) || isJapaneseExpansion(product?.name)) return false;
+  if (japaneseExpansionIds?.has(Number(product?.idExpansion))) return false;
+  return true;
+}
+
+async function loadCardmarketExpansionLanguageMap() {
+  try {
+    const dirs = await fetchJson(OPASSETS_HISTORY_DIR_URL);
+    const dates = (Array.isArray(dirs) ? dirs : [])
+      .map(x => String(x?.name || ""))
+      .filter(x => /^\d{4}-\d{2}-\d{2}$/.test(x))
+      .sort();
+    const latest = dates.at(-1);
+    if (!latest) throw new Error("No OPASSETS price-history date found");
+
+    const indexUrl = "https://raw.githubusercontent.com/ryscode/OPASSETS/main/CM-Data/Final/PriceHistory/" + latest + "/index.json";
+    const index = await fetchJson(indexUrl);
+    const entries = Array.isArray(index?.files) ? index.files : [];
+
+    const grouped = new Map();
+    const japaneseIds = new Set();
+    const englishExpansionIdsBySet = new Map();
+
+    for (const entry of entries) {
+      const id = Number(entry?.expansionId);
+      if (!Number.isFinite(id)) continue;
+      const expansionName = String(entry?.expansionName || "");
+      if (isJapaneseExpansion(expansionName) || isJapaneseExpansion(entry?.file)) japaneseIds.add(id);
+
+      const normalized = norm(expansionName);
+      if (normalized) {
+        if (!grouped.has(normalized)) grouped.set(normalized, []);
+        grouped.get(normalized).push(entry);
+      }
+    }
+
+    // Some Japanese expansions have the same bare expansion name as their
+    // English twin. Inspect only those duplicate expansion files; their
+    // productName fields include Cardmarket's explicit "(Non-English)",
+    // "(Japanese)" or "(Asia Region Legal)" marker.
+    const ambiguous = [...grouped.values()].filter(group => group.length > 1);
+    const detailResults = await Promise.all(ambiguous.flatMap(group =>
+      group.map(async entry => {
+        try {
+          const url = "https://raw.githubusercontent.com/ryscode/OPASSETS/main/CM-Data/Final/PriceHistory/" + latest + "/" + entry.file;
+          const detail = await fetchJson(url);
+          const rows = Array.isArray(detail?.priceGuides) ? detail.priceGuides : [];
+          const markedJapanese = rows.some(row =>
+            isJapaneseExpansion(row?.productName) || isJapaneseExpansion(row?.productCategoryName)
+          );
+          return {id:Number(entry.expansionId), markedJapanese};
+        } catch {
+          return {id:Number(entry.expansionId), markedJapanese:false};
+        }
+      })
+    ));
+    for (const row of detailResults) {
+      if (row.markedJapanese) japaneseIds.add(row.id);
+    }
+
+    for (const entry of entries) {
+      const id = Number(entry?.expansionId);
+      if (!Number.isFinite(id) || japaneseIds.has(id)) continue;
+      for (const setCode of Object.keys(CARDMARKET_SET_NAMES)) {
+        if (expansionMatches(setCode, entry?.expansionName)) {
+          if (!englishExpansionIdsBySet.has(setCode)) englishExpansionIdsBySet.set(setCode, new Set());
+          englishExpansionIdsBySet.get(setCode).add(id);
+        }
+      }
+    }
+
+    return {latest, japaneseExpansionIds:japaneseIds, englishExpansionIdsBySet};
+  } catch (error) {
+    console.warn("Cardmarket expansion-language map unavailable:", error?.message || error);
+    return {latest:null, japaneseExpansionIds:new Set(), englishExpansionIdsBySet:new Map()};
+  }
 }
 
 function sourceSetCode(card) {
@@ -245,7 +321,7 @@ function cardNameMatches(card, product) {
   return 0;
 }
 
-function candidateScore(card, product, productVersions) {
+function candidateScore(card, product, productVersions, primaryExpansionBySet) {
   const cardBase = baseId(card.id).toUpperCase();
   const code = extractCardCode(product?.name);
   const cardCode = extractCardCode(cardBase);
@@ -258,7 +334,9 @@ function candidateScore(card, product, productVersions) {
   const cNumber = numberPart(cardBase).replace(/^0+/, "") || "0";
   if (pNumber === cNumber) score += 20;
 
-  if (expansionMatches(sourceSetCode(card), product?.expansionName, String(card?.set_name || ""))) score += 100;
+  const sourceSet = sourceSetCode(card);
+  const primaryExpansionId = primaryExpansionBySet?.get(sourceSet);
+  if (primaryExpansionId && Number(product.idExpansion) === Number(primaryExpansionId)) score += 10;
   if (cardNameMatches(card, product)) score += cardNameMatches(card, product);
 
   const wantedVersion = localVersion(card.id);
@@ -274,8 +352,6 @@ function chooseProduct(card, productsBySetAndNumber, primaryExpansionBySet, prod
   const cardCode = extractCardCode(base);
   const number = numberPart(base);
   const desiredVersion = localVersion(card.id);
-  const sourceSet = sourceSetCode(card);
-  const primaryExpansionId = primaryExpansionBySet.get(sourceSet);
 
   const pool = [];
   for (const product of productsBySetAndNumber) {
@@ -290,13 +366,13 @@ function chooseProduct(card, productsBySetAndNumber, primaryExpansionBySet, prod
       continue;
     }
 
-    const score = candidateScore(card, product, productVersions);
+    const score = candidateScore(card, product, productVersions, primaryExpansionBySet);
     if (score > 0) {
       pool.push({
         product,
         score,
-        explicitVersion: productVersions?.has(String(product.idProduct)) || productVersion(product.name) !== null,
-        version: productVersions?.get(String(product.idProduct)) ?? productVersion(product.name)
+        explicitVersions: productVersion(product.name) !== null,
+          version: productVersions?.get(String(product.idProduct)) ?? productVersion(product.name)
       });
     }
   }
@@ -304,13 +380,9 @@ function chooseProduct(card, productsBySetAndNumber, primaryExpansionBySet, prod
   pool.sort((a, b) => b.score - a.score || Number(a.product.idProduct) - Number(b.product.idProduct));
   if (!pool.length) return null;
 
-  const explicitVersions = pool.some(x => x.explicitVersion);
-  if (explicitVersions) {
-    return pool.find(x => x.version === desiredVersion)?.product || pool[0].product;
-  }
-
-  return pool[Math.min(desiredVersion - 1, pool.length - 1)].product;
+  return pool.find(x => x.version === desiredVersion)?.product || pool[0].product;
 }
+
 function buildProductIndex(products) {
   const groups = new Map();
   for (const product of products) {
@@ -328,12 +400,14 @@ function buildProductIndex(products) {
   return groups;
 }
 
-function allProductsForCard(card, products) {
-  const exact = [];
+function allProductsForCard(card, products, englishExpansionIdsBySet) {
+  const preferred = [];
   const fallback = [];
   const base = baseId(card.id).toUpperCase();
   const code = extractCardCode(base);
   const number = numberPart(base);
+  const sourceSet = sourceSetCode(card);
+  const preferredExpansionIds = englishExpansionIdsBySet?.get(sourceSet) || null;
 
   for (const product of products) {
     if (!product?.idProduct || !isEnglishProduct(product)) continue;
@@ -346,18 +420,14 @@ function allProductsForCard(card, products) {
       if (pNumber !== number.replace(/^0+/, "")) continue;
     }
 
-    const expansionOk = expansionMatches(
-      sourceSetCode(card),
-      product?.expansionName,
-      String(card?.set_name || "")
-    );
-    (expansionOk ? exact : fallback).push(product);
+    if (preferredExpansionIds?.size) {
+      (preferredExpansionIds.has(Number(product.idExpansion)) ? preferred : fallback).push(product);
+    } else {
+      fallback.push(product);
+    }
   }
 
-  // Prefer the product(s) in the exact Cardmarket expansion for this printing.
-  // Only fall back to broader matching when Cardmarket does not expose a
-  // recognizable expansion name for the source card.
-  return exact.length ? exact : fallback;
+  return preferredExpansionIds?.size && preferred.length ? preferred : fallback;
 }
 
 function normalizeCardCatalog(parsed) {
@@ -423,13 +493,14 @@ function primaryExpansionMap(products) {
 }
 
 async function main() {
-  const [remoteCardsRaw, remotePacksRaw, op17Raw, productsRaw, pricesRaw, previous] = await Promise.all([
+  const [remoteCardsRaw, remotePacksRaw, op17Raw, productsRaw, pricesRaw, previous, languageMap] = await Promise.all([
     fetchJson(REMOTE_CARDS_URL),
     fetchJson(REMOTE_PACKS_URL),
     fetchJson(REMOTE_OP17_URL),
     fetchJson(PRODUCT_URL),
     fetchJson(PRICE_URL),
-    readPreviousDataset()
+    readPreviousDataset(),
+    loadCardmarketExpansionLanguageMap()
   ]);
 
   const packs = Array.isArray(remotePacksRaw) ? remotePacksRaw : Object.values(remotePacksRaw || {});
@@ -445,11 +516,7 @@ async function main() {
   const ids = new Set(normalized17.map(card => card.id));
   cards = cards.filter(card => !ids.has(card.id)).concat(normalized17).filter(card => !isJapaneseCard(card));
   const allProducts = readProducts(productsRaw);
-  const products = allProducts.filter(product => isEnglishProduct(product));
-  console.log(JSON.stringify({
-    productKeys: Object.keys(allProducts[0] || {}),
-    productSample: allProducts.find(p => extractCardCode(p?.name) === "EB01-001") || allProducts[0]
-  }));
+  const products = allProducts.filter(product => isEnglishProduct(product, languageMap.japaneseExpansionIds));
   const productVersions = buildProductVersionIndex(products);
   const prices = priceGuideIndex(readPrices(pricesRaw));
   if (!cards.length) throw new Error("Local card catalog is empty");
@@ -463,18 +530,8 @@ async function main() {
   let mapped = 0;
 
   for (const card of cards) {
-    const exactCandidates = allProductsForCard(card, products, primaryExpansionBySet);
+    const exactCandidates = allProductsForCard(card, products, languageMap.englishExpansionIdsBySet);
     const productPool = exactCandidates.length ? exactCandidates : products;
-    if (["EB01-001","OP04-083","OP02-004"].includes(baseId(card.id).toUpperCase())) {
-      const code = extractCardCode(baseId(card.id).toUpperCase());
-      const candidates = products.filter(p => p?.idProduct && extractCardCode(p.name) === code);
-      console.log(JSON.stringify({
-        debugCard: card.id,
-        sourceSet: sourceSetCode(card),
-        exact: exactCandidates.map(p => ({idProduct:p.idProduct,name:p.name,expansion:p.expansionName,idExpansion:p.idExpansion,idMetacard:p.idMetacard,dateAdded:p.dateAdded})),
-        allSameCode: candidates.map(p => ({idProduct:p.idProduct,name:p.name,expansion:p.expansionName,idExpansion:p.idExpansion,idMetacard:p.idMetacard,dateAdded:p.dateAdded}))
-      }));
-    }
     const product = chooseProduct(card, productPool, primaryExpansionBySet, productVersions);
     if (!product) {
       unmatched.push(card.id);
@@ -528,7 +585,7 @@ async function main() {
       avg30: guide ? priceNumber(guide.avg30, guide.AVG30, guide["AVG30"]) : null,
       cardmarketId: Number(product.idProduct),
       expansionId: Number(product.idExpansion),
-      expansion: String(product.expansionName || CARDMARKET_SET_NAMES[sourceSetCode(card)]?.[0] || sourceSetCode(card)),
+      expansion: String(CARDMARKET_SET_NAMES[sourceSetCode(card)]?.[0] || sourceSetCode(card)),
       version: localVersion(card.id),
       url: "https://www.cardmarket.com/es/OnePiece/Products?idProduct=" + encodeURIComponent(String(product.idProduct)),
       launchPrice,
