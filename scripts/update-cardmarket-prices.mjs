@@ -135,8 +135,28 @@ function isJapaneseCard(card) {
   return isJapaneseExpansion(card?.id) || isJapaneseExpansion(card?.set) || isJapaneseExpansion(card?.set_name);
 }
 
-function isEnglishProduct(product) {
-  return !isJapaneseExpansion(product?.expansionName) && !isJapaneseExpansion(product?.name);
+function isEnglishProduct(product, japaneseExpansionIds = null) {
+  if (isJapaneseExpansion(product?.expansionName) || isJapaneseExpansion(product?.name)) return false;
+  if (japaneseExpansionIds && japaneseExpansionIds.has(Number(product?.idExpansion))) return false;
+  return true;
+}
+
+function collectJapaneseExpansionIds(products) {
+  const ids = new Set();
+  for (const product of products) {
+    if (!Number.isFinite(Number(product?.idExpansion))) continue;
+    if (isJapaneseExpansion(product?.expansionName) || isJapaneseExpansion(product?.name)) {
+      ids.add(Number(product.idExpansion));
+    }
+  }
+  return ids;
+}
+
+function englishExpansionMatches(card, product) {
+  const setCode = sourceSetCode(card);
+  const localSetName = String(card?.set_name || "");
+  if (!(CARDMARKET_SET_NAMES[setCode]?.length || localSetName)) return true;
+  return expansionMatches(setCode, product?.expansionName, localSetName);
 }
 
 function sourceSetCode(card) {
@@ -316,7 +336,7 @@ function buildProductIndex(products) {
   return groups;
 }
 
-function allProductsForCard(card, products, primaryExpansionBySet) {
+function allProductsForCard(card, products, primaryExpansionBySet, japaneseExpansionIds) {
   const out = [];
   const base = baseId(card.id).toUpperCase();
   const code = extractCardCode(base);
@@ -325,7 +345,7 @@ function allProductsForCard(card, products, primaryExpansionBySet) {
   const primaryExpansionId = primaryExpansionBySet.get(sourceSet);
 
   for (const product of products) {
-    if (!product?.idProduct || !isEnglishProduct(product)) continue;
+    if (!product?.idProduct || !isEnglishProduct(product, japaneseExpansionIds)) continue;
     const pCode = extractCardCode(product.name);
     if (pCode && code) {
       if (pCode !== code) continue;
@@ -338,6 +358,7 @@ function allProductsForCard(card, products, primaryExpansionBySet) {
       }
     }
     if (primaryExpansionId && Number(product.idExpansion) !== Number(primaryExpansionId)) continue;
+    if (!englishExpansionMatches(card, product)) continue;
     if (cardNameMatches(card, product) <= 0 && !pCode) continue;
     out.push(product);
   }
@@ -427,7 +448,9 @@ async function main() {
   const normalized17 = o17.map(card => ({...card, set:"OP-17"}));
   const ids = new Set(normalized17.map(card => card.id));
   cards = cards.filter(card => !ids.has(card.id)).concat(normalized17).filter(card => !isJapaneseCard(card));
-  const products = readProducts(productsRaw).filter(isEnglishProduct);
+  const allProducts = readProducts(productsRaw);
+  const japaneseExpansionIds = collectJapaneseExpansionIds(allProducts);
+  const products = allProducts.filter(product => isEnglishProduct(product, japaneseExpansionIds));
   const productVersions = buildProductVersionIndex(products);
   const prices = priceGuideIndex(readPrices(pricesRaw));
   if (!cards.length) throw new Error("Local card catalog is empty");
@@ -441,8 +464,11 @@ async function main() {
   let mapped = 0;
 
   for (const card of cards) {
-    const exactCandidates = allProductsForCard(card, products, primaryExpansionBySet);
-    const product = chooseProduct(card, exactCandidates.length ? exactCandidates : products, primaryExpansionBySet, productVersions);
+    const exactCandidates = allProductsForCard(card, products, primaryExpansionBySet, japaneseExpansionIds);
+    const productPool = exactCandidates.length ? exactCandidates : products.filter(product =>
+      isEnglishProduct(product, japaneseExpansionIds) && englishExpansionMatches(card, product)
+    );
+    const product = chooseProduct(card, productPool, primaryExpansionBySet, productVersions);
     if (!product) {
       unmatched.push(card.id);
       const prior = oldCards[card.id] || {};
