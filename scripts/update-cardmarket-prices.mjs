@@ -319,7 +319,7 @@ async function main() {
   if (!prices.size) throw new Error("Cardmarket price guide is empty");
   console.log("CM_DIAGNOSTIC", JSON.stringify({
     productCount: products.length,
-    zoroProducts: products.filter(p => /Roronoa Zoro \(OP01-001\)/i.test(String(p?.name || ""))).slice(0, 10).map(p => ({idProduct:p?.idProduct,name:p?.name,number:p?.number,expansionName:p?.expansionName,keys:Object.keys(p || {})})),
+    zoroProducts: products.filter(p => /Roronoa Zoro \(OP01-001\)/i.test(String(p?.name || ""))).slice(0, 10).map(p => ({idProduct:p?.idProduct,name:p?.name,idExpansion:p?.idExpansion,idMetacard:p?.idMetacard,dateAdded:p?.dateAdded,categoryName:p?.categoryName})),
     zoroCards: cards.filter(c => c.set === "OP-01" && /^Roronoa Zoro$/i.test(String(c.name || ""))).slice(0, 10).map(c => ({id:c.id,name:c.name,set:c.set,set_name:c.set_name}))
   }));
 
