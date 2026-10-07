@@ -1233,6 +1233,11 @@ function importMarketSource(logicalId,kind,printSet,rawVariant="",priceHint=null
   const normalizedVariant=String(rawVariant||"").trim().replace(/_base$/i,"");
   const exact=candidates.find(c=>norm(c.id)===norm(normalizedVariant));
   if(exact)return exact;
+
+  // If the CSV variant suffix does not identify an exact catalog printing,
+  // do not silently replace it with another printing just because the logical
+  // card, kind and set look similar. Keep it synthetic and preserve variant_id.
+  if(normalizedVariant)return null;
   if(candidates.length===1)return candidates[0];
 
   const hint=Number(priceHint);
