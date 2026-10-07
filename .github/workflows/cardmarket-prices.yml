@@ -16,7 +16,7 @@ permissions:
 
 concurrency:
   group: cardmarket-prices
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   update:
