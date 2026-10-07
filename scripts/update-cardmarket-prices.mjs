@@ -259,7 +259,6 @@ function candidateScore(card, product, productVersions) {
   if (pNumber === cNumber) score += 20;
 
   if (expansionMatches(sourceSetCode(card), product?.expansionName, String(card?.set_name || ""))) score += 100;
-  else if (primaryExpansionId && Number(product.idExpansion) === Number(primaryExpansionId)) score += 10;
   if (cardNameMatches(card, product)) score += cardNameMatches(card, product);
 
   const wantedVersion = localVersion(card.id);
