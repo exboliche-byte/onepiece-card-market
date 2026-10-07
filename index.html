@@ -1276,17 +1276,19 @@ function resolveCSVPrint(logicalId,rawVariant,kind,printSet){
   const candidates=state.cards.filter(c=>norm(baseId(c.id))===norm(logical));
   const compatible=candidates.filter(c=>variantKindOf(c)===wantedKind);
 
-  if(wantedSet){
-    // variant_id es la identidad de la fila. Nunca sustituirlo por otro sufijo:
-    // solo reutilizamos una carta del catálogo si ID, tipo e impresión coinciden.
-    const exact=compatible.find(c=>
-      norm(c.id)===norm(normalizedVariant)&&csvPrintSetMatches(c,wantedSet)
-    );
-    return exact||null;
-  }
-
+  // variant_id is authoritative. If that exact catalog ID exists, import it.
+  // print_set is useful metadata/disambiguation, but must never turn a supplied
+  // variant_id into a synthetic/wrong card because catalog set metadata differs.
   const exact=compatible.find(c=>norm(c.id)===norm(normalizedVariant));
   if(exact)return exact;
+
+  // Only when the CSV does not provide a usable variant suffix may print_set
+  // disambiguate a single catalog printing.
+  if(wantedSet&&!/_((?:p|r|c)\d+)$/i.test(String(rawVariant||""))){
+    const bySet=compatible.filter(c=>csvPrintSetMatches(c,wantedSet));
+    if(bySet.length===1)return bySet[0];
+  }
+
   if(wantedKind==="base")return candidates.find(c=>norm(c.id)===norm(logical))||null;
   return null;
 }
