@@ -205,12 +205,7 @@ async function loadCardmarketExpansionLanguageMap() {
     for (const entry of entries) {
       const id = Number(entry?.expansionId);
       if (!Number.isFinite(id) || japaneseIds.has(id)) continue;
-      const entryExpansion = norm(entry?.expansionName);
-      const entryIsPromo = /(^|\\s)(promo|promos)(\\s|:|-|$)/i.test(entryExpansion);
       for (const setCode of Object.keys(CARDMARKET_SET_NAMES)) {
-        // Do not let "Promos: <set>" satisfy the fuzzy match for the main
-        // "<set>" expansion. Promo cards reuse the same printed card number.
-        if (entryIsPromo) continue;
         if (expansionMatches(setCode, entry?.expansionName)) {
           if (!englishExpansionIdsBySet.has(setCode)) englishExpansionIdsBySet.set(setCode, new Set());
           englishExpansionIdsBySet.get(setCode).add(id);
@@ -340,6 +335,13 @@ function candidateScore(card, product, productVersions, primaryExpansionBySet) {
   if (pNumber === cNumber) score += 20;
 
   const sourceSet = sourceSetCode(card);
+  const expectedExpansions = [...(CARDMARKET_SET_NAMES[sourceSet] || []), card?.set_name]
+    .map(norm)
+    .filter(Boolean);
+  const productExpansion = norm(product?.expansionName);
+  if (expectedExpansions.includes(productExpansion)) score += 100;
+  else if (/(^|\\s)(promo|promos)(\\s|:|-|$)/i.test(productExpansion)) score -= 80;
+
   const primaryExpansionId = primaryExpansionBySet?.get(sourceSet);
   if (primaryExpansionId && Number(product.idExpansion) === Number(primaryExpansionId)) score += 10;
   if (cardNameMatches(card, product)) score += cardNameMatches(card, product);
