@@ -444,7 +444,7 @@ async function main() {
       avg30: guide ? priceNumber(guide.avg30, guide.AVG30, guide["AVG30"]) : null,
       cardmarketId: Number(product.idProduct),
       expansionId: Number(product.idExpansion),
-      expansion: String(product.expansionName || CARDMARKET_SET_NAMES[sourceSet]?.[0] || sourceSet),
+      expansion: String(product.expansionName || CARDMARKET_SET_NAMES[sourceSetCode(card)]?.[0] || sourceSetCode(card)),
       version: localVersion(card.id),
       url: "https://www.cardmarket.com/es/OnePiece/Products?idProduct=" + encodeURIComponent(String(product.idProduct)),
       launchPrice,
