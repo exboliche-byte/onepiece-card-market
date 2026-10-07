@@ -196,6 +196,7 @@ function deckStorageKey(userId=state.user?.id){return "mialbumonepiece_decks_"+a
 function loadCollectionForAccount({migrateLegacy=false}={}){
   const key=collectionStorageKey(),raw=localStorage.getItem(key);
   let source=raw;
+  if(!source&&!state.user)source=localStorage.getItem("mialbumonepiece_collection");
   if(!source&&migrateLegacy&&state.user){
     const owner=localStorage.getItem("mialbumonepiece_collection_legacy_owner");
     if(!owner||owner===state.user.id)source=localStorage.getItem("mialbumonepiece_collection")||localStorage.getItem(collectionStorageKey(null));
@@ -209,6 +210,7 @@ function loadCollectionForAccount({migrateLegacy=false}={}){
 function loadDecksForAccount({migrateLegacy=false}={}){
   const key=deckStorageKey(),raw=localStorage.getItem(key);
   let source=raw;
+  if(!source&&!state.user)source=localStorage.getItem("mialbumonepiece_decks");
   if(!source&&migrateLegacy&&state.user){
     const owner=localStorage.getItem("mialbumonepiece_decks_legacy_owner");
     if(!owner||owner===state.user.id)source=localStorage.getItem("mialbumonepiece_decks")||localStorage.getItem(deckStorageKey(null));
@@ -956,7 +958,7 @@ function removeFromDeckGroup(id){
 }
 function deckGroupedTile(g){
   const c=g.card,q=logicalQty(c),d=state.decks.find(x=>x.id===state.deckId),isLeader=c.category==="Leader",leaderInGroup=isLeader&&d?.leader&&g.versions.some(v=>v.id===d.leader),inDeck=isLeader?(leaderInGroup?1:0):g.versions.reduce((s,v)=>s+Number(d?.cards?.[v.id]||0),0),ps=groupPriceStats(g);
-  const controls=isLeader?'<div class="quick"><button class="secondary" data-removeleader>−</button><div class="qty">'+inDeck+'</div><button class="primary" data-setleader="'+esc(c.id)+'">+</button></div>':'<div class="quick"><button class="secondary" data-deckremovegroup="'+esc(c.id)+'">−</button><div class="qty">'+inDeck+'</div><button class="primary" data-adddeck="'+esc(c.id)+'">+</button></div>';
+  const controls=isLeader?'<div class="quick"><button class="secondary" disabled>−</button><div class="qty">'+inDeck+'</div><button class="primary" data-setleader="'+esc(c.id)+'">+</button></div>':'<div class="quick"><button class="secondary" data-deckremovegroup="'+esc(c.id)+'">−</button><div class="qty">'+inDeck+'</div><button class="primary" data-adddeck="'+esc(c.id)+'">+</button></div>';
   return '<article class="card">'+(q?'<span class="tag">×'+q+' total</span>':'<span class="tag missing">Falta</span>')+
     '<button class="linkbtn" data-detail="'+esc(c.id)+'" style="display:block;width:100%;padding:0">'+cardImg(c,"cardimg")+'</button>'+
     '<div class="cardbody"><button class="linkbtn deck-card-open" data-detail="'+esc(c.id)+'"><div class="name">'+esc(c.name)+'</div><div class="small">'+esc(c.id)+' · '+g.versions.length+' versión(es)</div><div class="chips">'+g.sets.slice(0,3).map(x=>'<span class="chip">'+esc(x)+'</span>').join("")+'</div></button>'+
