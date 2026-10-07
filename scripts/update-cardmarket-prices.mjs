@@ -895,18 +895,21 @@ function primaryExpansionMap(products) {
 }
 
 async function main() {
-  const [remoteAllSetsRaw, productsRaw, pricesRaw, previous, languageMap, exactPrintOracle] = await Promise.all([
-    fetchJson(REMOTE_ALLSETS_URL),
+  const [localCardsRaw, localPacksRaw, productsRaw, pricesRaw, previous, languageMap, exactPrintOracle] = await Promise.all([
+    fs.readFile(new URL("../data/cards.json", import.meta.url), "utf8"),
+    fs.readFile(new URL("../data/packs.json", import.meta.url), "utf8"),
     fetchJson(PRODUCT_URL),
     fetchJson(PRICE_URL),
     readPreviousDataset(),
     loadCardmarketExpansionLanguageMap(),
     loadExactPrintOracle()
   ]);
-  const catalog = normalizeOptcgCatalog(remoteAllSetsRaw);
-  const packs = catalog.packs;
+  const packs = JSON.parse(localPacksRaw);
   const dynamicSetNames = new Map(packs.map(p => [String(p?.code || "").trim().toUpperCase(), String(p?.name || "").trim()]));
-  const cards = catalog.cards.map(card => ({
+  // Price exactly the catalog the app serves. The catalog sync may augment
+  // the primary source with newly published promos/reprints, so re-fetching
+  // only the primary source here would silently leave those prints unpriced.
+  const cards = normalizeCardCatalog(JSON.parse(localCardsRaw)).map(card => ({
     ...card, set_name: String(card.set_name || dynamicSetNames.get(card.set) || "")
   })).filter(card => !isJapaneseCard(card));
   const limitlessPrintMappings = await loadLimitlessPrintMappings(cards);
