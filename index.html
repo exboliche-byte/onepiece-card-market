@@ -47,6 +47,11 @@ function cardImg(c,cls="cardimg"){
   return '<img class="'+cls+'" loading="'+loading+'" decoding="async"'+priority+' src="'+esc(cdn)+'" alt="'+esc(c.name||c.id)+'" data-image-official="'+esc(official)+'" data-image-fallback="'+esc(fallback)+'" onerror="if(this.dataset.imageStep!==\'1\'){this.dataset.imageStep=\'1\';this.src=this.dataset.imageOfficial}else if(this.dataset.imageStep!==\'2\'){this.dataset.imageStep=\'2\';this.src=this.dataset.imageFallback}else{this.style.visibility=\'hidden\'}">';
 }
 function qty(id){return Number(state.owned[id]||0)}
+function isJapaneseCatalogCard(c){
+  return /(?:^|[-_ ])JP(?:$|[-_ ])|\bJAPANESE\b|NON-ENGLISH|ASIA REGION LEGAL/i.test(
+    String(c?.id||"")+" "+String(c?.set||"")+" "+String(c?.set_name||"")
+  );
+}
 function card(id){return state.cards.find(c=>c.id===id)}
 function baseId(id){return safeId(id).replace(/_(?:p\\d+|r\\d+)$/i,"")}
 function groupKey(c){
@@ -109,7 +114,7 @@ function expansionList(){
 }
 function prepareCatalog(raw,packs){
   state.packs=(Array.isArray(packs)?packs:Object.values(packs)).slice().sort(comparePacks);
-  state.cards=(Array.isArray(raw)?raw:Object.values(raw)).map(c=>({...c,id:String(c.id||"").trim(),set:String(c.set||"").trim(),set_name:c.set_name||setName(c.set||"")})).filter(c=>c.id);
+  state.cards=(Array.isArray(raw)?raw:Object.values(raw)).map(c=>({...c,id:String(c.id||"").trim(),set:String(c.set||"").trim(),set_name:c.set_name||setName(c.set||"")})).filter(c=>c.id&&!isJapaneseCatalogCard(c));
   const map=new Map();
   for(const c of state.cards){c.search=norm([c.id,c.name,c.set,c.set_name,c.category,c.rarity,...(c.colors||[]),...(c.types||[]),...(c.attributes||[]),c.effect,c.trigger].join(" "));const k=groupKey(c);if(!map.has(k))map.set(k,{key:k,card:c,ids:[],sets:new Set()});const g=map.get(k);g.ids.push(c.id);g.sets.add(c.set)}
   state.groups=[...map.values()].map(g=>({...g,sets:[...g.sets].sort(),versions:g.ids.map(id=>card(id))}));
@@ -243,7 +248,7 @@ function cmpPrice(a,b){
   return d*(state.catalog.dir==="desc"?-1:1);
 }
 let priceDatasetPromise=null;
-const PRICE_CACHE_VERSION=5;
+const PRICE_CACHE_VERSION=6;
 const MARKET_DATA_URL="/data/cardmarket-prices.json";
 function priceOf(c){const raw=state.prices[c?.id]??state.prices[norm(c?.id)];const n=Number(raw);return Number.isFinite(n)?n:null}
 function mergePriceDataset(d){
