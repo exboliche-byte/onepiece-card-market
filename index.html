@@ -1131,23 +1131,22 @@ function resolveCSVPrint(logicalId,rawVariant,kind,printSet){
   const wantedSet=String(printSet||"").trim();
   const normalizedVariant=String(rawVariant||"").trim().replace(/_base$/i,"");
   const candidates=state.cards.filter(c=>norm(baseId(c.id))===norm(logical));
-  const compatible=candidates.filter(c=>variantKindOf(c)===wantedKind);
 
-  // The print set/card set is the authoritative disambiguator. Upstream catalog
-  // suffixes (_p1/_p2/_r1/...) can move when new printings are added, while the
-  // logical card + kind + printing expansion remains stable.
+  // El variant_id del CSV es la versión exacta y tiene prioridad absoluta.
+  const exact=candidates.find(c=>norm(c.id)===norm(normalizedVariant));
+  if(exact)return exact;
+
+  // Si esa versión todavía no existe en el catálogo, usamos print_set/card_set
+  // solo para identificar de forma inequívoca la impresión correspondiente.
+  const compatible=candidates.filter(c=>variantKindOf(c)===wantedKind);
   if(wantedSet){
     const bySet=compatible.filter(c=>csvPrintSetMatches(c,wantedSet));
-    const exactSet=bySet.find(c=>norm(c.id)===norm(normalizedVariant));
-    if(exactSet)return exactSet;
     if(bySet.length===1)return bySet[0];
   }
 
-  // If the catalog cannot identify that expansion (some promos/embedded sets do
-  // not expose it), keep the literal variant from the CSV when it exists.
-  const exact=compatible.find(c=>norm(c.id)===norm(normalizedVariant));
-  if(exact)return exact;
-  if(wantedKind==="base")return candidates.find(c=>norm(c.id)===norm(logical))||null;
+  // No adivinamos entre varias versiones: el importador conservará literalmente
+  // el variant_id del CSV mediante syntheticCSVCard.
+  if(wantedKind==="base"&&!wantedSet)return candidates.find(c=>norm(c.id)===norm(logical))||null;
   return null;
 }
 function syntheticCSVCard(row,logicalId,variantId,kind,printSet){
