@@ -1468,10 +1468,9 @@ function normalizeUsername(value){
 }
 function authMessage(err){return String(err?.message||err||"Error de autenticación")}
 async function accountAuthRequest(payload){
-  await loadSupabaseConfig();
-  const r=await fetch(SUPABASE_URL+"/functions/v1/account-auth",{
+  const r=await fetch("/api/auth",{
     method:"POST",
-    headers:{"Content-Type":"application/json","apikey":SUPABASE_KEY},
+    headers:{"Content-Type":"application/json"},
     body:JSON.stringify(payload)
   });
   const data=await r.json().catch(()=>({}));
