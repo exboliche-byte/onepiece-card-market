@@ -358,7 +358,10 @@ function mergePriceDataset(d){
       version:Number(entry?.version||1),
       launchPrice:Number.isFinite(Number(entry?.launchPrice))?Number(entry.launchPrice):null,
       launchPriceDate:entry?.launchPriceDate||null,
-      trend:Number.isFinite(Number(entry?.trend))?Number(entry.trend):null,\n      avg:Number.isFinite(Number(entry?.avg))?Number(entry.avg):null,\n      avg5:Number.isFinite(Number(entry?.avg5))?Number(entry.avg5):null,\n      low:Number.isFinite(Number(entry?.low))?Number(entry.low):null,\n      sourceUrl:String(entry?.sourceUrl||""),
+      trend:Number.isFinite(Number(entry?.trend))?Number(entry.trend):null,
+      avg:Number.isFinite(Number(entry?.avg))?Number(entry.avg):null,
+      avg5:Number.isFinite(Number(entry?.avg5))?Number(entry.avg5):null,
+      low:Number.isFinite(Number(entry?.low))?Number(entry.low):null,
       collections:Array.isArray(entry?.collections)?entry.collections.map(collection=>({
         expansion:String(collection?.expansion||"").trim(),
         expansionId:Number.isFinite(Number(collection?.expansionId))?Number(collection?.expansionId):null,
