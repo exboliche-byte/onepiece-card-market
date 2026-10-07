@@ -42,5 +42,7 @@ jobs:
             echo "No price changes"
           else
             git commit -m "data: update Cardmarket prices $(date -u +%Y-%m-%d)"
+            git fetch origin main
+            git rebase origin/main
             git push
           fi
