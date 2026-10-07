@@ -380,7 +380,16 @@ function chooseProduct(card, productsBySetAndNumber, primaryExpansionBySet, prod
   pool.sort((a, b) => b.score - a.score || Number(a.product.idProduct) - Number(b.product.idProduct));
   if (!pool.length) return null;
 
-  return pool.find(x => x.version === requestedVersion)?.product || pool[0].product;
+  const exactVersion = pool.find(x => x.version === requestedVersion);
+  if (exactVersion) return exactVersion.product;
+
+  // Local catalog variants can outnumber Cardmarket's V1/V2/V3 products.
+  // Never fall back to V1 just because the requested version does not exist:
+  // use the highest available market version not newer than the requested one.
+  const compatible = pool
+    .filter(x => Number.isFinite(Number(x.version)) && Number(x.version) <= requestedVersion)
+    .sort((a, b) => Number(b.version) - Number(a.version) || b.score - a.score);
+  return (compatible[0] || pool[0]).product;
 }
 
 function buildProductIndex(products) {
