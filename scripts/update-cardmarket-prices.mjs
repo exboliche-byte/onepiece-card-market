@@ -221,7 +221,7 @@ async function loadCardmarketExpansionLanguageMap() {
 }
 
 function sourceSetCode(card) {
-  const rawSet = String(card?.set || "").trim().toUpperCase();
+  const rawSet = String(card?.source_set || card?.set || "").trim().toUpperCase();
   // Some One Piece datasets encode EB-04/EB-05 cards as OP14-EB04 / OP15-EB04.
   // Preserve that source-set identity instead of deriving it from the printed
   // card number prefix (OP14 / OP15).
@@ -479,7 +479,7 @@ function normalizeOptcgCatalog(parsed) {
       const idPrefix = id.toUpperCase().match(/^(OP|EB|ST|PRB)(\d{2})-/i);
       const cardSet = idPrefix ? normalizeOptcgSetCode(idPrefix[1] + idPrefix[2]) : setCode;
       cards.push({
-        id, set: cardSet, set_name: setName, name: String(raw?.name || "").trim(),
+        id, set: cardSet, source_set: setCode, set_name: setName, name: String(raw?.name || "").trim(),
         rarity: raw?.rarity === "L" ? "Leader" : String(raw?.rarity || "").trim(),
         category: raw?.cardClass === "LEADER" ? "Leader" : raw?.cardClass === "EVENT" ? "Event" : raw?.cardClass === "STAGE" ? "Stage" : raw?.cardClass === "DON" ? "Don" : "Character",
         colors: Array.isArray(raw?.color) ? raw.color : [], cost: raw?.cost == null ? null : Number(raw.cost),
@@ -680,7 +680,7 @@ async function main() {
       cardmarketId: Number(product.idProduct),
       expansionId: Number(product.idExpansion),
       expansion: String(languageMap.expansionNamesById?.get(Number(product.idExpansion)) || CARDMARKET_SET_NAMES[sourceSetCode(card)]?.[0] || sourceSetCode(card)),
-      version: desiredMarketVersion,
+      version: productVersions?.get(String(product.idProduct)) ?? productVersion(product.name) ?? desiredMarketVersion,
       url: "https://www.cardmarket.com/es/OnePiece/Products?idProduct=" + encodeURIComponent(String(product.idProduct)),
       collections,
       launchPrice,
