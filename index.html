@@ -248,7 +248,7 @@ function cmpPrice(a,b){
   return d*(state.catalog.dir==="desc"?-1:1);
 }
 let priceDatasetPromise=null;
-const PRICE_CACHE_VERSION=6;
+const PRICE_CACHE_VERSION=7;
 const MARKET_DATA_URL="/data/cardmarket-prices.json";
 function priceOf(c){const raw=state.prices[c?.id]??state.prices[norm(c?.id)];const n=Number(raw);return Number.isFinite(n)?n:null}
 function mergePriceDataset(d){
@@ -832,26 +832,29 @@ function parseCSV(text){
 function previewImport(text){
   try{const rows=parseCSV(text);if(rows.length<2)throw Error("CSV vacío");const h=rows[0].map(x=>norm(x).replace(/\\s+/g,"_"));const idI=Math.max(h.indexOf("card_id"),h.indexOf("id"),h.indexOf("numero"),h.indexOf("number"));const qI=Math.max(h.indexOf("quantity"),h.indexOf("cantidad"),h.indexOf("qty"),h.indexOf("copias"));if(idI<0||qI<0)throw Error("Faltan card_id/id y quantity/cantidad");const unknown=[],valid=[];for(const r of rows.slice(1)){const id=String(r[idI]||"").trim().toUpperCase(),q=Math.max(0,Math.min(99,Number(r[qI]||0)));if(card(id))valid.push([id,q]);else unknown.push(id)}const sum=valid.reduce((a,x)=>a+x[1],0);const msg="Filas: "+(rows.length-1)+" · reconocidas: "+valid.length+" · desconocidas: "+unknown.length+" · copias: "+sum+(unknown.length?"\\nIDs no encontrados: "+unknown.slice(0,20).join(", "):"");if(confirm(msg+"\\n\\nAceptar = sumar cantidades. Cancelar = no importar.")){for(const [id,q] of valid){state.owned[id]=qty(id)+q;if(state.owned[id]>99)state.owned[id]=99}saveLocal();if(state.user)syncCloud();renderVisibleOnly();notify("Colección importada")}}catch(e){alert(e.message||"CSV no válido")}
 }
-const REMOTE_CARDS="https://raw.githubusercontent.com/michalkiral/optcg-data/main/data/index/cards_by_id.json";
-const REMOTE_PACKS="https://raw.githubusercontent.com/michalkiral/optcg-data/main/data/packs.json";
-const REMOTE_OP17="https://raw.githubusercontent.com/hugoprudente/optcgjson/main/output/OP17.json";
+const REMOTE_ALLSETS="https://raw.githubusercontent.com/hugoprudente/optcgjson/main/output/AllSets.json";
 async function loadCatalogData(){
   try{
-    const [remoteCards,remotePacks,op17]=await Promise.all([fetchJson(REMOTE_CARDS,30000),fetchJson(REMOTE_PACKS,20000),fetchJson(REMOTE_OP17,30000)]);
-    let cards=Array.isArray(remoteCards)?remoteCards:Object.values(remoteCards||{});
-    const isJapanese = c => /(?:^|[-_ ])JP(?:$|[-_ ])|\\bJAPANESE\\b|NON-ENGLISH|ASIA REGION LEGAL/i.test(String(c?.id||"")+" "+String(c?.set||"")+" "+String(c?.set_name||""));
-    cards=cards.filter(c=>!isJapanese(c));
-    const o17=op17?.data?.cards||[];
-    const normalized17=o17.map(c=>({id:c.id,set:"OP-17",name:c.name,rarity:c.rarity==="L"?"Leader":c.rarity,category:c.cardClass==="LEADER"?"Leader":(c.cardClass==="EVENT"?"Event":(c.cardClass==="STAGE"?"Stage":"Character")),colors:c.color||[],cost:c.cost===null?null:Number(c.cost),power:c.power===null?null:Number(c.power),counter:c.counter===null?null:Number(c.counter),attributes:c.attribute||[],types:c.feature||[],effect:c.effect||"",trigger:c.trigger||null,image:c.imageUrl||"",isParallel:!!c.isParallel}));
-    const ids=new Set(normalized17.map(c=>c.id));
-    cards=cards.filter(c=>!ids.has(c.id)).concat(normalized17);
-    let packs=Array.isArray(remotePacks)?remotePacks:[];
-    if(!packs.some(p=>p.code==="OP-17"))packs=packs.concat([{code:"OP-17",name:"THE WORLD'S STRONGEST WARRIORS",cardCount:normalized17.length}]);
+    const remoteAllSets=await fetchJson(REMOTE_ALLSETS,30000);
+    const cards=[]; const packs=[]; const seen=new Set();
+    const normalizeSetCode=raw=>{const v=String(raw||"").trim().toUpperCase();if(v==="OP14")return "OP14-EB04";if(v==="OP15")return "OP15-EB04";const m=v.match(/^(OP|EB|ST|PRB)-?(\d{2})$/i);return m?m[1].toUpperCase()+"-"+m[2]:v};
+    for(const [key,payload] of Object.entries(remoteAllSets||{})){
+      const d=payload?.data;if(!d)continue;
+      const setCode=normalizeSetCode(d.code||key),setName=String(d.name||"").trim(),setCards=Array.isArray(d.cards)?d.cards:[];
+      packs.push({code:setCode,name:setName,cardCount:setCards.length});
+      for(const c of setCards){
+        const id=String(c?.id||"").trim();if(!id||seen.has(id))continue;
+        if(Array.isArray(c.languages)&&c.languages.length&&!c.languages.some(x=>/^English$/i.test(String(x))))continue;
+        seen.add(id);
+        const m=id.toUpperCase().match(/^(OP|EB|ST|PRB)(\d{2})-/i),cardSet=m?normalizeSetCode(m[1]+m[2]):setCode;
+        cards.push({id,set:cardSet,set_name:setName,name:String(c?.name||"").trim(),rarity:c?.rarity==="L"?"Leader":String(c?.rarity||"").trim(),category:c?.cardClass==="LEADER"?"Leader":c?.cardClass==="EVENT"?"Event":c?.cardClass==="STAGE"?"Stage":c?.cardClass==="DON"?"Don":"Character",colors:Array.isArray(c?.color)?c.color:[],cost:c?.cost==null?null:Number(c.cost),power:c?.power==null?null:Number(c.power),counter:c?.counter==null?null:Number(c.counter),block:c?.blockIcon==null?null:Number(c.blockIcon)||c.blockIcon,attributes:Array.isArray(c?.attribute)?c.attribute:[],types:Array.isArray(c?.feature)?c.feature:[],effect:c?.effect||"",trigger:c?.trigger||null,image:c?.imageUrl||"",isParallel:!!c?.isParallel});
+      }
+    }
     if(!cards.length||!packs.length)throw Error("Fuente remota vacía");
     return {cards,packs,remote:true};
   }catch(e){
     const [localCards,localPacks]=await Promise.all([fetchJson(DATA+"cards.json"),fetchJson(DATA+"packs.json")]);
-    const cards= (Array.isArray(localCards)?localCards:Object.values(localCards||{})).filter(c=>!/(?:^|[-_ ])JP(?:$|[-_ ])|\\bJAPANESE\\b|NON-ENGLISH|ASIA REGION LEGAL/i.test(String(c?.id||"")+" "+String(c?.set||"")+" "+String(c?.set_name||"")));
+    const cards=(Array.isArray(localCards)?localCards:Object.values(localCards||{})).filter(c=>!isJapaneseCatalogCard(c));
     return {cards,packs:localPacks,remote:false};
   }
 }
