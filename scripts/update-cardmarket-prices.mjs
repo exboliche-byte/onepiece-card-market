@@ -98,6 +98,34 @@ function productVersion(name) {
   return m ? Number(m[1]) : null;
 }
 
+function buildProductVersionIndex(products) {
+  const groups = new Map();
+  for (const product of products) {
+    if (!product?.idProduct) continue;
+    const expansion = String(product.idExpansion ?? "");
+    const metacard = String(product.idMetacard ?? "");
+    if (!expansion || !metacard) continue;
+    const key = expansion + "|" + metacard;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(product);
+  }
+
+  const versions = new Map();
+  for (const [key, group] of groups.entries()) {
+    const ordered = [...group].sort((a, b) =>
+      String(a.dateAdded || "").localeCompare(String(b.dateAdded || "")) ||
+      Number(a.idProduct) - Number(b.idProduct)
+    );
+    let next = 1;
+    for (const product of ordered) {
+      const explicit = productVersion(product.name);
+      versions.set(String(product.idProduct), explicit ?? next);
+      next = Math.max(next, (explicit ?? next) + 1);
+    }
+  }
+  return versions;
+}
+
 function isJapaneseExpansion(value) {
   const s = String(value ?? "").toUpperCase();
   return /(?:^|[-_ ])JP(?:$|[-_ ])/.test(s) || /\bJAPANESE\b|NON-ENGLISH|ASIA REGION LEGAL/.test(s);
@@ -203,7 +231,7 @@ function cardNameMatches(card, product) {
   return 0;
 }
 
-function candidateScore(card, product) {
+function candidateScore(card, product, productVersions) {
   const cardBase = baseId(card.id).toUpperCase();
   const code = extractCardCode(product?.name);
   const cardCode = extractCardCode(cardBase);
@@ -220,14 +248,14 @@ function candidateScore(card, product) {
   if (cardNameMatches(card, product)) score += cardNameMatches(card, product);
 
   const wantedVersion = localVersion(card.id);
-  const actualVersion = productVersion(product?.name);
-  if (wantedVersion === actualVersion) score += 30;
-  else score -= 30;
+  const actualVersion = productVersions?.get(String(product?.idProduct)) ?? productVersion(product?.name);
+  if (wantedVersion === actualVersion) score += 50;
+  else if (actualVersion !== null && actualVersion !== undefined) score -= 30;
 
   return score;
 }
 
-function chooseProduct(card, productsBySetAndNumber, primaryExpansionBySet) {
+function chooseProduct(card, productsBySetAndNumber, primaryExpansionBySet, productVersions) {
   const base = baseId(card.id).toUpperCase();
   const cardCode = extractCardCode(base);
   const number = numberPart(base);
@@ -250,13 +278,13 @@ function chooseProduct(card, productsBySetAndNumber, primaryExpansionBySet) {
 
     if (primaryExpansionId && Number(product.idExpansion) !== Number(primaryExpansionId)) continue;
 
-    const score = candidateScore(card, product);
+    const score = candidateScore(card, product, productVersions);
     if (score > 0) {
       pool.push({
         product,
         score,
-        explicitVersion: productVersion(product.name) !== null,
-        version: productVersion(product.name)
+        explicitVersion: productVersions?.has(String(product.idProduct)) || productVersion(product.name) !== null,
+        version: productVersions?.get(String(product.idProduct)) ?? productVersion(product.name)
       });
     }
   }
@@ -400,6 +428,7 @@ async function main() {
   const ids = new Set(normalized17.map(card => card.id));
   cards = cards.filter(card => !ids.has(card.id)).concat(normalized17).filter(card => !isJapaneseCard(card));
   const products = readProducts(productsRaw).filter(isEnglishProduct);
+  const productVersions = buildProductVersionIndex(products);
   const prices = priceGuideIndex(readPrices(pricesRaw));
   if (!cards.length) throw new Error("Local card catalog is empty");
   if (!products.length) throw new Error("Cardmarket product catalog is empty");
@@ -413,7 +442,7 @@ async function main() {
 
   for (const card of cards) {
     const exactCandidates = allProductsForCard(card, products, primaryExpansionBySet);
-    const product = chooseProduct(card, exactCandidates.length ? exactCandidates : products, primaryExpansionBySet);
+    const product = chooseProduct(card, exactCandidates.length ? exactCandidates : products, primaryExpansionBySet, productVersions);
     if (!product) {
       unmatched.push(card.id);
       const prior = oldCards[card.id] || {};
