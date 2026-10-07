@@ -176,6 +176,21 @@ function logicalQty(c){
   const ids=state.groupByKey?.get(groupKey(c))?.ids||[c?.id];
   return ids.reduce((sum,id)=>sum+qty(id),0);
 }
+function ownedDeckVersion(cardOrId,required=1){
+  const raw=typeof cardOrId==="string"?String(cardOrId||"").trim():String(cardOrId?.id||"").trim();
+  const exact=(typeof cardOrId==="object"&&cardOrId?.id?cardOrId:null)||card(raw)||state.cards.find(c=>norm(c.id)===norm(raw))||null;
+  const logical=baseId(exact?.id||raw);
+  const group=state.groups.find(g=>(g.versions||[]).some(v=>norm(baseId(v.id))===norm(logical)));
+  const versions=(group?.versions||[]).filter(Boolean);
+  if(exact&&qty(exact.id)>0)return exact;
+  const need=Math.max(1,Number(required)||1);
+  const owned=versions.filter(v=>qty(v.id)>0).sort((a,b)=>{
+    const aEnough=qty(a.id)>=need?1:0,bEnough=qty(b.id)>=need?1:0;
+    return bEnough-aEnough||qty(b.id)-qty(a.id)||String(a.id).localeCompare(String(b.id),"es",{numeric:true});
+  });
+  if(owned.length)return owned[0];
+  return exact||versions.find(v=>norm(v.id)===norm(logical))||group?.card||null;
+}
 function uniqueSorted(arr){return [...new Set(arr.filter(v=>v!==null&&v!==undefined&&String(v)!==""))].sort((a,b)=>String(a).localeCompare(String(b),"es"))}
 function packSortKey(code){
   const s=String(code||"").toUpperCase().replace(/\\s+/g,"");
@@ -988,7 +1003,7 @@ function deckFilterPanel(){
     '<div class="filter-actions"><span class="active-filters-note">'+deckActiveFilterCount().toLocaleString("es-ES")+' filtro(s) activo(s)</span><button class="secondary btn" id="closeDeckFilters" type="button">Cerrar filtros</button></div>'+
   '</div>';
 }
-function deckTotalValue(d){let x=0,l=card(d?.leader);if(l)x+=Number(priceOf(l)||0);for(const [id,n] of Object.entries(d?.cards||{})){const cc=card(id);if(cc)x+=Number(n||0)*Number(priceOf(cc)||0)}return x}
+function deckTotalValue(d){let x=0,l=ownedDeckVersion(card(d?.leader)||d?.leader,1);if(l)x+=Number(priceOf(l)||0);for(const [id,n] of Object.entries(d?.cards||{})){const cc=ownedDeckVersion(card(id)||id,n);if(cc)x+=Number(n||0)*Number(priceOf(cc)||0)}return x}
 function competitiveLeaderOptions(){
   const seen=new Set(),leaders=[];
   for(const c of state.cards){
@@ -1023,7 +1038,7 @@ function competitiveDeckOwnedStats(result){
     if(got<1)cost+=Number(priceOf(leader)||0);
   }else missing+=1;
   for(const [id,qRaw] of Object.entries(result?.cards||{})){
-    const need=Math.max(0,Number(qRaw)||0),cc=resolveDeckImportCard(id);
+    const need=Math.max(0,Number(qRaw)||0),cc=resolveDeckImportCard(id,need);
     if(!cc){missing+=need;continue}
     const got=Math.min(need,logicalQty(cc));owned+=got;
     const miss=need-got;missing+=miss;
@@ -1088,7 +1103,7 @@ function openCompetitiveDeckPreview(index){
   if(!leaderCard||leaderCard.category!=="Leader")return notify("No encuentro ese líder en el catálogo actual");
   const cards={};let unresolved=0;
   for(const [id,qRaw] of Object.entries(result.cards||{})){
-    const cc=resolveDeckImportCard(id),q=Math.max(0,Number(qRaw)||0);
+    const q=Math.max(0,Number(qRaw)||0),cc=resolveDeckImportCard(id,q);
     if(!cc||cc.category==="Leader"){unresolved+=q;continue}
     const limit=deckCopyLimit(cc);
     cards[cc.id]=Math.min(limit,(cards[cc.id]||0)+q);
@@ -1182,19 +1197,21 @@ function deckCompositionView(d){
 function deckRows(d){
   const r=[];
   if(d.leader){
-    const l=card(d.leader);
+    const original=card(d.leader),l=ownedDeckVersion(original||d.leader,1);
     if(l){
-      const lp=priceOf(l),missing=qty(l.id)<1;
-      r.push('<article class="card deck-owned-card '+(missing?"deckcard-missing":"")+'"><span class="tag">Líder</span><button class="linkbtn" data-detail="'+esc(l.id)+'" style="display:block;width:100%;padding:0">'+deckOwnedImg(l,qty(l.id),1)+'</button><div class="cardbody"><div class="name">'+esc(l.name||l.id)+'</div><div class="small">'+esc(l.id)+' · '+esc(l.colors?.join("/")||"—")+'</div><div class="small deck-owned-status">'+(lp!==null?money(lp)+' · ':"")+(missing?"te falta 1":"en colección")+'</div><button class="danger btn" style="width:100%;margin-top:6px" data-removeleader>Quitar líder</button></div></article>');
+      const have=logicalQty(l),lp=priceOf(l),missing=have<1;
+      const using=original&&l.id!==original.id?' · usando '+l.id:"";
+      r.push('<article class="card deck-owned-card '+(missing?"deckcard-missing":"")+'"><span class="tag">Líder</span><button class="linkbtn" data-detail="'+esc(l.id)+'" style="display:block;width:100%;padding:0">'+deckOwnedImg(l,have,1)+'</button><div class="cardbody"><div class="name">'+esc(l.name||l.id)+'</div><div class="small">'+esc(l.id)+' · '+esc(l.colors?.join("/")||"—")+esc(using)+'</div><div class="small deck-owned-status">'+(lp!==null?money(lp)+' · ':"")+(missing?"te falta 1":"en colección")+'</div><button class="danger btn" style="width:100%;margin-top:6px" data-removeleader>Quitar líder</button></div></article>');
     }
   }
   for(const [id,nRaw] of Object.entries(d.cards||{}).sort(([a],[b])=>String(a).localeCompare(String(b),"es",{numeric:true}))){
     const n=Number(nRaw)||0;if(n<=0)continue;
-    const cc=card(id);if(!cc)continue;
-    const have=qty(id),need=Math.max(0,n-have),unit=priceOf(cc),total=unit===null?null:n*Number(unit);
+    const original=card(id),cc=ownedDeckVersion(original||id,n);if(!cc)continue;
+    const have=logicalQty(cc),need=Math.max(0,n-have),unit=priceOf(cc),total=unit===null?null:n*Number(unit);
     const info=(unit!==null?money(unit)+(n>1?' · '+money(total):''):'Precio —');
     const ownership=need?('Tienes '+Math.min(have,n)+'/'+n+' · faltan '+need):('Tienes '+Math.min(have,n)+'/'+n);
-    r.push('<article class="card deck-owned-card '+(need?"deckcard-missing":"")+'"><span class="tag">×'+n+'</span><button class="linkbtn" data-detail="'+esc(cc.id)+'" style="display:block;width:100%;padding:0">'+deckOwnedImg(cc,have,n)+'</button><div class="cardbody"><div class="name">'+esc(cc.name||cc.id)+'</div><div class="small">'+esc(cc.id)+' · '+esc(cc.set||"—")+' · '+esc(cc.rarity||"—")+'</div><div class="small deck-owned-status">'+info+'<br>'+ownership+'</div><div class="quick"><button class="secondary" data-deckqty="'+esc(id)+'" data-d="-1">−</button><div class="qty">'+n+'</div><button class="primary" data-deckqty="'+esc(id)+'" data-d="1">+</button></div></div></article>');
+    const using=original&&cc.id!==original.id?' · usando '+cc.id:"";
+    r.push('<article class="card deck-owned-card '+(need?"deckcard-missing":"")+'"><span class="tag">×'+n+'</span><button class="linkbtn" data-detail="'+esc(cc.id)+'" style="display:block;width:100%;padding:0">'+deckOwnedImg(cc,have,n)+'</button><div class="cardbody"><div class="name">'+esc(cc.name||cc.id)+'</div><div class="small">'+esc(cc.id)+' · '+esc(cc.set||"—")+' · '+esc(cc.rarity||"—")+esc(using)+'</div><div class="small deck-owned-status">'+info+'<br>'+ownership+'</div><div class="quick"><button class="secondary" data-deckqty="'+esc(id)+'" data-d="-1">−</button><div class="qty">'+n+'</div><button class="primary" data-deckqty="'+esc(id)+'" data-d="1">+</button></div></div></article>');
   }
   return r.join("")||'<div class="notice" style="grid-column:1/-1">Elige primero un líder.</div>';
 }
@@ -1228,10 +1245,8 @@ function exportDeckFile(){
   $("#copyDeckList").onclick=async()=>{try{await navigator.clipboard.writeText(text)}catch{const el=$("#deckListExport");el.focus();el.select();document.execCommand?.("copy")}notify("Lista copiada")};
 }
 
-function resolveDeckImportCard(id){
-  const raw=String(id||"").trim(),exact=card(raw)||state.cards.find(cc=>norm(cc.id)===norm(raw));if(exact)return exact;
-  const base=baseId(raw),g=state.groups.find(g=>g.versions.some(v=>norm(baseId(v.id))===norm(base)));
-  return g?.versions.find(v=>v.id===base)||g?.card||null;
+function resolveDeckImportCard(id,required=1){
+  return ownedDeckVersion(id,required);
 }
 function parseDeckListLine(line){
   const raw=String(line||"").trim();if(!raw)return null;
@@ -1249,12 +1264,12 @@ function importDeckText(t,n=""){
     if(p&&typeof p==="object"){
       name=String(p.name||name);description=String(p.description||"");
       const lc=resolveDeckImportCard(p.leader);if(lc?.category==="Leader")leader=lc.id;
-      for(const [id,q] of Object.entries(p.cards||{})){const cc=resolveDeckImportCard(id),limit=cc?deckCopyLimit(cc):4,num=Math.max(0,Math.min(limit,Number(q)||0));if(cc?.category==="Leader"){if(!leader)leader=cc.id}else if(cc&&num)cards[cc.id]=num}
+      for(const [id,q] of Object.entries(p.cards||{})){const requested=Math.max(0,Number(q)||0),cc=resolveDeckImportCard(id,requested),limit=cc?deckCopyLimit(cc):4,num=Math.max(0,Math.min(limit,requested));if(cc?.category==="Leader"){if(!leader)leader=cc.id}else if(cc&&num)cards[cc.id]=Math.min(limit,(cards[cc.id]||0)+num)}
     }
   }catch{
     for(const raw of String(t||"").split(/\r?\n/)){
       const parsed=parseDeckListLine(raw);if(!parsed)continue;
-      const cc=resolveDeckImportCard(parsed.id);if(!cc)continue;
+      const cc=resolveDeckImportCard(parsed.id,parsed.quantity);if(!cc)continue;
       if(cc.category==="Leader"){if(!leader)leader=cc.id}
       else cards[cc.id]=Math.min(deckCopyLimit(cc),Number(cards[cc.id]||0)+parsed.quantity);
     }
@@ -1299,9 +1314,12 @@ function deckValidate(d){
   return {total,illegal,valid:!!leader&&total===50&&illegal===0,messages};
 }
 function deckMissingCost(d){
-  let x=0;const l=card(d?.leader);
-  if(l&&qty(l.id)<1)x+=Number(priceOf(l)||0);
-  for(const [id,n] of Object.entries(d?.cards||{})){const cc=card(id);if(cc)x+=Math.max(0,Number(n)-qty(id))*Number(priceOf(cc)||0)}
+  let x=0;const l=ownedDeckVersion(card(d?.leader)||d?.leader,1);
+  if(l&&logicalQty(l)<1)x+=Number(priceOf(l)||0);
+  for(const [id,n] of Object.entries(d?.cards||{})){
+    const cc=ownedDeckVersion(card(id)||id,n);if(!cc)continue;
+    x+=Math.max(0,Number(n)-logicalQty(cc))*Number(priceOf(cc)||0);
+  }
   return x;
 }
 function removeFromDeckGroup(id){
