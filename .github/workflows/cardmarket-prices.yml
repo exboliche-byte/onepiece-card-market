@@ -8,6 +8,8 @@ on:
     paths:
       - "scripts/update-cardmarket-prices.mjs"
       - ".github/workflows/cardmarket-prices.yml"
+      - "data/cards.json"
+      - "data/packs.json"
 
 permissions:
   contents: write
