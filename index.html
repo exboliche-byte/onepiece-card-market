@@ -137,12 +137,16 @@ function expansionFamilyKey(code){
   return s;
 }
 function sameExpansion(a,b){return expansionFamilyKey(a)===expansionFamilyKey(b)}
+function cardExpansionCode(c){return String(c?.source_set||c?.set||"").trim()}
+function cardPrintLabel(c){
+  const code=cardExpansionCode(c)||String(c?.set||"").trim();
+  const name=String(c?.set_name||"").trim();
+  if(name&&norm(name)!==norm(setName(code)))return (code?code+" · ":"")+name;
+  return code||name||"—";
+}
 function cardsForExpansion(code){
   const family=expansionFamilyKey(code);
-  return state.cards.filter(c=>{
-    const idFamily=String(c?.id||"").toUpperCase().match(/^(OP14|OP15)-/i)?.[1];
-    return (idFamily||expansionFamilyKey(c?.set))===family;
-  });
+  return state.cards.filter(c=>expansionFamilyKey(cardExpansionCode(c)||c?.set)===family);
 }
 function expansionType(code){
   const s=String(code||"").toUpperCase();
@@ -218,7 +222,7 @@ function ensureOwnedCardsInCatalog(){
     cc.search=norm([cc.id,cc.name,cc.set,cc.set_name,cc.category,cc.rarity,...(cc.colors||[]),...(cc.types||[]),...(cc.attributes||[]),cc.effect,cc.trigger].join(" "));
     const k=groupKey(cc);
     if(!map.has(k))map.set(k,{key:k,card:cc,ids:[],sets:new Set()});
-    const g=map.get(k);g.ids.push(cc.id);g.sets.add(cc.set);
+    const g=map.get(k);g.ids.push(cc.id);g.sets.add(cardExpansionCode(cc));
   }
   state.groups=[...map.values()].map(g=>({...g,sets:[...g.sets].sort(),versions:g.ids.map(id=>card(id))}));
   state.groupByKey=map;
@@ -247,7 +251,7 @@ function prepareCatalog(raw,packs){
   }
   state.cards=[...byId.values()];
   const map=new Map();
-  for(const c of state.cards){c.search=norm([c.id,c.name,c.set,c.set_name,c.category,c.rarity,...(c.colors||[]),...(c.types||[]),...(c.attributes||[]),c.effect,c.trigger].join(" "));const k=groupKey(c);if(!map.has(k))map.set(k,{key:k,card:c,ids:[],sets:new Set()});const g=map.get(k);g.ids.push(c.id);g.sets.add(c.set)}
+  for(const c of state.cards){c.search=norm([c.id,c.name,c.set,c.set_name,c.category,c.rarity,...(c.colors||[]),...(c.types||[]),...(c.attributes||[]),c.effect,c.trigger].join(" "));const k=groupKey(c);if(!map.has(k))map.set(k,{key:k,card:c,ids:[],sets:new Set()});const g=map.get(k);g.ids.push(c.id);g.sets.add(cardExpansionCode(c))}
   state.groups=[...map.values()].map(g=>({...g,sets:[...g.sets].sort(),versions:g.ids.map(id=>card(id))}));
   state.groupByKey=map;
   if(!state.album.set)state.album.set="";
@@ -397,7 +401,7 @@ function filteredCards(mode){
     const searchGroups=new Set(state.cards.filter(c=>searchMatchesCard(c,q)).map(groupKey));
     list=list.filter(c=>searchGroups.has(groupKey(c)));
   }
-  if(mode==="catalog"&&f.set&&f.set!=="Todas")list=list.filter(c=>sameExpansion(c.set,f.set));
+  if(mode==="catalog"&&f.set&&f.set!=="Todas")list=list.filter(c=>sameExpansion(cardExpansionCode(c),f.set));
   if(f.category&&f.category!=="Todos")list=list.filter(c=>filterValueMatches(c.category,f.category));
   if(f.color&&f.color!=="Todos")list=list.filter(c=>filterValueMatches(c.colors,f.color));
   if(f.rarity&&f.rarity!=="Todos")list=list.filter(c=>filterValueMatches(c.rarity,f.rarity));
@@ -414,7 +418,7 @@ function filteredCards(mode){
     if(f.ownership==="Me faltan")list=list.filter(c=>qty(c.id)<playsetTarget(c));
   }
   if(mode==="collection"){
-    if(f.set&&f.set!=="Todas")list=list.filter(c=>sameExpansion(c.set,f.set));
+    if(f.set&&f.set!=="Todas")list=list.filter(c=>sameExpansion(cardExpansionCode(c),f.set));
     if(f.quantity==="1")list=list.filter(c=>qty(c.id)===1);
     if(f.quantity==="2")list=list.filter(c=>qty(c.id)===2);
     if(f.quantity==="3")list=list.filter(c=>qty(c.id)===3);
@@ -436,7 +440,7 @@ function filteredCards(mode){
   };
   list.sort((a,b)=>{
     if(f.sort==="set"){
-      const av=packSortKey(a.set),bv=packSortKey(b.set);
+      const av=packSortKey(cardExpansionCode(a)),bv=packSortKey(cardExpansionCode(b));
       for(let i=0;i<av.length;i++){const d=cmp(av[i],bv[i]);if(d)return d*dir}
       return String(a.id).localeCompare(String(b.id),"es",{numeric:true})*dir;
     }
@@ -513,7 +517,7 @@ function cmpPrice(a,b){
   return d*(state.catalog.dir==="desc"?-1:1);
 }
 let priceDatasetPromise=null;
-const PRICE_CACHE_VERSION=16;
+const PRICE_CACHE_VERSION=17;
 const MARKET_DATA_URL="/data/cardmarket-prices.json";
 function priceOf(c){
   const key=c?.id;
@@ -535,28 +539,12 @@ function priceOf(c){
     if(Number.isFinite(n)&&n>0)return n;
   }
 
-  // Si la versión exacta no tiene precio propio, recuperar el precio de la
-  // impresión indicada por el catálogo/CSV dentro del historial de la carta.
-  const wantedSet=normalizePrintSet(printSetOf(c));
-  if(wantedSet){
-    const baseKey=baseId(key);
-    const base=state.marketMeta?.[baseKey]||state.marketMeta?.[norm(baseKey)]||{};
-    const matches=(base.collections||[]).filter(x=>marketCollectionMatchesSet(x,wantedSet));
-    const exactVersion=Number(meta?.version);
-    const match=(Number.isFinite(exactVersion)&&exactVersion>0
-      ?matches.find(x=>Number(x?.version)===exactVersion&&Number(x?.eur)>0)
-      :null)||matches.find(x=>Number(x?.eur)>0);
-    const n=Number(match?.eur);
-    if(Number.isFinite(n)&&n>0)return n;
-  }
-
-  // Último recurso para una impresión importada que aún no existe en el
-  // catálogo dinámico: conservar el último precio conocido del propio CSV.
-  // En cuanto exista una resolución dinámica exacta, los candidatos de arriba
-  // tienen prioridad y este valor deja de usarse automáticamente.
+  // Never borrow a price from another printing of the same logical card.
+  // For imported synthetic prints, the CSV value is only a last-known fallback
+  // until an exact dynamic mapping exists.
   const saved=state.importedCards?.[c?.id]||{};
   const importedPrice=Number(c?.importUnitPrice??saved?.importUnitPrice);
-  if(Number.isFinite(importedPrice)&&importedPrice>0)return importedPrice;
+  if((c?.syntheticImport||c?.importVariantId)&&Number.isFinite(importedPrice)&&importedPrice>0)return importedPrice;
   return null;
 }
 function selectPrimaryMarketEntry(id,entry){
@@ -674,36 +662,11 @@ function priceMeta(c){
 function cardmarketUrl(c){
   const meta=priceMeta(c);
   const direct=String(meta?.url||"").trim();
-  const wantedSet=normalizePrintSet(printSetOf(c));
-  if(wantedSet){
-    const baseMeta=state.marketMeta?.[baseId(c?.id)]||state.marketMeta?.[norm(baseId(c?.id))]||{};
-    const matches=(baseMeta.collections||[]).filter(x=>marketCollectionMatchesSet(x,wantedSet));
-    const exactVersion=Number(meta?.version);
-    const edition=(Number.isFinite(exactVersion)&&exactVersion>0
-      ?matches.find(x=>Number(x?.version)===exactVersion&&/^https?:\/\//i.test(String(x?.url||"")))
-      :null)||matches.find(x=>/^https?:\/\//i.test(String(x?.url||"")));
-    const editionUrl=String(edition?.url||"").trim();
-    // A generic /Cards/ URL means the updater did not identify a sellable
-    // product for this print, so the exact collection product is preferable.
-    if(/^https?:\/\//i.test(editionUrl)&&(!/^https?:\/\//i.test(direct)||/\/Cards\//i.test(direct)))return editionUrl;
-  }
-  if(/^https?:\/\//i.test(direct))return direct;
-  const importedSet=normalizePrintSet(c?.importPrintSet);
-  if(importedSet){
-    const baseMeta=state.marketMeta?.[baseId(c?.id)]||state.marketMeta?.[norm(baseId(c?.id))]||{};
-    const edition=(baseMeta.collections||[]).find(x=>normalizePrintSet(x?.setCode)===importedSet);
-    const editionUrl=String(edition?.url||"").trim();
-    if(/^https?:\/\//i.test(editionUrl))return editionUrl;
-  }
-  const base=card(baseId(c?.id));
-  if(base&&base.id!==c.id){
-    const baseMeta=priceMeta(base);
-    const baseDirect=String(baseMeta?.url||"").trim();
-    if(/^https?:\/\//i.test(baseDirect))return baseDirect;
-    const baseIdProduct=String(baseMeta?.cardmarketId||"").trim();
-    if(baseIdProduct)return "https://www.cardmarket.com/es/OnePiece/Products?idProduct="+encodeURIComponent(baseIdProduct);
-  }
   const id=String(meta?.cardmarketId||"").trim();
+
+  // Product URLs/IDs identify the exact sellable printing. Generic /Cards/
+  // pages are deliberately not used because they can represent another version.
+  if(/^https?:\/\//i.test(direct)&&!/\/Cards\//i.test(direct))return direct;
   if(id)return "https://www.cardmarket.com/es/OnePiece/Products?idProduct="+encodeURIComponent(id);
   return "";
 }
@@ -712,7 +675,7 @@ function cardTile(c,extra=""){
   return '<article class="card">'+
     '<span class="tag">×'+q+'</span>'+
     '<button class="linkbtn" data-detail="'+esc(c.id)+'" style="display:block;width:100%;padding:0">'+cardImg(c,"cardimg catalogthumb")+'</button>'+
-    '<div class="cardbody"><div class="name">'+esc(c.name||c.id)+'</div><div class="small">'+esc(c.id)+' · '+esc(c.set||"—")+' · '+esc(c.rarity||"—")+'</div>'+
+    '<div class="cardbody"><div class="name">'+esc(c.name||c.id)+'</div><div class="small">'+esc(c.id)+' · '+esc(cardExpansionCode(c)||"—")+' · '+esc(c.rarity||"—")+'</div>'+
     '<div class="chips">'+(c.colors||[]).map(x=>'<span class="chip">'+esc(x)+'</span>').join("")+'</div>'+
     '<div class="row"><span>'+(p!==null?money(p):"Precio —")+'</span><span class="small">'+q+'/'+target+'</span></div>'+
     '<div class="quick"><button class="secondary" data-qty="'+esc(c.id)+'" data-d="-1">−</button><div class="qty">'+q+'</div><button class="primary" data-qty="'+esc(c.id)+'" data-d="1">+</button></div>'+
@@ -1273,7 +1236,7 @@ async function renderDeckResults(){
   if(choosingLeader)list=list.filter(c=>c.category==="Leader");
   else list=list.filter(c=>deckCardAllowedByLeader(c,leader));
   if(q){const searchGroups=new Set(state.cards.filter(c=>searchMatchesCard(c,q)).map(groupKey));list=list.filter(c=>searchGroups.has(groupKey(c)))}
-  if(f.set!=="Todas")list=list.filter(c=>sameExpansion(c.set,f.set));
+  if(f.set!=="Todas")list=list.filter(c=>sameExpansion(cardExpansionCode(c),f.set));
   if(!choosingLeader&&f.category!=="Todos"&&f.category!=="Leader")list=list.filter(c=>filterValueMatches(c.category,f.category));
   if(f.color!=="Todos")list=list.filter(c=>filterValueMatches(c.colors,f.color));
   if(f.rarity!=="Todos")list=list.filter(c=>filterValueMatches(c.rarity,f.rarity));
@@ -1425,18 +1388,19 @@ function detailView(c){
   const versions=(group?.versions||[c]).filter(Boolean);
   const q=qty(c.id);
   const collections=priceMeta(c).collections||[];
+  const cmUrl=cardmarketUrl(c);
   return '<div class="modalback"><div class="modal"><div class="sectionhead"><div><b>'+esc(c.id)+'</b><div class="small">'+esc(c.name)+'</div></div><button class="close" data-close>×</button></div>'+
     '<div class="detail"><div>'+cardImg(c,"cardimg detailimg")+'</div><div>'+
       '<h2 style="margin-top:0">'+esc(c.name)+'</h2>'+
-      '<div class="small">'+esc(c.set)+' · '+esc(c.rarity||"—")+' · '+esc(c.category||"—")+'</div>'+
+      '<div class="small">'+esc(cardPrintLabel(c))+' · '+esc(c.rarity||"—")+' · '+esc(c.category||"—")+'</div>'+
       '<div class="chips">'+(c.colors||[]).map(x=>'<span class="chip">'+esc(x)+'</span>').join("")+'</div>'+
       '<p style="white-space:pre-wrap">'+esc(c.effect||"Sin efecto disponible")+'</p>'+
       '<div class="small">Coste '+esc(c.cost??"—")+' · Poder '+esc(c.power??"—")+' · Counter '+esc(c.counter??"—")+'</div>'+
       '<div class="row" style="margin-top:10px"><b>Mi colección: '+q+'</b><b>'+(priceOf(c)!==null?money(priceOf(c)):"Precio —")+'</b></div>'+
       '<div class="small" style="margin-top:5px">Precio de salida (referencia): '+(priceMeta(c)?.launchPrice!==null&&priceMeta(c)?.launchPrice!==undefined?money(priceMeta(c).launchPrice):"—")+'</div>'+
       (deckMode?(c.category==="Leader"?'<div class="quick"><button class="secondary" data-removeleader="'+esc(c.id)+'">−</button><div class="qty">'+(state.decks.find(d=>d.id===state.deckId)?.leader===c.id?1:0)+'</div><button class="primary" data-setleader="'+esc(c.id)+'">+</button></div>':'<div class="quick"><button class="secondary" data-deckqty="'+esc(c.id)+'" data-d="-1">−</button><div class="qty">'+Number(state.decks.find(d=>d.id===state.deckId)?.cards?.[c.id]||0)+'</div><button class="primary" data-adddeck="'+esc(c.id)+'">+</button></div>'):'<div class="quick"><button class="secondary" data-qty="'+esc(c.id)+'" data-d="-1">−</button><div class="qty">'+q+'</div><button class="primary" data-qty="'+esc(c.id)+'" data-d="1">+</button></div>')+
-      '<a class="secondary btn" style="display:block;text-align:center;margin-top:8px;text-decoration:none" target="_blank" rel="noopener" href="'+esc(cardmarketUrl(c))+'">Cardmarket ↗</a>'+
-      '<h3 style="margin-top:18px">Versiones / reimpresiones</h3>'+(deckMode?'<p class="small">Toca una versión para verla y añadir o quitar esa impresión.</p>':'')+'<div class="version-list">'+versions.map(v=>'<button class="version secondary" data-detail="'+esc(v.id)+'">'+cardImg(v,"versionImg")+'<small>'+esc(v.set)+' · '+(priceOf(v)!==null?money(priceOf(v)):"Precio —")+' · ×'+qty(v.id)+'</small></button>').join("")+'</div>'+
+      (cmUrl?'<a class="secondary btn" style="display:block;text-align:center;margin-top:8px;text-decoration:none" target="_blank" rel="noopener" href="'+esc(cmUrl)+'">Cardmarket ↗</a>':'<div class="small" style="margin-top:8px">Enlace exacto de Cardmarket no disponible</div>')+
+      '<h3 style="margin-top:18px">Versiones / reimpresiones</h3>'+(deckMode?'<p class="small">Toca una versión para verla y añadir o quitar esa impresión.</p>':'')+'<div class="version-list">'+versions.map(v=>'<button class="version secondary" data-detail="'+esc(v.id)+'">'+cardImg(v,"versionImg")+'<small>'+esc(cardPrintLabel(v))+' · '+(priceOf(v)!==null?money(priceOf(v)):"Precio —")+' · ×'+qty(v.id)+'</small></button>').join("")+'</div>'+
       renderCardmarketCollections(c)+
     '</div></div></div></div>';
 }
@@ -2089,7 +2053,10 @@ function catalogPrintSetOf(c){
   const imported=normalizePrintSet(c?.importPrintSet);
   if(imported)return imported;
 
-  // "Promotion card" es más específico que el set lógico de la carta.
+  const sourceCode=printSetCodeFromText(c?.source_set)||normalizePrintSet(c?.source_set);
+  if(sourceCode&&sourceCode!=="LIMITEDPRODUCTCARD"&&sourceCode!=="FAMILYDECKSET")return sourceCode;
+
+  // El nombre exacto de la impresión/producto es más específico que el número lógico.
   const nameCode=printSetCodeFromText(c?.set_name);
   if(nameCode==="P")return "P";
 
