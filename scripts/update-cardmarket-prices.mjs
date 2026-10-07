@@ -446,6 +446,10 @@ async function main() {
   cards = cards.filter(card => !ids.has(card.id)).concat(normalized17).filter(card => !isJapaneseCard(card));
   const allProducts = readProducts(productsRaw);
   const products = allProducts.filter(product => isEnglishProduct(product));
+  console.log(JSON.stringify({
+    productKeys: Object.keys(allProducts[0] || {}),
+    productSample: allProducts.find(p => extractCardCode(p?.name) === "EB01-001") || allProducts[0]
+  }));
   const productVersions = buildProductVersionIndex(products);
   const prices = priceGuideIndex(readPrices(pricesRaw));
   if (!cards.length) throw new Error("Local card catalog is empty");
