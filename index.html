@@ -1152,6 +1152,11 @@ function deckLibraryView(){
 function decksView(){
   const d=state.decks.find(x=>x.id===state.deckId);
   const draft=!!d?.draftCompetitive;
+  if(d&&preferOwnedVersionsInDeck(d)){
+    d.updatedAt=new Date().toISOString();
+    if(!draft)saveLocal();
+    if(state.user&&!draft)syncDeck(d);
+  }
   if(!state.user&&!draft)return deckLibraryView();
   const savedCount=state.decks.filter(x=>!x?.draftCompetitive).length;
   if(state.deckLibrary||(!draft&&!savedCount))return deckLibraryView();
@@ -1247,6 +1252,27 @@ function exportDeckFile(){
 
 function resolveDeckImportCard(id,required=1){
   return ownedDeckVersion(id,required);
+}
+function preferOwnedVersionsInDeck(d){
+  if(!d)return false;
+  let changed=false;
+  if(d.leader){
+    const preferred=ownedDeckVersion(d.leader,1);
+    if(preferred&&qty(preferred.id)>0&&preferred.id!==d.leader){
+      d.leader=preferred.id;
+      changed=true;
+    }
+  }
+  const next={};
+  for(const [id,qRaw] of Object.entries(d.cards||{})){
+    const q=Math.max(0,Number(qRaw)||0);if(!q)continue;
+    const preferred=ownedDeckVersion(id,q);
+    const target=preferred&&logicalQty(preferred)>0?preferred.id:id;
+    next[target]=(next[target]||0)+q;
+    if(target!==id)changed=true;
+  }
+  if(changed)d.cards=next;
+  return changed;
 }
 function parseDeckListLine(line){
   const raw=String(line||"").trim();if(!raw)return null;
