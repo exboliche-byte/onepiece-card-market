@@ -632,7 +632,14 @@ function candidateScore(card, product, productVersions, primaryExpansionBySet, e
     product?.expansionName ||
     ""
   );
-  if (expectedExpansions.includes(productExpansion)) score += 100;
+  const exactPrintName = norm(card?.set_name || "");
+  const exactPrintNameMatch = exactPrintName && productExpansion && (
+    exactPrintName === productExpansion ||
+    exactPrintName.includes(productExpansion) ||
+    productExpansion.includes(exactPrintName)
+  );
+  if (exactPrintNameMatch) score += 180;
+  else if (expectedExpansions.includes(productExpansion)) score += 100;
   else if (/(^|\s)(promo|promos)(\s|:|-|$)/i.test(productExpansion)) score -= 80;
 
   const primaryExpansionId = primaryExpansionBySet?.get(sourceSet);
@@ -808,9 +815,10 @@ function normalizeOptcgCatalog(parsed) {
       if (Array.isArray(raw?.languages) && raw.languages.length && !raw.languages.some(x => /^English$/i.test(String(x)))) continue;
       seen.add(id);
       const idPrefix = id.toUpperCase().match(/^(OP|EB|ST|PRB)(\d{2})-/i);
-      const cardSet = idPrefix ? normalizeOptcgSetCode(idPrefix[1] + idPrefix[2]) : setCode;
+      const originSet = idPrefix ? normalizeOptcgSetCode(idPrefix[1] + idPrefix[2]) : setCode;
+      const printName = String(raw?.card_set || setName || setCode).trim();
       cards.push({
-        id, set: cardSet, source_set: setCode, set_name: setName, name: String(raw?.name || "").trim(),
+        id, set: setCode, source_set: setCode, origin_set: originSet, set_name: printName, pack_name: setName, name: String(raw?.name || "").trim(),
         rarity: raw?.rarity === "L" ? "Leader" : String(raw?.rarity || "").trim(),
         category: raw?.cardClass === "LEADER" ? "Leader" : raw?.cardClass === "EVENT" ? "Event" : raw?.cardClass === "STAGE" ? "Stage" : raw?.cardClass === "DON" ? "Don" : "Character",
         colors: Array.isArray(raw?.color) ? raw.color : [], cost: raw?.cost == null ? null : Number(raw.cost),
