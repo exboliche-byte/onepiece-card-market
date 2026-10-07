@@ -740,6 +740,14 @@ async function main() {
   };
 
   if (coverage < MIN_COVERAGE) {
+    const bySet = new Map();
+    for (const id of unmatched) {
+      const card = cards.find(c => String(c?.id || "") === String(id));
+      const set = sourceSetCode(card || {id});
+      bySet.set(set, (bySet.get(set) || 0) + 1);
+    }
+    console.error("Unmatched by source set:", Object.fromEntries([...bySet.entries()].sort((a,b)=>b[1]-a[1])));
+    console.error("Unmatched sample:", unmatched.slice(0, 100).join(", "));
     throw new Error("Safety check failed: only " + mapped + "/" + cards.length + " cards matched to an exact Cardmarket product (" + (coverage * 100).toFixed(1) + "%)");
   }
 
