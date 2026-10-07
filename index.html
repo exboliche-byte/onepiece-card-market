@@ -333,10 +333,13 @@ const PRICE_CACHE_VERSION=15;
 const MARKET_DATA_URL="/data/cardmarket-prices.json";
 function priceOf(c){
   const key=c?.id;
-  const meta=state.marketMeta?.[key]||state.marketMeta?.[norm(key)]||{};
+  const source=importedSourceCard(c);
+  const meta=priceMeta(c);
   const candidates=[
     state.prices?.[key],
     state.prices?.[norm(key)],
+    source?state.prices?.[source.id]:null,
+    source?state.prices?.[norm(source.id)]:null,
     meta.eur,
     meta.trend,
     meta.avg,
