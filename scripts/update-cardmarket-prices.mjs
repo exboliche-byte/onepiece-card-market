@@ -951,7 +951,7 @@ async function main() {
       cardmarketId: product ? Number(product.idProduct) : null,
       expansionId: product ? Number(product.idExpansion) : null,
       expansion: limitlessPrint?.expansion || String(languageMap.expansionNamesById?.get(Number(product?.idExpansion)) || CARDMARKET_SET_NAMES[sourceSetCode(card)]?.[0] || sourceSetCode(card)),
-      version: productVersions?.get(String(product.idProduct)) ?? productVersion(product.name) ?? desiredMarketVersion,
+      version: limitlessPrint?.limitlessVersion ?? (product ? productVersion(product.name) ?? null : null),
       url: limitlessPrint?.url || (exactPrintOracle?.urlsByPrint?.get(String(card.id))?.[0]
         ? exactPrintOracle.urlsByPrint.get(String(card.id))[0].replace("/en/OnePiece/", "/es/OnePiece/")
         : (product ? "https://www.cardmarket.com/es/OnePiece/Products?idProduct=" + encodeURIComponent(String(product.idProduct)) : cardmarketCardUrl(baseCard))),
