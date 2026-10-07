@@ -358,7 +358,11 @@ function mergePriceDataset(d){
       version:Number(entry?.version||1),
       launchPrice:Number.isFinite(Number(entry?.launchPrice))?Number(entry.launchPrice):null,
       launchPriceDate:entry?.launchPriceDate||null,
-      trend:Number.isFinite(Number(entry?.trend))?Number(entry.trend):null,\n      avg:Number.isFinite(Number(entry?.avg))?Number(entry.avg):null,\n      avg5:Number.isFinite(Number(entry?.avg5))?Number(entry.avg5):null,\n      low:Number.isFinite(Number(entry?.low))?Number(entry.low):null,\n      sourceUrl:String(entry?.sourceUrl||""),
+      trend:Number.isFinite(Number(entry?.trend))?Number(entry.trend):null,
+      avg:Number.isFinite(Number(entry?.avg))?Number(entry.avg):null,
+      avg5:Number.isFinite(Number(entry?.avg5))?Number(entry.avg5):null,
+      low:Number.isFinite(Number(entry?.low))?Number(entry.low):null,
+      sourceUrl:String(entry?.sourceUrl||""),
       collections:Array.isArray(entry?.collections)?entry.collections.map(collection=>({
         expansion:String(collection?.expansion||"").trim(),
         expansionId:Number.isFinite(Number(collection?.expansionId))?Number(collection?.expansionId):null,
@@ -715,7 +719,11 @@ function changeQty(id,d){
   notify(n?"Colección actualizada":"Carta quitada");
 }
 async function clearCollection(){
-  if(!confirm("¿Borrar TODA tu colección?\n\nSe eliminarán todas las cantidades guardadas en este dispositivo y, si tienes sesión iniciada, también de la nube.\n\nEsta acción no se puede deshacer."))return;
+  if(!confirm("¿Borrar TODA tu colección?
+
+Se eliminarán todas las cantidades guardadas en este dispositivo y, si tienes sesión iniciada, también de la nube.
+
+Esta acción no se puede deshacer."))return;
   state.owned={};
   saveLocal();
   if(state.user&&state.sb){
@@ -1005,10 +1013,13 @@ function sharedDeckView(){
 }
 function csvEscape(v){
   const s=String(v??"");
-  return /[",\n\r]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;
+  return /[",
+\r]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;
 }
 function csvDownload(rows,filename){
-  const csv="\uFEFF"+rows.map(r=>r.map(csvEscape).join(",")).join("\r\n")+"\r\n";
+  const csv="\uFEFF"+rows.map(r=>r.map(csvEscape).join(",")).join("\r
+")+"\r
+";
   const a=document.createElement("a");
   a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8"}));
   a.download=filename;
@@ -1042,15 +1053,18 @@ function exportCollectionCSV(){
 function parseCSV(text){
   text=String(text??"").replace(/^\uFEFF/,"");
   const rows=[];let row=[],cell="",quote=false;
-  const firstLine=(text.split(/\r?\n/,1)[0]||"").replace(/^\uFEFF/,"");
+  const firstLine=(text.split(/\r?
+/,1)[0]||"").replace(/^\uFEFF/,"");
   const delim=firstLine.includes(",")?",":";";
   for(let i=0;i<text.length;i++){
     const ch=text[i],nx=text[i+1];
     if(ch==='"'&&quote&&nx==='"'){cell+='"';i++;continue}
     if(ch==='"'){quote=!quote;continue}
     if(ch===delim&&!quote){row.push(cell);cell="";continue}
-    if((ch==="\n"||ch==="\r")&&!quote){
-      if(ch==="\r"&&nx==="\n")i++;
+    if((ch==="
+"||ch==="\r")&&!quote){
+      if(ch==="\r"&&nx==="
+")i++;
       row.push(cell);rows.push(row);row=[];cell="";continue;
     }
     cell+=ch;
@@ -1081,9 +1095,14 @@ function previewImport(text){
     }
     const sum=[...imported.values()].reduce((a,x)=>a+x,0);
     const msg="Filas: "+(rows.length-1)+" · reconocidas: "+imported.size+" cartas · "+sum+" copias"+
-      (unknown.length?"\nNo reconocidas: "+unknown.slice(0,15).join(", ")+(unknown.length>15?" …":""):"")+
-      "\n\nLa importación sustituirá las cantidades actuales por las del CSV.";
-    if(confirm(msg+"\n\nAceptar = importar. Cancelar = no cambiar nada.")){
+      (unknown.length?"
+No reconocidas: "+unknown.slice(0,15).join(", ")+(unknown.length>15?" …":""):"")+
+      "
+
+La importación sustituirá las cantidades actuales por las del CSV.";
+    if(confirm(msg+"
+
+Aceptar = importar. Cancelar = no cambiar nada.")){
       state.owned={};
       for(const [id,q] of imported)if(q>0)state.owned[id]=q;
       saveLocal();
