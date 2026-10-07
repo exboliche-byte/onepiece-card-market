@@ -171,11 +171,11 @@ function setCodesEqual(a,b){return setCodeKey(a)===setCodeKey(b)}
 function searchMatchesCard(c,q){
   const query=norm(q);
   if(!query)return true;
-  const id=norm(c.id),set=norm(c.set),setName=norm(c.set_name);
+  const id=norm(c.id),base=norm(baseId(c.id)),set=norm(c.set),setName=norm(c.set_name);
   const looksLikeId=/^(?:op|st|eb|prb|p|ex|don)[-_]?\d+/i.test(query)||/\d{2,3}[-_]\d{3}/.test(query);
-  if(looksLikeId)return id.includes(query)||set.includes(query);
+  if(looksLikeId)return id.includes(query)||base.includes(query)||set.includes(query);
   const setMatch=setName===query||set===query;
-  return norm(c.name).includes(query)||setMatch;
+  return norm(c.name).includes(query)||norm(base).includes(query)||setMatch;
 }
 function filterValueMatches(value,selected){
   const target=norm(selected);
@@ -189,7 +189,13 @@ function filteredCards(mode){
     ?state.cards.filter(c=>qty(c.id)>0)
     :mode==="album"&&f.set?cardsForExpansion(f.set):state.cards;
   const q=norm(f.query||state.query||"");
-  if(q)list=list.filter(c=>searchMatchesCard(c,q));
+  if(q){
+    // Search/filter by logical card: _p1/_r1/_c1 variants are the same card.
+    // First find the matching logical groups across the full catalog, then keep
+    // all versions that survive the active expansion/other filters.
+    const searchGroups=new Set(state.cards.filter(c=>searchMatchesCard(c,q)).map(groupKey));
+    list=list.filter(c=>searchGroups.has(groupKey(c)));
+  }
   if(mode==="catalog"&&f.set&&f.set!=="Todas")list=list.filter(c=>sameExpansion(c.set,f.set));
   if(f.category&&f.category!=="Todos")list=list.filter(c=>filterValueMatches(c.category,f.category));
   if(f.color&&f.color!=="Todos")list=list.filter(c=>filterValueMatches(c.colors,f.color));
