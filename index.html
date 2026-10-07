@@ -505,7 +505,10 @@ function loadCachedPrices(){
   }catch{localStorage.removeItem("mialbumonepiece_prices")}
 }
 function collectionPriceOf(c){return priceOf(c)}
-async function ensureCollectionPrices({refresh=false}={}){await loadMarketPrices({refresh})}
+async function ensureCollectionPrices({refresh=false}={}){
+  await loadMarketPrices({refresh});
+  await fillMissingExactPrices(state.cards);
+}
 const COLLECTION_PRICE_CACHE_VERSION=PRICE_CACHE_VERSION;
 function loadCachedCollectionPrices(){}
 function cardmarketVersionLabel(c){
