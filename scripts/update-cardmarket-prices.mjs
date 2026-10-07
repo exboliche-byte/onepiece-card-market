@@ -251,13 +251,18 @@ function extractCardCode(text) {
 }
 
 function expansionMatches(setCode, expansionName, localSetName = "") {
-  const wanted = [...(CARDMARKET_SET_NAMES[setCode] || []), localSetName];
+  const wanted = [...(CARDMARKET_SET_NAMES[setCode] || []), localSetName]
+    .map(norm)
+    .filter(Boolean);
   const target = norm(expansionName);
   if (!target) return false;
-  return wanted.some(name => {
-    const candidate = norm(name);
-    return candidate && (candidate === target || candidate.includes(target) || target.includes(candidate));
-  });
+
+  // Match the actual expansion name, not a substring. Cardmarket has
+  // separate expansions such as "Wings of the Captain" and
+  // "Promos: Wings of the Captain" which contain the same words and share
+  // the same printed card numbers. A fuzzy match here can therefore assign
+  // a promo's price/product URL to the normal expansion card.
+  return wanted.includes(target);
 }
 
 function readProducts(data) {
