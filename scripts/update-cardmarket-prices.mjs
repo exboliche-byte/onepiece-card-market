@@ -272,7 +272,8 @@ function candidateScore(card, product, productVersions) {
   const cNumber = numberPart(cardBase).replace(/^0+/, "") || "0";
   if (pNumber === cNumber) score += 20;
 
-  if (expansionMatches(String(card.set || "").toUpperCase(), product?.expansionName)) score += 35;
+  if (expansionMatches(sourceSetCode(card), product?.expansionName, String(card?.set_name || ""))) score += 100;
+  else if (primaryExpansionId && Number(product.idExpansion) === Number(primaryExpansionId)) score += 10;
   if (cardNameMatches(card, product)) score += cardNameMatches(card, product);
 
   const wantedVersion = localVersion(card.id);
@@ -303,8 +304,6 @@ function chooseProduct(card, productsBySetAndNumber, primaryExpansionBySet, prod
     } else {
       continue;
     }
-
-    if (primaryExpansionId && Number(product.idExpansion) !== Number(primaryExpansionId)) continue;
 
     const score = candidateScore(card, product, productVersions);
     if (score > 0) {
