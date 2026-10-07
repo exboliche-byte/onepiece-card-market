@@ -951,6 +951,10 @@ function bindShell(){
       if(!key)return;
       state.catalog[key]=target.value;
       state.catalog.page=1;
+      // Selecting price must apply immediately on the same change event.
+      if(key==="sort"&&target.value==="price"){
+        try{await ensurePrices();}catch(e){console.warn("catalog prices",e)}
+      }
       await renderCatalogResults();
     };
     const catalogToolbar=$("#catalogToolbar");
@@ -968,7 +972,14 @@ function bindShell(){
   if(state.tab==="collection"){
     bindSearch("#collectionSearch",v=>{state.collection.query=v;state.collection.page=1;renderCollectionResults()});
     const map={colSet:"set",colCategory:"category",colColor:"color",colRarity:"rarity",colType:"type",colAttribute:"attribute",colQty:"quantity",colPlayset:"playset",colSort:"sort",colDir:"dir"};
-    Object.entries(map).forEach(([id,k])=>$("#"+id)?.addEventListener("change",async()=>{state.collection[k]=$("#"+id).value;state.collection.page=1;if(k==="sort"&&state.collection.sort==="price")await ensurePrices(state.cards.map(c=>c.id));renderCollectionResults()}));
+    Object.entries(map).forEach(([id,k])=>$("#"+id)?.addEventListener("change",async()=>{
+      state.collection[k]=$("#"+id).value;
+      state.collection.page=1;
+      if(k==="sort"&&state.collection.sort==="price"){
+        try{await ensurePrices();}catch(e){console.warn("collection prices",e)}
+      }
+      await renderCollectionResults();
+    }));
     $("#collectionFilterToggle")?.addEventListener("click",()=>{state.collection.filtersOpen=!state.collection.filtersOpen;renderShell()});
     $("#closeCollectionFilters")?.addEventListener("click",()=>{state.collection.filtersOpen=false;renderShell()});
     $("#clearCollectionFilters")?.addEventListener("click",()=>{Object.assign(state.collection,{set:"Todas",category:"Todos",color:"Todos",rarity:"Todos",type:"Todos",attribute:"Todos",quantity:"Todas",playset:"Todas",page:1});renderShell()});
@@ -986,7 +997,14 @@ function bindShell(){
   if(state.tab==="album"){
     $("#backToExpansions")?.addEventListener("click",()=>{state.album.set="";state.album.query="";state.album.page=1;renderShell()});
     $("#albumOwn")?.addEventListener("change",e=>{state.album.ownership=e.target.value;state.album.page=1;renderAlbumResults()});
-    $("#albumSort")?.addEventListener("change",e=>{state.album.sort=e.target.value;state.album.page=1;renderAlbumResults()});
+    $("#albumSort")?.addEventListener("change",async e=>{
+      state.album.sort=e.target.value;
+      state.album.page=1;
+      if(state.album.sort==="price"){
+        try{await ensurePrices();}catch(err){console.warn("album prices",err)}
+      }
+      renderAlbumResults();
+    });
     bindSearch("#albumSearch",v=>{state.album.query=v;state.album.page=1;renderAlbumResults()});
   }
   if(state.tab==="decks"){
