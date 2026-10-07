@@ -461,26 +461,20 @@ async function main() {
   for (const card of cards) {
     const exactCandidates = allProductsForCard(card, products, primaryExpansionBySet);
     const productPool = exactCandidates.length ? exactCandidates : products;
+    if (["EB01-001","OP04-083","OP02-004"].includes(baseId(card.id).toUpperCase())) {
+      const code = extractCardCode(baseId(card.id).toUpperCase());
+      const candidates = products.filter(p => p?.idProduct && extractCardCode(p.name) === code);
+      console.log(JSON.stringify({
+        debugCard: card.id,
+        sourceSet: sourceSetCode(card),
+        exact: exactCandidates.map(p => ({idProduct:p.idProduct,name:p.name,expansion:p.expansionName,idExpansion:p.idExpansion,idMetacard:p.idMetacard,dateAdded:p.dateAdded})),
+        allSameCode: candidates.map(p => ({idProduct:p.idProduct,name:p.name,expansion:p.expansionName,idExpansion:p.idExpansion,idMetacard:p.idMetacard,dateAdded:p.dateAdded}))
+      }));
+    }
     const product = chooseProduct(card, productPool, primaryExpansionBySet, productVersions);
     if (!product) {
       unmatched.push(card.id);
       const prior = oldCards[card.id] || {};
-      if (/_p\d+$/i.test(String(card.id))) {
-      console.log(JSON.stringify({
-        debugCard: card.id,
-        set: card.set,
-        debugName: card.name,
-        chosen: product && {
-          idProduct: product.idProduct,
-          name: product.name,
-          expansionName: product.expansionName,
-          idExpansion: product.idExpansion,
-          idMetacard: product.idMetacard,
-          number: product.number,
-          dateAdded: product.dateAdded
-        }
-      }));
-    }
 
     outputCards[card.id] = {
         eur: null,
