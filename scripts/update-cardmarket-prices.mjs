@@ -257,12 +257,18 @@ function expansionMatches(setCode, expansionName, localSetName = "") {
   const target = norm(expansionName);
   if (!target) return false;
 
-  // Match the actual expansion name, not a substring. Cardmarket has
-  // separate expansions such as "Wings of the Captain" and
-  // "Promos: Wings of the Captain" which contain the same words and share
-  // the same printed card numbers. A fuzzy match here can therefore assign
-  // a promo's price/product URL to the normal expansion card.
-  return wanted.includes(target);
+  // Cardmarket has dedicated promo expansions such as
+  // "Promos: Wings of the Captain" whose products reuse the printed OP06
+  // numbers. They must never be considered part of the main expansion.
+  const isPromo = /(^|\\s)(promo|promos)(\\s|:|-|$)/i.test(target);
+  const wantedIsPromo = wanted.some(name => /(^|\\s)(promo|promos)(\\s|:|-|$)/i.test(name));
+  if (isPromo !== wantedIsPromo) return false;
+
+  // Keep the tolerant matching for harmless naming differences, but only
+  // after explicitly separating promo expansions from their main set.
+  return wanted.some(candidate =>
+    candidate === target || candidate.includes(target) || target.includes(candidate)
+  );
 }
 
 function readProducts(data) {
