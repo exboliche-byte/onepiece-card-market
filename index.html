@@ -59,6 +59,10 @@ function baseId(id){return safeId(id).replace(/_(?:p\d+|r\d+|c\d+|jp\d+)$/i,"")}
 function groupKey(c){
   return norm(baseId(c?.id));
 }
+function logicalQty(c){
+  const ids=state.groupByKey?.get(groupKey(c))?.ids||[c?.id];
+  return ids.reduce((sum,id)=>sum+qty(id),0);
+}
 function uniqueSorted(arr){return [...new Set(arr.filter(v=>v!==null&&v!==undefined&&String(v)!==""))].sort((a,b)=>String(a).localeCompare(String(b),"es"))}
 function packSortKey(code){
   const s=String(code||"").toUpperCase().replace(/\\s+/g,"");
@@ -222,9 +226,9 @@ function filteredCards(mode){
     if(f.playset==="Incompleto")list=list.filter(c=>qty(c.id)>0&&qty(c.id)<playsetTarget(c));
   }
   if(mode==="album"){
-    if(f.ownership==="Tengo")list=list.filter(c=>qty(c.id)>0);
-    if(f.ownership==="No tengo")list=list.filter(c=>qty(c.id)===0);
-    if(f.ownership==="Me faltan")list=list.filter(c=>qty(c.id)>0&&qty(c.id)<playsetTarget(c));
+    if(f.ownership==="Tengo")list=list.filter(c=>logicalQty(c)>0);
+    if(f.ownership==="No tengo")list=list.filter(c=>logicalQty(c)===0);
+    if(f.ownership==="Me faltan")list=list.filter(c=>logicalQty(c)>0&&logicalQty(c)<playsetTarget(c));
   }
   const dir=f.dir==="desc"?-1:1;
   const cmp=(av,bv)=>{
@@ -379,8 +383,8 @@ function cardTile(c,extra=""){
     extra+'</div></article>';
 }
 function groupedTile(g){
-  const c=g.card,q=g.versions.reduce((s,x)=>s+qty(x.id),0);
-  const albumMissing=state.tab==="album"&&!g.versions.some(v=>qty(v.id)>0);
+  const c=g.card,q=logicalQty(c);
+  const albumMissing=state.tab==="album"&&!q;
   const versionPrices=g.versions.map(priceOf).filter(v=>v!==null);
   const minPrice=versionPrices.length?Math.min(...versionPrices):null;
   const maxPrice=versionPrices.length?Math.max(...versionPrices):null;
@@ -556,7 +560,7 @@ function renderAlbumResults(){
   const host=$("#albumResults");if(!host)return;
   const list=filteredCards("album"),groups=groupCardList(list),pages=Math.max(1,Math.ceil(groups.length/PAGE));state.album.page=Math.min(state.album.page,pages);
   const start=(state.album.page-1)*PAGE,visible=groups.slice(start,start+PAGE);
-  const owned=list.filter(c=>qty(c.id)>0).length, none=list.filter(c=>qty(c.id)===0).length, missing=list.filter(c=>qty(c.id)>0&&qty(c.id)<playsetTarget(c)).length;
+  const owned=groups.filter(g=>logicalQty(g.card)>0).length, none=groups.filter(g=>logicalQty(g.card)===0).length, missing=groups.filter(g=>logicalQty(g.card)>0&&logicalQty(g.card)<playsetTarget(g.card)).length;
   host.innerHTML='<div class="stats"><div class="stat"><b>'+groups.length+'</b><span>Cartas de '+esc(packLabel({code:state.album.set}))+'</span></div><div class="stat"><b>'+owned+'</b><span>Tengo</span></div><div class="stat"><b>'+none+'</b><span>No tengo</span></div><div class="stat"><b>'+missing+'</b><span>Me faltan copias</span></div></div><div class="grid">'+visible.map(g=>groupedTile(g)).join("")+'</div>'+pagination(groups.length,state.album.page,"album");
   bindResultEvents(host);
   ensurePrices(visible.flatMap(g=>g.versions).map(c=>c.id));
