@@ -201,8 +201,15 @@ function loadCollectionForAccount({migrateLegacy=false}={}){
     const owner=localStorage.getItem("mialbumonepiece_collection_legacy_owner");
     if(!owner||owner===state.user.id)source=localStorage.getItem("mialbumonepiece_collection")||localStorage.getItem(collectionStorageKey(null));
   }
-  try{state.owned=JSON.parse(source||"{}")}catch{state.owned={}}
-  if(state.user&&!raw&&source){
+  try{
+    const parsed=JSON.parse(source||"{}");
+    const legacyRaw=localStorage.getItem("mialbumonepiece_collection");
+    const legacy=legacyRaw?JSON.parse(legacyRaw):{};
+    const legacyOwner=localStorage.getItem("mialbumonepiece_collection_legacy_owner");
+    const canUseLegacy=state.user&&(!legacyOwner||legacyOwner===state.user.id);
+    state.owned=(canUseLegacy&&Object.keys(parsed||{}).length===0&&Object.keys(legacy||{}).length>0)?legacy:parsed;
+  }catch{state.owned={}}
+  if(state.user&&!raw&&Object.keys(state.owned||{}).length){
     localStorage.setItem(key,JSON.stringify(state.owned));
     localStorage.setItem("mialbumonepiece_collection_legacy_owner",state.user.id);
   }
@@ -769,8 +776,10 @@ async function renderCollectionResults(){
   updateCollectionValue();
   const list=filteredCards("collection"),pages=Math.max(1,Math.ceil(list.length/PAGE));state.collection.page=Math.min(state.collection.page,pages);
   const start=(state.collection.page-1)*PAGE,visible=list.slice(start,start+PAGE),active=collectionActiveFilterCount();
-  host.innerHTML='<div class="notice">'+list.length.toLocaleString("es-ES")+' cartas en tu colección · '+collectionStats().copies.toLocaleString("es-ES")+' copias totales.'+(active?' Filtros activos: '+active+'.':'')+'</div><div class="grid">'+visible.map(c=>cardTile(c)).join("")+'</div>'+pagination(list.length,state.collection.page,"collection");
+  const stats=collectionStats(),empty=list.length===0&&stats.copies>0;
+  host.innerHTML='<div class="notice">'+list.length.toLocaleString("es-ES")+' cartas en tu colección · '+stats.copies.toLocaleString("es-ES")+' copias totales.'+(active?' Filtros activos: '+active+'.':'')+'</div>'+(empty?'<div class="section center"><b>Tu colección tiene cartas, pero no hay resultados visibles.</b><p class="muted">Limpia los filtros para volver a mostrarlas.</p><button class="secondary btn" id="collectionResetVisible">Limpiar filtros</button></div>':'<div class="grid">'+visible.map(c=>cardTile(c)).join("")+'</div>'+pagination(list.length,state.collection.page,"collection"));
   bindResultEvents(host);
+  $("#collectionResetVisible")?.addEventListener("click",()=>{Object.assign(state.collection,{query:"",set:"Todas",category:"Todos",color:"Todos",rarity:"Todos",type:"Todos",attribute:"Todos",quantity:"Todas",playset:"Todas",page:1});renderShell()});
   if(state.collection.sort!=="price"){
     const hadPrices=Object.keys(state.prices||{}).length>0;
     ensurePrices(visible.map(c=>c.id)).then(()=>{
@@ -857,7 +866,7 @@ function deckFilterPanel(){
 function deckTotalValue(d){let x=0,l=card(d?.leader);if(l)x+=Number(priceOf(l)||0);for(const [id,n] of Object.entries(d?.cards||{})){const cc=card(id);if(cc)x+=Number(n||0)*Number(priceOf(cc)||0)}return x}
 function deckLibraryView(){
   if(!state.user)return '<div class="wrap"><div class="hero"><div><h1>Mazos</h1><p>Los mazos se guardan asociados a tu cuenta.</p></div></div><div class="section center"><h2>Inicia sesión para gestionar tus mazos</h2><p class="muted">Así tus mazos quedan vinculados a tu cuenta y se sincronizan entre dispositivos.</p><button class="primary btn" id="deckAccountBtn">Entrar o crear cuenta</button></div></div>';
-  const tiles=state.decks.map(d=>{const l=card(d.leader),v=deckValidate(d);return '<button class="setcard decktile" data-open-deck="'+esc(d.id)+'">'+(l?cardImg(l,"deckleader"):'<div class="deckleader fallback" style="display:grid">Sin líder</div>')+'<div class="decktilebody"><b>'+esc(d.name)+'</b><div class="small">'+v.total+'/50 · '+(v.valid?"✓ Legal":"⚠ No legal")+'</div><div class="small">Valor '+money(deckTotalValue(d))+' · te faltan '+money(deckMissingCost(d))+'</div></div></button>'}).join("");
+  const tiles=state.decks.map(d=>{const l=card(d.leader),v=deckValidate(d);return '<button class="setcard decktile" data-open-deck="'+esc(d.id)+'">'+(l?cardImg(l,"deckleader"):'<div class="deckleader fallback" style="display:grid">Sin líder</div>')+'<div class="decktilebody"><b>'+esc(d.name)+'</b><div class="small">'+v.total+'/50 cartas · '+deckUniqueCount(d)+' diferentes · '+(d.leader?"1 líder":"sin líder")+'</div><div class="small">'+(v.valid?"✓ Legal":"⚠ No legal")+' · Valor '+money(deckTotalValue(d))+' · te faltan '+money(deckMissingCost(d))+'</div></div></button>'}).join("");
   return '<div class="wrap"><div class="hero"><div><h1>Mazos</h1><p>Tus mazos sincronizados con '+esc(state.user.email||"tu cuenta")+'.</p></div><div class="inline-actions"><button class="secondary btn" id="importDeckBtn">Importar lista</button><button class="primary btn" id="newDeck">Nuevo mazo</button></div></div><input id="deckImportFile" class="fileinput" type="file" accept=".txt,text/plain,.json,application/json">'+(tiles?'<div class="decklibrary">'+tiles+'</div>':'<div class="section center"><h2>Aún no tienes mazos</h2><button class="primary btn" id="newDeck2">Crear mi primer mazo</button></div>')+'</div>';
 }
 function decksView(){
@@ -869,7 +878,13 @@ function decksView(){
     '<div class="section">'+(l?'<div class="deck-leader-row">'+cardImg(l,"thumb")+'<div class="grow"><b>Líder · '+esc(l.name)+'</b><div class="small">'+esc(l.id)+' · '+(priceOf(l)!==null?money(priceOf(l)):"Precio —")+' · '+(qty(l.id)?"en colección":"te falta")+'</div></div><button class="secondary btn" id="changeLeader">Cambiar</button><button class="danger btn" id="removeLeader">Quitar</button></div>':'<div class="notice"><b>1. Elige el líder.</b> Hasta que no selecciones uno, aquí solo aparecen líderes.</div>')+'</div>'+
     '<div class="stats"><div class="stat"><b>'+v.total+'/50</b><span>Cartas</span></div><div class="stat"><b>'+money(deckTotalValue(d))+'</b><span>Valor del mazo</span></div><div class="stat"><b>'+money(deckMissingCost(d))+'</b><span>Te falta comprar</span></div><div class="stat"><b>'+(v.valid?"✓":"⚠")+'</b><span>Legalidad</span></div></div>'+
     '<div class="validation '+(v.valid?"ok":"bad")+'"><b>'+(v.valid?"✓ Mazo válido":"⚠ Mazo no válido")+'</b><div class="small">'+esc(v.messages.join(" · ")||"Cumple las reglas configuradas.")+'</div></div>'+
-    '<div class="deckbuilder"><div><div class="section"><div class="sectionhead"><h2>'+(choosingLeader?"Elige líder":"Añade cartas")+'</h2><span class="small">'+(choosingLeader?"Solo líderes":"Solo cartas compatibles con el color del líder")+'</span></div><div class="catalog-controls"><input id="deckSearch" class="field" inputmode="search" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="🔎 Buscar por nombre, ID o expansión..." value="'+esc(state.deckQuery)+'"><div class="sort-controls">'+filterLabel("Ordenar por",'<select id="deckSort" class="field"><option value="id" '+(state.deckFilters.sort==="id"?"selected":"")+'>Número de carta</option><option value="name" '+(state.deckFilters.sort==="name"?"selected":"")+'>Nombre</option><option value="set" '+(state.deckFilters.sort==="set"?"selected":"")+'>Expansión</option><option value="rarity" '+(state.deckFilters.sort==="rarity"?"selected":"")+'>Rareza</option><option value="cost" '+(state.deckFilters.sort==="cost"?"selected":"")+'>Coste</option><option value="power" '+(state.deckFilters.sort==="power"?"selected":"")+'>Poder</option><option value="price" '+(state.deckFilters.sort==="price"?"selected":"")+'>Precio</option><option value="quantity" '+(state.deckFilters.sort==="quantity"?"selected":"")+'>Cantidad que tengo</option></select>')+filterLabel("Orden",'<select id="deckDir" class="field"><option value="asc" '+(state.deckFilters.dir==="asc"?"selected":"")+'>Ascendente</option><option value="desc" '+(state.deckFilters.dir==="desc"?"selected":"")+'>Descendente</option></select>')+'</div><button class="secondary btn filter-toggle" id="deckFilterToggle">🔽 FILTRO'+(n?' ('+n+')':'')+'</button></div>'+deckFilterPanel()+'<div id="deckResults"></div></div></div><div><div class="section"><h2>Lista del mazo</h2><div class="list" id="deckRows">'+deckRows(d)+'</div></div></div></div></div>';
+    deckCompositionView(d)+
+    '<div class="section"><div class="sectionhead"><h2>'+(choosingLeader?"Elige líder":"Creador del mazo")+'</h2><span class="small">'+(choosingLeader?"Solo líderes":"Busca y añade cartas compatibles con el líder")+'</span></div><div class="catalog-controls"><input id="deckSearch" class="field" inputmode="search" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="🔎 Buscar por nombre, ID o expansión..." value="'+esc(state.deckQuery)+'"><div class="sort-controls">'+filterLabel("Ordenar por",'<select id="deckSort" class="field"><option value="id" '+(state.deckFilters.sort==="id"?"selected":"")+'>Número de carta</option><option value="name" '+(state.deckFilters.sort==="name"?"selected":"")+'>Nombre</option><option value="set" '+(state.deckFilters.sort==="set"?"selected":"")+'>Expansión</option><option value="rarity" '+(state.deckFilters.sort==="rarity"?"selected":"")+'>Rareza</option><option value="cost" '+(state.deckFilters.sort==="cost"?"selected":"")+'>Coste</option><option value="power" '+(state.deckFilters.sort==="power"?"selected":"")+'>Poder</option><option value="price" '+(state.deckFilters.sort==="price"?"selected":"")+'>Precio</option><option value="quantity" '+(state.deckFilters.sort==="quantity"?"selected":"")+'>Cantidad que tengo</option></select>')+filterLabel("Orden",'<select id="deckDir" class="field"><option value="asc" '+(state.deckFilters.dir==="asc"?"selected":"")+'>Ascendente</option><option value="desc" '+(state.deckFilters.dir==="desc"?"selected":"")+'>Descendente</option></select>')+'</div><button class="secondary btn filter-toggle" id="deckFilterToggle">🔽 FILTRO'+(n?' ('+n+')':'')+'</button></div>'+deckFilterPanel()+'<div id="deckResults"></div></div></div>';
+}
+function deckUniqueCount(d){return Object.values(d?.cards||{}).filter(n=>Number(n)>0).length+(d?.leader?1:0)}
+function deckCompositionView(d){
+  const total=deckCardTotal(d),unique=deckUniqueCount(d);
+  return '<div class="section"><div class="sectionhead"><div><h2>Tu mazo</h2><div class="small">'+total+'/50 cartas · '+unique+' cartas diferentes'+(d.leader?' · 1 líder':'')+'</div></div></div><div class="list" id="deckRows">'+deckRows(d)+'</div></div>';
 }
 function deckRows(d){
   const r=[];
@@ -1230,6 +1245,7 @@ function bindShell(){
     $("#collectionFilterToggle")?.addEventListener("click",()=>{state.collection.filtersOpen=!state.collection.filtersOpen;renderShell()});
     $("#closeCollectionFilters")?.addEventListener("click",()=>{state.collection.filtersOpen=false;renderShell()});
     $("#clearCollectionFilters")?.addEventListener("click",()=>{Object.assign(state.collection,{set:"Todas",category:"Todos",color:"Todos",rarity:"Todos",type:"Todos",attribute:"Todos",quantity:"Todas",playset:"Todas",page:1});renderShell()});
+    $("#collectionResetVisible")?.addEventListener("click",()=>{Object.assign(state.collection,{query:"",set:"Todas",category:"Todos",color:"Todos",rarity:"Todos",type:"Todos",attribute:"Todos",quantity:"Todas",playset:"Todas",page:1});renderShell()});
     $("#exportCsv")?.addEventListener("click",exportCollectionCSV);
     $("#importCsv")?.addEventListener("click",()=>$("#csvFile").click());
     $("#clearCollection")?.addEventListener("click",clearCollection);
