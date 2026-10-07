@@ -12,6 +12,10 @@
     {
       "source": "/deck/:slug",
       "destination": "/index.html"
+    },
+    {
+      "source": "/auth/:path*",
+      "destination": "/index.html"
     }
   ],
   "headers": [
