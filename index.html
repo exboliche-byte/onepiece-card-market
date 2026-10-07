@@ -337,7 +337,7 @@ function filteredCards(mode){
   let list=mode==="collection"
     ?state.cards.filter(c=>qty(c.id)>0)
     :mode==="album"&&f.set?cardsForExpansion(f.set):state.cards;
-  const q=norm(f.query||state.query||"");
+  const q=norm(f.query||(mode==="catalog"?state.query:""));
   if(q){
     // Search/filter by logical card: _p1/_r1/_c1 variants are the same card.
     // First find the matching logical groups across the full catalog, then keep
@@ -857,8 +857,9 @@ function renderAlbumResults(){
   const list=filteredCards("album"),groups=groupCardList(list),pages=Math.max(1,Math.ceil(groups.length/PAGE));state.album.page=Math.min(state.album.page,pages);
   const start=(state.album.page-1)*PAGE,visible=groups.slice(start,start+PAGE);
   const owned=groups.filter(g=>logicalQty(g.card)>0).length, none=groups.filter(g=>logicalQty(g.card)===0).length, missing=groups.filter(g=>logicalQty(g.card)>0&&logicalQty(g.card)<playsetTarget(g.card)).length;
-  host.innerHTML='<div class="stats"><div class="stat"><b>'+groups.length+'</b><span>Cartas de '+esc(packLabel({code:state.album.set}))+'</span></div><div class="stat"><b>'+owned+'</b><span>Tengo</span></div><div class="stat"><b>'+none+'</b><span>No tengo</span></div><div class="stat"><b>'+missing+'</b><span>Me faltan copias</span></div></div><div class="grid">'+visible.map(g=>groupedTile(g)).join("")+'</div>'+pagination(groups.length,state.album.page,"album");
+  host.innerHTML='<div class="stats"><div class="stat"><b>'+groups.length+'</b><span>Cartas de '+esc(packLabel({code:state.album.set}))+'</span></div><div class="stat"><b>'+owned+'</b><span>Tengo</span></div><div class="stat"><b>'+none+'</b><span>No tengo</span></div><div class="stat"><b>'+missing+'</b><span>Me faltan copias</span></div></div>'+(groups.length?'<div class="grid">'+visible.map(g=>groupedTile(g)).join("")+'</div>'+pagination(groups.length,state.album.page,"album"):'<div class="section center"><b>No hay cartas con esta búsqueda.</b><p class="muted">La expansión sí está cargada. Limpia la búsqueda o el filtro de colección.</p><button class="secondary btn" id="resetAlbumFilters">Mostrar todas las cartas</button></div>');
   bindResultEvents(host);
+  $("#resetAlbumFilters")?.addEventListener("click",()=>{state.album.query="";state.album.ownership="Todas";state.album.page=1;renderShell()});
   {
     const hadPrices=Object.keys(state.prices||{}).length>0;
     ensurePrices(visible.flatMap(g=>g.versions).map(c=>c.id)).then(()=>{
@@ -1278,7 +1279,7 @@ function bindShell(){
   $("#accountBtn")?.addEventListener("click",()=>{state.tab="account";renderShell()});
   document.querySelectorAll("[data-close]").forEach(b=>b.onclick=()=>{state.newDeck=false;renderShell()});
   document.querySelectorAll("[data-close-auth]").forEach(b=>b.onclick=()=>{state.auth=false;renderShell()});
-  document.querySelectorAll("[data-open-set]").forEach(b=>b.onclick=()=>{state.tab="album";state.album.set=b.dataset.openSet;state.album.page=1;renderShell()});
+  document.querySelectorAll("[data-open-set]").forEach(b=>b.onclick=()=>{state.tab="album";state.album.set=b.dataset.openSet;state.album.query="";state.album.page=1;renderShell()});
   if(state.tab==="catalog"){
     bindSearch("#catalogSearch",v=>{state.catalog.query=v;state.query=v;state.catalog.page=1;renderCatalogResults()});
     const catalogFieldMap={catSet:"set",catCategory:"category",catColor:"color",catRarity:"rarity",catType:"type",catAttribute:"attribute",catMinCost:"minCost",catMaxCost:"maxCost",catMinPower:"minPower",catMaxPower:"maxPower",catMinPrice:"minPrice",catMaxPrice:"maxPrice",catOwnership:"ownership",catSort:"sort",catDir:"dir"};
