@@ -55,7 +55,8 @@ const fallbackImageUrl=c=>"https://images.weserv.nl/?url="+encodeURIComponent(of
 function preloadCardImage(c){const u=imageCdnUrl(c);if(!u||imagePreloadCache.has(u))return;const im=new Image();im.src=u;imagePreloadCache.set(u,im)}
 function cardImg(c,cls="cardimg"){
   const cdn=imageCdnUrl(c),official=officialImageUrl(c),fallback=fallbackImageUrl(c);
-  const loading=cls.includes("detail")?"eager":"lazy";
+  const competitive=cls.includes("competitive-");
+  const loading=(cls.includes("detail")||competitive)?"eager":"lazy";
   const priority=cls.includes("detail")?' fetchpriority="high"':"";
   return '<img class="'+cls+'" loading="'+loading+'" decoding="async"'+priority+' src="'+esc(cdn)+'" alt="'+esc(c.name||c.id)+'" data-image-official="'+esc(official)+'" data-image-fallback="'+esc(fallback)+'" onerror="if(this.dataset.imageStep!==\'1\'){this.dataset.imageStep=\'1\';this.src=this.dataset.imageOfficial}else if(this.dataset.imageStep!==\'2\'){this.dataset.imageStep=\'2\';this.src=this.dataset.imageFallback}else{this.style.visibility=\'hidden\'}">';
 }
@@ -126,7 +127,8 @@ function catalogSetForMarketPrint(printSet,base){
   const exact=state.packs.find(p=>normalizePrintSet(p?.code)===wanted);
   if(exact)return exact.code;
   if(wanted==="P"){
-    const promo=state.packs.find(p=>expansionType(p?.code)==="PROMO"||/PROMO|PROMOTION/i.test(String(p?.code||"")+" "+String(p?.name||"")));
+    const promo=state.packs.find(p=>setCodeKey(p?.code)==="PROMOTIONCARD")
+      ||state.packs.find(p=>expansionType(p?.code)==="PROMO"||/PROMO|PROMOTION/i.test(String(p?.code||"")+" "+String(p?.name||"")));
     if(promo)return promo.code;
   }
   const m=wanted.match(/^(OP|EB|ST|PRB)(\d{2})$/);
@@ -193,6 +195,10 @@ function expansionFamilyKey(code){
   const s=setCodeKey(code);
   if(s==="OP14"||s==="OP-14"||s==="OP14-EB04")return "OP14";
   if(s==="OP15"||s==="OP-15"||s==="OP15-EB04")return "OP15";
+  // These upstream buckets are promotional product printings, not separate
+  // logical expansions. Group them in the Promos view while preserving the
+  // exact source_set on every card for identity/import/pricing.
+  if(["PROMOTIONCARD","PROMOTION-CARD","LIMITEDPRODUCTCARD","LIMITED-PRODUCT-CARD","OTHERPRODUCTCARD","OTHER-PRODUCT-CARD"].includes(s))return "PROMOTIONCARD";
   return s;
 }
 function sameExpansion(a,b){return expansionFamilyKey(a)===expansionFamilyKey(b)}
@@ -213,12 +219,15 @@ function expansionType(code){
   if(/^EB-?\\d+$/i.test(s)||/^OP\\d+-EB\\d+$/i.test(s))return "EB";
   if(/^ST-?\\d+$/i.test(s))return "ST";
   if(/^PRB-?\\d+$/i.test(s))return "PRB";
-  if(/^P(ROMO)?[-_]/i.test(s)||/PROMOTION/i.test(s))return "PROMO";
+  if(/^P(ROMO)?[-_]/i.test(s)||/PROMOTION/i.test(s)||/LIMITED.?PRODUCT.?CARD|OTHER.?PRODUCT.?CARD/i.test(s))return "PROMO";
   return "OTROS";
 }
 function expansionList(){
   const f=state.expansions;
-  let list=state.packs.map(p=>{
+  const canonicalPromoPack=state.packs.find(p=>setCodeKey(p?.code)==="PROMOTIONCARD")
+    ||state.packs.find(p=>expansionFamilyKey(p?.code)==="PROMOTIONCARD");
+  const visiblePacks=state.packs.filter(p=>expansionFamilyKey(p?.code)!=="PROMOTIONCARD"||p===canonicalPromoPack);
+  let list=visiblePacks.map(p=>{
     const cards=cardsForExpansion(p.code);
     // The expansion overview must use the same logical-card grouping as the
     // album view. Parallel/reprint versions are one card, not extra cards to
@@ -1022,7 +1031,7 @@ function competitiveResultHtml(result,index){
   const place=Number(result.placing||0)?Number(result.placing)+'.º':'—';
   const field=Number(result.players||0)?' / '+Number(result.players):'';
   return '<article class="competitive-deck"><div class="competitive-result-main">'+
-    (leader?'<div class="competitive-result-leader">'+cardImg(leader,"cardimg")+'</div>':'')+
+    (leader?'<div class="competitive-result-leader">'+cardImg(leader,"cardimg competitive-result-img")+'</div>':'')+
     '<div class="competitive-result-copy"><div class="competitive-deck-head"><div><h3>'+esc(result.leaderName||result.leaderId)+'</h3><div class="small">'+esc(result.tournament||"Torneo")+' · '+date+'</div></div><div><b>'+place+field+'</b></div></div>'+
     '<div class="competitive-badges"><span class="competitive-badge good">'+esc(result.quality||"Resultado")+'</span><span class="competitive-badge">'+esc(result.player||"Jugador")+'</span><span class="competitive-badge">Récord '+esc(record)+'</span>'+(result.country?'<span class="competitive-badge">'+esc(result.country)+'</span>':'')+'</div>'+
     '<div class="small"><b>Tu colección:</b> '+stats.owned+'/'+stats.total+' cartas cubiertas · faltan '+stats.missing+(stats.cost>0?' · aprox. '+money(stats.cost):'')+'</div>'+
