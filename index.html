@@ -801,6 +801,8 @@ async function loadCatalogData(){
   try{
     const [remoteCards,remotePacks,op17]=await Promise.all([fetchJson(REMOTE_CARDS,30000),fetchJson(REMOTE_PACKS,20000),fetchJson(REMOTE_OP17,30000)]);
     let cards=Array.isArray(remoteCards)?remoteCards:Object.values(remoteCards||{});
+    const isJapanese = c => /(?:^|[-_ ])JP(?:$|[-_ ])|\\bJAPANESE\\b|NON-ENGLISH|ASIA REGION LEGAL/i.test(String(c?.id||"")+" "+String(c?.set||"")+" "+String(c?.set_name||""));
+    cards=cards.filter(c=>!isJapanese(c));
     const o17=op17?.data?.cards||[];
     const normalized17=o17.map(c=>({id:c.id,set:"OP-17",name:c.name,rarity:c.rarity==="L"?"Leader":c.rarity,category:c.cardClass==="LEADER"?"Leader":(c.cardClass==="EVENT"?"Event":(c.cardClass==="STAGE"?"Stage":"Character")),colors:c.color||[],cost:c.cost===null?null:Number(c.cost),power:c.power===null?null:Number(c.power),counter:c.counter===null?null:Number(c.counter),attributes:c.attribute||[],types:c.feature||[],effect:c.effect||"",trigger:c.trigger||null,image:c.imageUrl||"",isParallel:!!c.isParallel}));
     const ids=new Set(normalized17.map(c=>c.id));
@@ -811,7 +813,8 @@ async function loadCatalogData(){
     return {cards,packs,remote:true};
   }catch(e){
     const [localCards,localPacks]=await Promise.all([fetchJson(DATA+"cards.json"),fetchJson(DATA+"packs.json")]);
-    return {cards:Array.isArray(localCards)?localCards:Object.values(localCards||{}),packs:localPacks,remote:false};
+    const cards= (Array.isArray(localCards)?localCards:Object.values(localCards||{})).filter(c=>!/(?:^|[-_ ])JP(?:$|[-_ ])|\\bJAPANESE\\b|NON-ENGLISH|ASIA REGION LEGAL/i.test(String(c?.id||"")+" "+String(c?.set||"")+" "+String(c?.set_name||"")));
+    return {cards,packs:localPacks,remote:false};
   }
 }
 async function boot(){
