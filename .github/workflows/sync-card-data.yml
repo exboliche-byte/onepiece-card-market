@@ -37,6 +37,7 @@ jobs:
             v=String(v||"").trim().toUpperCase();
             if(v==="OP14")return "OP14-EB04";
             if(v==="OP15")return "OP15-EB04";
+            if(v==="PROMOTION-CARD"||v==="PROMOTIONCARD")return "PROMOTIONCARD";
             const m=v.match(/^(OP|EB|ST|PRB)-?(\d{2})$/);
             return m?m[1]+"-"+m[2]:v;
           };
