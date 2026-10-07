@@ -368,7 +368,7 @@ function cmpPrice(a,b){
   return d*(state.catalog.dir==="desc"?-1:1);
 }
 let priceDatasetPromise=null;
-const PRICE_CACHE_VERSION=15;
+const PRICE_CACHE_VERSION=16;
 const MARKET_DATA_URL="/data/cardmarket-prices.json";
 function priceOf(c){
   const key=c?.id;
@@ -473,7 +473,29 @@ async function loadMarketPrices({refresh=false}={}){
   })().catch(error=>{priceDatasetPromise=null;throw error});
   return priceDatasetPromise;
 }
-async function ensurePrices(){await loadMarketPrices()}
+async function fillMissingExactPrices(cards=state.cards){
+  const ids=[...new Set((cards||[]).map(c=>String(c?.id||"").trim()).filter(Boolean))]
+    .filter(id=>!Number.isFinite(Number(state.prices?.[id]))&&!Number.isFinite(Number(state.prices?.[norm(id)])));
+  for(let i=0;i<ids.length;i+=500){
+    const batch=ids.slice(i,i+500);
+    try{
+      const r=await fetch("/api/cardmarket?ids="+encodeURIComponent(batch.join(",")),{cache:"no-store"});
+      if(!r.ok)continue;
+      const d=await r.json();
+      for(const [id,raw] of Object.entries(d?.prices||{})){
+        const n=Number(raw);
+        if(Number.isFinite(n)&&n>0){
+          state.prices[id]=n;
+          state.prices[norm(id)]=n;
+        }
+      }
+    }catch(e){console.warn("exact price fallback",e)}
+  }
+}
+async function ensurePrices(cards=state.cards){
+  await loadMarketPrices();
+  await fillMissingExactPrices(cards);
+}
 function loadCachedPrices(){
   try{
     const d=JSON.parse(localStorage.getItem("mialbumonepiece_prices")||"null");
