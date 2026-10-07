@@ -6,8 +6,11 @@ const REQUEST_TIMEOUT = 120000;
 const MIN_COVERAGE = 0.90;
 const REMOTE_ALLSETS_URL = "https://raw.githubusercontent.com/hugoprudente/optcgjson/main/output/AllSets.json";
 const OPASSETS_HISTORY_DIR_URL = "https://api.github.com/repos/ryscode/OPASSETS/contents/CM-Data/Final/PriceHistory?ref=main";
+const EXACT_PRINTMAP_URL = "https://raw.githubusercontent.com/michalkiral/optcg-data/main/data/prices/printmap.json";
+const EXACT_PRINT_PRICES_URL = "https://raw.githubusercontent.com/michalkiral/optcg-data/main/data/prices/summary.json";
 
 const CARDMARKET_SET_NAMES = {
+  "P": ["Promos", "Special Tournaments Promos", "Premium Bandai Products"],
   "OP-01": ["Romance Dawn"],
   "OP-02": ["Paramount War"],
   "OP-03": ["Pillars of Strength"],
@@ -222,6 +225,8 @@ async function loadCardmarketExpansionLanguageMap() {
 }
 
 function sourceSetCode(card) {
+  const cardBase = baseId(card?.id);
+  if (/^P-\d{3}$/i.test(cardBase)) return "P";
   const rawSet = String(card?.source_set || card?.set || "").trim().toUpperCase();
   // Some One Piece datasets encode EB-04/EB-05 cards as OP14-EB04 / OP15-EB04.
   // Preserve that source-set identity instead of deriving it from the printed
@@ -238,6 +243,7 @@ function sourceSetCode(card) {
   return m ? m[1].toUpperCase() + "-" + m[2] : prefix.toUpperCase();
 }
 
+
 function cardmarketCardUrl(card) {
   const code = extractCardCode(baseId(card?.id));
   const slug = norm(card?.name || "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
@@ -247,9 +253,10 @@ function cardmarketCardUrl(card) {
 
 
 function extractCardCode(text) {
-  const m = String(text || "").toUpperCase().match(/\b((?:OP|EB|ST|PRB)\d{2})[- ](\d{3})\b/);
+  const m = String(text || "").toUpperCase().match(/\b((?:OP|EB|ST|PRB)\d{2}|P)[- ](\d{3})\b/);
   return m ? m[1] + "-" + m[2] : null;
 }
+
 
 function expansionMatches(setCode, expansionName, localSetName = "") {
   const wanted = [...(CARDMARKET_SET_NAMES[setCode] || []), localSetName];
@@ -322,7 +329,79 @@ function cardNameMatches(card, product) {
   return 0;
 }
 
-function candidateScore(card, product, productVersions, primaryExpansionBySet) {
+function externalExpansionSlug(url) {
+  const match = String(url || "").match(/\/Products\/Singles\/([^/]+)\//i);
+  return match ? norm(match[1].replace(/-/g, " ")) : "";
+}
+
+function externalPrintHints(card, exactPrintOracle) {
+  return exactPrintOracle?.urlsByPrint?.get(String(card?.id || "")) || [];
+}
+
+function externalExpansionScore(card, product, expansionNamesById, exactPrintOracle) {
+  const hints = externalPrintHints(card, exactPrintOracle);
+  if (!hints.length) return 0;
+
+  const productExpansion = norm(
+    expansionNamesById?.get(Number(product?.idExpansion)) ||
+    product?.expansionName ||
+    ""
+  );
+  if (!productExpansion) return 0;
+
+  let best = 0;
+  for (const url of hints) {
+    const urlExpansion = externalExpansionSlug(url);
+    if (!urlExpansion || /japanese|non english|asia region/.test(urlExpansion)) continue;
+    if (urlExpansion === productExpansion) best = Math.max(best, 150);
+    else if (urlExpansion.includes(productExpansion) || productExpansion.includes(urlExpansion)) best = Math.max(best, 80);
+  }
+  return best;
+}
+
+function externalPriceScore(card, product, guide, exactPrintOracle) {
+  const target = Number(exactPrintOracle?.priceByPrint?.get(String(card?.id || "")));
+  if (!(target > 0) || !guide) return 0;
+
+  const values = [guide.trend, guide.avg, guide.avg7, guide.avg30, guide.low]
+    .map(Number)
+    .filter(value => value > 0);
+  if (!values.length) return 0;
+
+  const distance = Math.min(...values.map(value => Math.abs(Math.log(target / value))));
+  if (!Number.isFinite(distance)) return 0;
+  return Math.max(-100, 120 - distance * 70);
+}
+
+async function loadExactPrintOracle() {
+  try {
+    const [printmap, summary] = await Promise.all([
+      fetchJson(EXACT_PRINTMAP_URL),
+      fetchJson(EXACT_PRINT_PRICES_URL)
+    ]);
+
+    const urlsByPrint = new Map();
+    for (const [url, id] of Object.entries(printmap?.map || {})) {
+      const key = String(id || "").trim();
+      if (!key || !url) continue;
+      if (!urlsByPrint.has(key)) urlsByPrint.set(key, []);
+      urlsByPrint.get(key).push(String(url));
+    }
+
+    const priceByPrint = new Map();
+    for (const [id, value] of Object.entries(summary?.cards || {})) {
+      const eur = Number(value?.eur);
+      if (Number.isFinite(eur) && eur > 0) priceByPrint.set(String(id), eur);
+    }
+
+    return {urlsByPrint, priceByPrint};
+  } catch (error) {
+    console.warn("Exact print oracle unavailable:", error?.message || error);
+    return {urlsByPrint:new Map(), priceByPrint:new Map()};
+  }
+}
+
+function candidateScore(card, product, productVersions, primaryExpansionBySet, expansionNamesById, exactPrintOracle, prices) {
   const cardBase = baseId(card.id).toUpperCase();
   const code = extractCardCode(product?.name);
   const cardCode = extractCardCode(cardBase);
@@ -339,31 +418,52 @@ function candidateScore(card, product, productVersions, primaryExpansionBySet) {
   const expectedExpansions = [...(CARDMARKET_SET_NAMES[sourceSet] || []), card?.set_name]
     .map(norm)
     .filter(Boolean);
-  const productExpansion = norm(product?.expansionName);
+  const productExpansion = norm(
+    expansionNamesById?.get(Number(product?.idExpansion)) ||
+    product?.expansionName ||
+    ""
+  );
   if (expectedExpansions.includes(productExpansion)) score += 100;
-  else if (/(^|\\s)(promo|promos)(\\s|:|-|$)/i.test(productExpansion)) score -= 80;
+  else if (/(^|\s)(promo|promos)(\s|:|-|$)/i.test(productExpansion)) score -= 80;
 
   const primaryExpansionId = primaryExpansionBySet?.get(sourceSet);
   if (primaryExpansionId && Number(product.idExpansion) === Number(primaryExpansionId)) score += 10;
   if (cardNameMatches(card, product)) score += cardNameMatches(card, product);
 
+  // Cardmarket does not expose reliable V1/V2 ordering in its public product
+  // catalog, so inferred dateAdded versions must never override print matching.
+  const explicitVersion = productVersion(product?.name);
   const wantedVersion = localVersion(card.id);
-  const actualVersion = productVersions?.get(String(product?.idProduct)) ?? productVersion(product?.name);
-  if (wantedVersion === actualVersion) score += 50;
-  else if (actualVersion !== null && actualVersion !== undefined) score -= 30;
+  if (explicitVersion !== null) {
+    if (wantedVersion === explicitVersion) score += 25;
+    else score -= 15;
+  }
+
+  const guide = prices?.get(String(product?.idProduct));
+  score += externalExpansionScore(card, product, expansionNamesById, exactPrintOracle);
+  score += externalPriceScore(card, product, guide, exactPrintOracle);
 
   return score;
 }
 
-function chooseProduct(card, productsBySetAndNumber, primaryExpansionBySet, productVersions, desiredVersion = localVersion(card.id)) {
+function chooseProduct(
+  card,
+  productsBySetAndNumber,
+  primaryExpansionBySet,
+  productVersions,
+  desiredVersion = localVersion(card.id),
+  expansionNamesById = null,
+  exactPrintOracle = null,
+  prices = null
+) {
   const base = baseId(card.id).toUpperCase();
   const cardCode = extractCardCode(base);
   const number = numberPart(base);
-  const requestedVersion = Number(desiredVersion) || 1;
 
   const pool = [];
   for (const product of productsBySetAndNumber) {
     if (!product?.idProduct) continue;
+
     const code = extractCardCode(product?.name);
     if (code && cardCode) {
       if (code !== cardCode) continue;
@@ -374,31 +474,27 @@ function chooseProduct(card, productsBySetAndNumber, primaryExpansionBySet, prod
       continue;
     }
 
-    const score = candidateScore(card, product, productVersions, primaryExpansionBySet);
-    if (score > 0) {
-      pool.push({
-        product,
-        score,
-        explicitVersions: productVersion(product.name) !== null,
-          version: productVersions?.get(String(product.idProduct)) ?? productVersion(product.name)
-      });
-    }
+    const score = candidateScore(
+      card,
+      product,
+      productVersions,
+      primaryExpansionBySet,
+      expansionNamesById,
+      exactPrintOracle,
+      prices
+    );
+
+    if (score > 0) pool.push({product, score});
   }
 
-  pool.sort((a, b) => b.score - a.score || Number(a.product.idProduct) - Number(b.product.idProduct));
-  if (!pool.length) return null;
+  pool.sort((a, b) =>
+    b.score - a.score ||
+    Number(a.product.idProduct) - Number(b.product.idProduct)
+  );
 
-  const exactVersion = pool.find(x => x.version === requestedVersion);
-  if (exactVersion) return exactVersion.product;
-
-  // Local catalog variants can outnumber Cardmarket's V1/V2/V3 products.
-  // Never fall back to V1 just because the requested version does not exist:
-  // use the highest available market version not newer than the requested one.
-  const compatible = pool
-    .filter(x => Number.isFinite(Number(x.version)) && Number(x.version) <= requestedVersion)
-    .sort((a, b) => Number(b.version) - Number(a.version) || b.score - a.score);
-  return (compatible[0] || pool[0]).product;
+  return pool[0]?.product || null;
 }
+
 
 function buildProductIndex(products) {
   const groups = new Map();
@@ -458,14 +554,12 @@ function allProductsForCard(card, products, englishExpansionIdsBySet) {
 
     const expansionId = Number(product.idExpansion);
     const matchesConfiguredExpansion = preferredExpansionIds?.has(expansionId) || false;
-    const matchesExpansionName = expansionMatches(sourceSet, product?.expansionName, card?.set_name);
+    if (sourceSet === "P") {
+      matches.push(product);
+      continue;
+    }
 
-    // Expansion IDs from Cardmarket's historical data can be incomplete or
-    // ambiguous. Keep the configured IDs as a strong signal, but also admit
-    // products whose actual expansion name matches the card's source set.
-    // This recovers valid products without falling back to unrelated
-    // expansions. candidateScore() then strongly prefers the exact main-set
-    // name over promo expansions with the same printed card number.
+    const matchesExpansionName = expansionMatches(sourceSet, product?.expansionName, card?.set_name);
     if (matchesConfiguredExpansion || matchesExpansionName) matches.push(product);
   }
 
@@ -578,12 +672,13 @@ function primaryExpansionMap(products) {
 }
 
 async function main() {
-  const [remoteAllSetsRaw, productsRaw, pricesRaw, previous, languageMap] = await Promise.all([
+  const [remoteAllSetsRaw, productsRaw, pricesRaw, previous, languageMap, exactPrintOracle] = await Promise.all([
     fetchJson(REMOTE_ALLSETS_URL),
     fetchJson(PRODUCT_URL),
     fetchJson(PRICE_URL),
     readPreviousDataset(),
-    loadCardmarketExpansionLanguageMap()
+    loadCardmarketExpansionLanguageMap(),
+    loadExactPrintOracle()
   ]);
   const catalog = normalizeOptcgCatalog(remoteAllSetsRaw);
   const packs = catalog.packs;
@@ -623,13 +718,25 @@ async function main() {
     // product must belong to this card's own expansion.
     const productPool = exactCandidates;
     const desiredMarketVersion = localVersion(card.id);
-    const product = chooseProduct(card, productPool, primaryExpansionBySet, productVersions, desiredMarketVersion);
+    const product = chooseProduct(
+      card,
+      productPool,
+      primaryExpansionBySet,
+      productVersions,
+      desiredMarketVersion,
+      languageMap.expansionNamesById,
+      exactPrintOracle,
+      prices
+    );
     if (!product) {
       unmatched.push(card.id);
       const prior = oldCards[card.id] || {};
 
+    const oraclePrice = Number(exactPrintOracle?.priceByPrint?.get(String(card.id)));
+    const oracleUrls = exactPrintOracle?.urlsByPrint?.get(String(card.id)) || [];
+    const oracleUrl = oracleUrls[0] || null;
     outputCards[card.id] = {
-        eur: null,
+        eur: Number.isFinite(oraclePrice) && oraclePrice > 0 ? oraclePrice : null,
         trend: null,
         low: null,
         avg: null,
@@ -640,7 +747,7 @@ async function main() {
         expansionId: null,
         expansion: String(CARDMARKET_SET_NAMES[sourceSetCode(card)]?.[0] || card.set_name || sourceSetCode(card)),
         version: desiredMarketVersion,
-        url: cardmarketCardUrl(baseCard),
+        url: oracleUrl ? oracleUrl.replace("/en/OnePiece/", "/es/OnePiece/") : cardmarketCardUrl(baseCard),
         variantOf: isParallelVariant && baseCard.id !== card.id ? baseCard.id : null,
         launchPrice: priceNumber(prior.launchPrice),
         launchPriceDate: prior.launchPriceDate || null,
@@ -706,7 +813,9 @@ async function main() {
       expansionId: Number(product.idExpansion),
       expansion: String(languageMap.expansionNamesById?.get(Number(product.idExpansion)) || CARDMARKET_SET_NAMES[sourceSetCode(card)]?.[0] || sourceSetCode(card)),
       version: productVersions?.get(String(product.idProduct)) ?? productVersion(product.name) ?? desiredMarketVersion,
-      url: "https://www.cardmarket.com/es/OnePiece/Products?idProduct=" + encodeURIComponent(String(product.idProduct)),
+      url: (exactPrintOracle?.urlsByPrint?.get(String(card.id))?.[0]
+        ? exactPrintOracle.urlsByPrint.get(String(card.id))[0].replace("/en/OnePiece/", "/es/OnePiece/")
+        : "https://www.cardmarket.com/es/OnePiece/Products?idProduct=" + encodeURIComponent(String(product.idProduct))),
       collections,
       launchPrice,
       launchPriceDate,
