@@ -1170,3 +1170,5 @@ main().catch(error => {
   console.error(error);
   process.exit(1);
 });
+
+// Exact-print mapping revision 2026-10-07.
