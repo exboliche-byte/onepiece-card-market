@@ -864,19 +864,97 @@ function sharedDeckView(){
   const d=state.decks.find(x=>x.id==="shared"),v=deckValidate(d||{});if(!d)return "";
   return '<div class="wrap"><div class="hero"><div><h1>Mazo compartido</h1><p>'+esc(d.name)+'</p></div></div><div class="section"><div class="stats"><div class="stat"><b>'+v.total+'/50</b><span>Cartas</span></div><div class="stat"><b>'+esc(d.leader||"—")+'</b><span>Líder</span></div><div class="stat"><b>'+money(deckMissingCost(d))+'</b><span>Faltantes</span></div><div class="stat"><b>'+ (v.valid?"✓":"⚠")+'</b><span>Legalidad</span></div></div><div class="list">'+deckRows(d)+'</div></div></div>';
 }
-function csvEscape(v){const s=String(v??"");return /[;"\\n\\r]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s}
+function csvEscape(v){
+  const s=String(v??"");
+  return /[",\n\r]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;
+}
+function csvDownload(rows,filename){
+  const csv="\\ufeff"+rows.map(r=>r.map(csvEscape).join(",")).join("\\r\\n")+"\\r\\n";
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8"}));
+  a.download=filename;
+  document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+}
+function csvRarity(c){
+  const r=String(c?.rarity||"").trim();
+  return r==="Leader"?"L":r==="Common"?"C":r==="Uncommon"?"UC":r==="Rare"?"R":r==="Super Rare"?"SR":r==="Secret Rare"?"SEC":r==="Special"?"SP":r||"";
+}
+function csvVariant(c){
+  const id=String(c?.id||"");
+  const m=id.match(/_(p\\d+|r\\d+|c\\d+)$/i);
+  if(m)return {variant_id:id,variant_kind:m[1].toLowerCase().startsWith("p")?"parallel":m[1].toLowerCase().startsWith("r")?"reprint":"parallel",print_set:""};
+  return {variant_id:id+"_base",variant_kind:"base",print_set:""};
+}
 function exportCollectionCSV(){
-  const rows=[["card_id","name","set","set_name","rarity","category","colors","types","quantity","playset"]];
-  for(const c of state.cards){const q=qty(c.id);if(q)rows.push([c.id,c.name,c.set,c.set_name||setName(c.set),c.rarity,c.category,(c.colors||[]).join("|"),(c.types||[]).join("|"),q,Math.min(q,4)+"/4"])}
-  const csv="\\ufeff"+rows.map(r=>r.map(csvEscape).join(";")).join("\\r\\n");
-  const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8"}));a.download="mialbumonepiece-collection-"+new Date().toISOString().slice(0,10)+".csv";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);notify("CSV exportado");
+  const headers=["card_id","name","set_code","set_name","rarity","variant_id","variant_kind","print_set","condition","language","quantity","unit_price","total_price","currency","price_source"];
+  const rows=[headers];
+  for(const c of state.cards){
+    const q=qty(c.id);if(q<=0)continue;
+    const variant=csvVariant(c),price=priceOf(c),unit=price===null?"":Number(price.toFixed(2));
+    rows.push([
+      c.id,c.name,c.set,c.set_name||setName(c.set),csvRarity(c),variant.variant_id,variant.variant_kind,variant.print_set,
+      "NM","EN",q,unit,unit===""?"":Number((unit*q).toFixed(2)),"EUR","Cardmarket"
+    ]);
+  }
+  csvDownload(rows,"mialbumonepiece-collection-"+new Date().toISOString().slice(0,10)+".csv");
+  notify("CSV exportado");
 }
 function parseCSV(text){
-  const rows=[];let row=[],cell="",quote=false,delim=(text.split(/\\r?\\n/,1)[0]||"").includes(";")?";":",";
-  for(let i=0;i<text.length;i++){const ch=text[i],nx=text[i+1];if(ch==='"'&&quote&&nx==='"'){cell+='"';i++;continue}if(ch==='"'){quote=!quote;continue}if(ch===delim&&!quote){row.push(cell);cell="";continue}if((ch==="\\n"||ch==="\\r")&&!quote){if(ch==="\\r"&&nx==="\\n")i++;row.push(cell);rows.push(row);row=[];cell="";continue}cell+=ch}if(cell.length||row.length){row.push(cell);rows.push(row)}return rows.filter(r=>r.some(x=>String(x).trim()!==""));
+  text=String(text||"").replace(/^\\uFEFF/,"");
+  const rows=[];let row=[],cell="",quote=false;
+  const firstLine=(text.split(/\\r?\\n/,1)[0]||"").replace(/^\\uFEFF/,"");
+  const delim=firstLine.includes(",")?",":";";
+  for(let i=0;i<text.length;i++){
+    const ch=text[i],nx=text[i+1];
+    if(ch==='"'&&quote&&nx==='"'){cell+='"';i++;continue}
+    if(ch==='"'){quote=!quote;continue}
+    if(ch===delim&&!quote){row.push(cell);cell="";continue}
+    if((ch==="\\n"||ch==="\\r")&&!quote){
+      if(ch==="\\r"&&nx==="\\n")i++;
+      row.push(cell);rows.push(row);row=[];cell="";continue;
+    }
+    cell+=ch;
+  }
+  if(cell.length||row.length){row.push(cell);rows.push(row)}
+  return rows.filter(r=>r.some(x=>String(x).trim()!==""));
 }
 function previewImport(text){
-  try{const rows=parseCSV(text);if(rows.length<2)throw Error("CSV vacío");const h=rows[0].map(x=>norm(x).replace(/\\s+/g,"_"));const idI=Math.max(h.indexOf("card_id"),h.indexOf("id"),h.indexOf("numero"),h.indexOf("number"));const qI=Math.max(h.indexOf("quantity"),h.indexOf("cantidad"),h.indexOf("qty"),h.indexOf("copias"));if(idI<0||qI<0)throw Error("Faltan card_id/id y quantity/cantidad");const unknown=[],valid=[];for(const r of rows.slice(1)){const id=String(r[idI]||"").trim().toUpperCase(),q=Math.max(0,Math.min(99,Number(r[qI]||0)));if(card(id))valid.push([id,q]);else unknown.push(id)}const sum=valid.reduce((a,x)=>a+x[1],0);const msg="Filas: "+(rows.length-1)+" · reconocidas: "+valid.length+" · desconocidas: "+unknown.length+" · copias: "+sum+(unknown.length?"\\nIDs no encontrados: "+unknown.slice(0,20).join(", "):"");if(confirm(msg+"\\n\\nAceptar = sumar cantidades. Cancelar = no importar.")){for(const [id,q] of valid){state.owned[id]=qty(id)+q;if(state.owned[id]>99)state.owned[id]=99}saveLocal();if(state.user)syncCloud();renderVisibleOnly();notify("Colección importada")}}catch(e){alert(e.message||"CSV no válido")}
+  try{
+    const rows=parseCSV(text);
+    if(rows.length<2)throw Error("CSV vacío");
+    const h=rows[0].map(x=>norm(String(x).replace(/^\\uFEFF/,"")).replace(/\\s+/g,"_"));
+    const aliases={card_id:["card_id","id","numero","number"],quantity:["quantity","cantidad","qty","copias"]};
+    const findIndex=names=>names.map(n=>h.indexOf(n)).find(i=>i>=0);
+    const idI=findIndex(aliases.card_id),qI=findIndex(aliases.quantity);
+    if(idI===undefined||qI===undefined)throw Error("El CSV debe contener las columnas card_id y quantity.");
+    const imported=new Map(),unknown=[];
+    for(const r of rows.slice(1)){
+      const id=String(r[idI]||"").trim().toUpperCase();
+      if(!id)continue;
+      const raw=String(r[qI]??"").trim().replace(",",".");
+      const n=Number(raw);
+      const q=Number.isFinite(n)?Math.max(0,Math.min(99,Math.round(n))):NaN;
+      if(!Number.isFinite(q)){unknown.push(id+" (cantidad no válida)");continue}
+      const match=card(id);
+      if(match)imported.set(id,(imported.get(id)||0)+q);
+      else unknown.push(id);
+    }
+    const sum=[...imported.values()].reduce((a,x)=>a+x,0);
+    const oldCopies=Object.values(state.owned).reduce((a,b)=>a+Number(b||0),0);
+    const msg="Filas: "+(rows.length-1)+" · reconocidas: "+imported.size+" cartas · "+sum+" copias"+
+      (unknown.length?"\\nNo reconocidas: "+unknown.slice(0,15).join(", ")+(unknown.length>15?" …":""):"")+
+      "\\n\\nLa importación sustituirá las cantidades actuales por las del CSV.";
+    if(confirm(msg+"\\n\\nAceptar = importar. Cancelar = no cambiar nada.")){
+      state.owned={};
+      for(const [id,q] of imported)if(q>0)state.owned[id]=q;
+      saveLocal();
+      if(state.user)syncCloud();
+      state.collection.page=1;
+      renderShell();
+      notify("Colección importada: "+sum+" copias");
+    }
+  }catch(e){alert(e.message||"CSV no válido")}
 }
 const REMOTE_ALLSETS="https://raw.githubusercontent.com/hugoprudente/optcgjson/main/output/AllSets.json";
 async function loadCatalogData(){
