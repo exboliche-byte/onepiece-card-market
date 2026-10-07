@@ -190,27 +190,51 @@ async function fetchJson(url,timeout=15000){
   const ac=new AbortController(),t=setTimeout(()=>ac.abort(),timeout);
   try{const r=await fetch(url,{cache:"no-store",signal:ac.signal});if(!r.ok)throw Error("HTTP "+r.status);return await r.json()}finally{clearTimeout(t)}
 }
-function deckStorageKey(userId=state.user?.id){return "mialbumonepiece_decks_"+(userId||"guest")}
+function accountStorageSuffix(userId=state.user?.id){return userId||"guest"}
+function collectionStorageKey(userId=state.user?.id){return "mialbumonepiece_collection_"+accountStorageSuffix(userId)}
+function deckStorageKey(userId=state.user?.id){return "mialbumonepiece_decks_"+accountStorageSuffix(userId)}
+function loadCollectionForAccount({migrateLegacy=false}={}){
+  const key=collectionStorageKey(),raw=localStorage.getItem(key);
+  let source=raw;
+  if(!source&&migrateLegacy&&state.user){
+    const owner=localStorage.getItem("mialbumonepiece_collection_legacy_owner");
+    if(!owner||owner===state.user.id)source=localStorage.getItem("mialbumonepiece_collection")||localStorage.getItem(collectionStorageKey(null));
+  }
+  try{state.owned=JSON.parse(source||"{}")}catch{state.owned={}}
+  if(state.user&&!raw&&source){
+    localStorage.setItem(key,JSON.stringify(state.owned));
+    localStorage.setItem("mialbumonepiece_collection_legacy_owner",state.user.id);
+  }
+}
 function loadDecksForAccount({migrateLegacy=false}={}){
   const key=deckStorageKey(),raw=localStorage.getItem(key);
   let source=raw;
-  if(!source&&migrateLegacy&&state.user)source=localStorage.getItem("mialbumonepiece_decks")||localStorage.getItem(deckStorageKey(null));
+  if(!source&&migrateLegacy&&state.user){
+    const owner=localStorage.getItem("mialbumonepiece_decks_legacy_owner");
+    if(!owner||owner===state.user.id)source=localStorage.getItem("mialbumonepiece_decks")||localStorage.getItem(deckStorageKey(null));
+  }
   try{state.decks=JSON.parse(source||"[]")}catch{state.decks=[]}
   if(state.user){
     state.decks=state.decks.map(d=>({...d,owner_id:state.user.id}));
-    if(!raw&&source)localStorage.setItem(key,JSON.stringify(state.decks));
+    if(!raw&&source){
+      localStorage.setItem(key,JSON.stringify(state.decks));
+      localStorage.setItem("mialbumonepiece_decks_legacy_owner",state.user.id);
+    }
   }
   if(state.deckId&&!state.decks.some(d=>d.id===state.deckId))state.deckId=null;
 }
+function loadAccountLocal({migrateLegacy=false}={}){
+  loadCollectionForAccount({migrateLegacy});
+  loadDecksForAccount({migrateLegacy});
+}
 function saveLocal(){
-  localStorage.setItem("mialbumonepiece_collection",JSON.stringify(state.owned));
+  localStorage.setItem(collectionStorageKey(),JSON.stringify(state.owned));
   localStorage.setItem(deckStorageKey(),JSON.stringify(state.decks));
   localStorage.setItem("mialbumonepiece_wishlist",JSON.stringify(state.wishlist));
   localStorage.setItem("mialbumonepiece_imported_cards",JSON.stringify(state.importedCards||{}));
 }
 function loadLocal(){
-  try{state.owned=JSON.parse(localStorage.getItem("mialbumonepiece_collection")||"{}")}catch{}
-  loadDecksForAccount();
+  loadAccountLocal();
   try{state.wishlist=JSON.parse(localStorage.getItem("mialbumonepiece_wishlist")||"{}")}catch{}
   try{state.importedCards=JSON.parse(localStorage.getItem("mialbumonepiece_imported_cards")||"{}")}catch{state.importedCards={}}
 }
@@ -870,8 +894,8 @@ function exportDeckFile(){
   a.href=url;a.download=(d.name||"mazo").replace(/[^a-z0-9_-]+/gi,"-")+".txt";document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);notify("Lista exportada");
 }
 function resolveDeckImportCard(id){
-  const exact=card(String(id||"").trim());if(exact)return exact;
-  const base=baseId(String(id||"").trim()),g=state.groups.find(g=>g.versions.some(v=>baseId(v.id)===base));
+  const raw=String(id||"").trim(),exact=card(raw)||state.cards.find(cc=>norm(cc.id)===norm(raw));if(exact)return exact;
+  const base=baseId(raw),g=state.groups.find(g=>g.versions.some(v=>norm(baseId(v.id))===norm(base)));
   return g?.versions.find(v=>v.id===base)||g?.card||null;
 }
 function parseDeckListLine(line){
@@ -931,12 +955,12 @@ function removeFromDeckGroup(id){
   changeDeckQty(exact,-1);
 }
 function deckGroupedTile(g){
-  const c=g.card,q=logicalQty(c),d=state.decks.find(x=>x.id===state.deckId),inDeck=g.versions.reduce((s,v)=>s+Number(d?.cards?.[v.id]||0),0),ps=groupPriceStats(g);
+  const c=g.card,q=logicalQty(c),d=state.decks.find(x=>x.id===state.deckId),isLeader=c.category==="Leader",leaderInGroup=isLeader&&d?.leader&&g.versions.some(v=>v.id===d.leader),inDeck=isLeader?(leaderInGroup?1:0):g.versions.reduce((s,v)=>s+Number(d?.cards?.[v.id]||0),0),ps=groupPriceStats(g);
+  const controls=isLeader?'<div class="quick"><button class="secondary" data-removeleader>−</button><div class="qty">'+inDeck+'</div><button class="primary" data-setleader="'+esc(c.id)+'">+</button></div>':'<div class="quick"><button class="secondary" data-deckremovegroup="'+esc(c.id)+'">−</button><div class="qty">'+inDeck+'</div><button class="primary" data-adddeck="'+esc(c.id)+'">+</button></div>';
   return '<article class="card">'+(q?'<span class="tag">×'+q+' total</span>':'<span class="tag missing">Falta</span>')+
     '<button class="linkbtn" data-detail="'+esc(c.id)+'" style="display:block;width:100%;padding:0">'+cardImg(c,"cardimg")+'</button>'+
     '<div class="cardbody"><button class="linkbtn deck-card-open" data-detail="'+esc(c.id)+'"><div class="name">'+esc(c.name)+'</div><div class="small">'+esc(c.id)+' · '+g.versions.length+' versión(es)</div><div class="chips">'+g.sets.slice(0,3).map(x=>'<span class="chip">'+esc(x)+'</span>').join("")+'</div></button>'+
-    '<div class="row"><span class="small">'+(ps.min===null?"Precio —":ps.max!==ps.min?"Desde "+money(ps.min):money(ps.min))+'</span><span class="small">Mazo '+inDeck+'</span></div>'+
-    '<div class="quick"><button class="secondary" data-deckremovegroup="'+esc(c.id)+'">−</button><div class="qty">'+inDeck+'</div><button class="primary" data-adddeck="'+esc(c.id)+'">+</button></div></div></article>';
+    '<div class="row"><span class="small">'+(ps.min===null?"Precio —":ps.max!==ps.min?"Desde "+money(ps.min):money(ps.min))+'</span><span class="small">'+(isLeader?"Líder "+inDeck:"Mazo "+inDeck)+'</span></div>'+controls+'</div></article>';
 }
 async function renderDeckResults(){
   const host=$("#deckResults");if(!host)return;
@@ -1109,7 +1133,7 @@ function detailView(c){
 function accountView(){
   const status=state.authError?'<div class="notice">'+esc(state.authError)+'</div>':(!state.authReady?'<div class="notice">Conectando con la cuenta…</div>':"");
   return '<div class="wrap"><div class="hero"><div><h1>Cuenta</h1><p>'+(state.user?("Sesión: "+esc(state.user.email||"")):"Inicia sesión para sincronizar colección y mazos.")+'</p></div></div>'+status+
-  (state.user?'<div class="section"><h2>Sincronización activa</h2><p class="muted">Tu colección y tus mazos están asociados a esta cuenta. Los mazos locales de esta cuenta se guardan separados de otras cuentas.</p><button class="secondary btn" id="logout" type="button">Cerrar sesión</button></div>':'<div class="section"><h2>Entrar o crear cuenta</h2><input id="authEmail" class="field" type="email" placeholder="Email" autocomplete="email"><input id="authPassword" class="field" type="password" style="margin-top:8px" placeholder="Contraseña (mín. 6 caracteres)" autocomplete="current-password"><div class="inline-actions" style="margin-top:8px"><button class="primary btn" id="login" type="button" '+(state.authBusy?"disabled":"")+'>Entrar</button><button class="secondary btn" id="register" type="button" '+(state.authBusy?"disabled":"")+'>Crear cuenta</button></div></div>')+
+  (state.user?'<div class="section"><h2>Sincronización activa</h2><p class="muted">Tu colección y tus mazos están asociados a esta cuenta. Los datos locales de esta cuenta se guardan separados de otras cuentas.</p><button class="secondary btn" id="logout" type="button">Cerrar sesión</button></div>':'<div class="section"><h2>Entrar o crear cuenta</h2><input id="authEmail" class="field" type="email" placeholder="Email" autocomplete="email"><input id="authPassword" class="field" type="password" style="margin-top:8px" placeholder="Contraseña (mín. 6 caracteres)" autocomplete="current-password"><div class="inline-actions" style="margin-top:8px"><button class="primary btn" id="login" type="button" '+(state.authBusy?"disabled":"")+'>Entrar</button><button class="secondary btn" id="register" type="button" '+(state.authBusy?"disabled":"")+'>Crear cuenta</button></div></div>')+
   '<div class="section"><h2>Estado</h2><div class="small">Catálogo: '+state.cards.length.toLocaleString("es-ES")+' cartas · '+state.packs.length+' expansiones'+(state.priceDate?' · Precios: '+new Date(state.priceDate).toLocaleString("es-ES"):"")+'</div></div></div>';
 }
 
@@ -1267,7 +1291,7 @@ function bindAccount(){
   $("#login")?.addEventListener("click",()=>loginFrom("#authEmail","#authPassword"));
   $("#register")?.addEventListener("click",()=>registerFrom("#authEmail","#authPassword"));
   $("#authPassword")?.addEventListener("keydown",e=>{if(e.key==="Enter")loginFrom("#authEmail","#authPassword")});
-  $("#logout")?.addEventListener("click",async()=>{try{await state.sb?.auth.signOut()}catch{}state.user=null;state.deckId=null;state.deckLibrary=true;loadDecksForAccount();notify("Sesión cerrada");renderShell()});
+  $("#logout")?.addEventListener("click",async()=>{try{await state.sb?.auth.signOut()}catch{}state.user=null;state.deckId=null;state.deckLibrary=true;loadAccountLocal();notify("Sesión cerrada");renderShell()});
 }
 function loginFrom(e,p){loginUser($(e)?.value,$(p)?.value)}
 function registerFrom(e,p){registerUser($(e)?.value,$(p)?.value)}
@@ -1279,7 +1303,7 @@ async function loginUser(email,password){
   try{
     const sb=state.sb||await initSupabase();if(!sb)throw Error("No se pudo conectar con Supabase");
     const r=await sb.auth.signInWithPassword({email,password});if(r.error)throw r.error;
-    state.user=r.data.user;loadDecksForAccount({migrateLegacy:true});await syncCloud();state.tab="decks";state.deckLibrary=true;notify("Sesión iniciada");
+    state.user=r.data.user;loadAccountLocal({migrateLegacy:true});await syncCloud();state.tab="decks";state.deckLibrary=true;notify("Sesión iniciada");
   }catch(e){state.authError=authMessage(e);notify(state.authError)}
   finally{state.authBusy=false;renderShell()}
 }
@@ -1291,7 +1315,7 @@ async function registerUser(email,password){
   try{
     const sb=state.sb||await initSupabase();if(!sb)throw Error("No se pudo conectar con Supabase");
     const r=await sb.auth.signUp({email,password,options:{emailRedirectTo:location.origin+"/"}});if(r.error)throw r.error;
-    if(r.data.session&&r.data.user){state.user=r.data.user;loadDecksForAccount({migrateLegacy:true});await syncCloud();state.tab="decks";state.deckLibrary=true;notify("Cuenta creada y sesión iniciada")}
+    if(r.data.session&&r.data.user){state.user=r.data.user;loadAccountLocal({migrateLegacy:true});await syncCloud();state.tab="decks";state.deckLibrary=true;notify("Cuenta creada y sesión iniciada")}
     else notify("Cuenta creada. Revisa tu email para confirmarla y después inicia sesión.");
   }catch(e){state.authError=authMessage(e);notify(state.authError)}
   finally{state.authBusy=false;renderShell()}
@@ -1318,11 +1342,11 @@ async function syncDeckDelete(id){
 }
 async function syncCloud(){
   if(!state.sb||!state.user)return;
-  loadDecksForAccount({migrateLegacy:true});
-  const localDecks=state.decks.slice();
+  loadAccountLocal({migrateLegacy:true});
+  const localOwned={...state.owned},localDecks=state.decks.slice();
   try{
     const ci=await state.sb.from("collection_items").select("card_id,quantity,updated_at").eq("user_id",state.user.id);if(ci.error)throw ci.error;
-    for(const r of ci.data||[])state.owned[r.card_id]=Math.max(qty(r.card_id),Number(r.quantity||0));
+    state.owned={...localOwned};for(const r of ci.data||[])state.owned[r.card_id]=Math.max(Number(state.owned[r.card_id]||0),Number(r.quantity||0));
     const ds=await state.sb.from("decks").select("*").eq("user_id",state.user.id);if(ds.error)throw ds.error;
     const remoteIds=(ds.data||[]).map(d=>d.id);
     let dc={data:[]};
@@ -1345,13 +1369,13 @@ async function initSupabase(){
       state.sb=api.createClient(SUPABASE_URL,SUPABASE_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
       const s=await state.sb.auth.getSession();if(s.error)throw s.error;
       state.user=s.data.session?.user||null;
-      if(state.user){loadDecksForAccount({migrateLegacy:true});await syncCloud()}
-      else loadDecksForAccount();
+      if(state.user){loadAccountLocal({migrateLegacy:true});await syncCloud()}
+      else loadAccountLocal();
       state.authReady=true;state.authError="";renderShell();
       state.sb.auth.onAuthStateChange((event,session)=>setTimeout(async()=>{
         const previous=state.user?.id||null;state.user=session?.user||null;
-        if(state.user){loadDecksForAccount({migrateLegacy:true});await syncCloud()}
-        else if(previous){state.deckId=null;state.deckLibrary=true;loadDecksForAccount()}
+        if(state.user){loadAccountLocal({migrateLegacy:true});await syncCloud()}
+        else if(previous){state.deckId=null;state.deckLibrary=true;loadAccountLocal()}
         state.authReady=true;renderShell();
       },0));
       return state.sb;
