@@ -205,7 +205,9 @@ function loadCollectionForAccount({migrateLegacy=false}={}){
     const parsed=JSON.parse(source||"{}");
     const legacyRaw=localStorage.getItem("mialbumonepiece_collection");
     const legacy=legacyRaw?JSON.parse(legacyRaw):{};
-    state.owned=(state.user&&Object.keys(parsed||{}).length===0&&Object.keys(legacy||{}).length>0)?legacy:parsed;
+    const legacyOwner=localStorage.getItem("mialbumonepiece_collection_legacy_owner");
+    const canUseLegacy=state.user&&(!legacyOwner||legacyOwner===state.user.id);
+    state.owned=(canUseLegacy&&Object.keys(parsed||{}).length===0&&Object.keys(legacy||{}).length>0)?legacy:parsed;
   }catch{state.owned={}}
   if(state.user&&!raw&&Object.keys(state.owned||{}).length){
     localStorage.setItem(key,JSON.stringify(state.owned));
@@ -777,6 +779,7 @@ async async function renderCollectionResults(){
   const stats=collectionStats(),empty=list.length===0&&stats.copies>0;
   host.innerHTML='<div class="notice">'+list.length.toLocaleString("es-ES")+' cartas en tu colección · '+stats.copies.toLocaleString("es-ES")+' copias totales.'+(active?' Filtros activos: '+active+'.':'')+'</div>'+(empty?'<div class="section center"><b>Tu colección tiene cartas, pero no hay resultados visibles.</b><p class="muted">Limpia los filtros para volver a mostrarlas.</p><button class="secondary btn" id="collectionResetVisible">Limpiar filtros</button></div>':'<div class="grid">'+visible.map(c=>cardTile(c)).join("")+'</div>'+pagination(list.length,state.collection.page,"collection"));
   bindResultEvents(host);
+  $("#collectionResetVisible")?.addEventListener("click",()=>{Object.assign(state.collection,{query:"",set:"Todas",category:"Todos",color:"Todos",rarity:"Todos",type:"Todos",attribute:"Todos",quantity:"Todas",playset:"Todas",page:1});renderShell()});
   if(state.collection.sort!=="price"){
     const hadPrices=Object.keys(state.prices||{}).length>0;
     ensurePrices(visible.map(c=>c.id)).then(()=>{
