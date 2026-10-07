@@ -35,7 +35,7 @@ const state={
   catalog:{set:"Todas",category:"Todos",color:"Todos",rarity:"Todos",type:"Todos",attribute:"Todos",ownership:"Todas",sort:"id",dir:"asc",page:1,grouped:true,minCost:"",maxCost:"",minPower:"",maxPower:"",minPrice:"",maxPrice:"",query:"",filtersOpen:false},
   owned:{},collection:{query:"",set:"Todas",category:"Todos",color:"Todos",rarity:"Todos",type:"Todos",attribute:"Todos",quantity:"Todas",playset:"Todas",sort:"id",dir:"asc",page:1,filtersOpen:false},
   album:{set:"",query:"",ownership:"Todas",sort:"id",dir:"asc",page:1},expansions:{query:"",type:"Todos",sort:"set",dir:"asc"},
-  deckQuery:"",deckPage:1,deckLibrary:true,deckChoosingLeader:false,deckDiscover:false,deckDiscoverLeader:"",deckDiscoverLeaderQuery:"",deckDiscoverResults:[],deckDiscoverLoading:false,deckDiscoverError:"",deckDiscoverDays:90,deckDiscoverMinPlayers:32,deckDiscoverMeta:null,deckFilters:{set:"Todas",category:"Todos",color:"Todos",rarity:"Todos",type:"Todos",attribute:"Todos",ownership:"Todas",sort:"id",dir:"asc",filtersOpen:false},auth:false,authReady:false,authBusy:false,authError:"",authNotice:"",authRecovery:false,scanner:{active:false,busy:false,locked:false,status:"Cámara detenida",error:"",code:"",groupKey:"",ocrText:"",confidence:null,lastSeen:0},toast:"",loading:true
+  deckQuery:"",deckPage:1,deckLibrary:true,deckChoosingLeader:false,deckDiscover:false,deckDiscoverLeader:"",deckDiscoverLeaderQuery:"",deckDiscoverResults:[],deckDiscoverLoading:false,deckDiscoverError:"",deckDiscoverDays:90,deckDiscoverMinPlayers:32,deckDiscoverMeta:null,deckFilters:{set:"Todas",category:"Todos",color:"Todos",rarity:"Todos",type:"Todos",attribute:"Todos",ownership:"Todas",sort:"id",dir:"asc",filtersOpen:false},auth:false,authReady:false,authBusy:false,authError:"",authNotice:"",authRecovery:false,scanner:{active:false,busy:false,locked:false,status:"Cámara detenida",error:"",code:"",groupKey:"",ocrText:"",confidence:null,lastSeen:0,candidateCode:"",candidateHits:0,candidateAt:0},toast:"",loading:true
 };
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??"").replace(/[&<>'"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[c]));
@@ -51,21 +51,36 @@ const officialImageUrl=c=>{
 };
 const imageUrl=c=>officialImageUrl(c);
 const imageCdnUrl=c=>"https://optcg-api.arjunbansal-ai.workers.dev/images/"+encodeURIComponent(visualPrintId(c));
+const limitlessImageUrl=c=>{
+  const id=visualPrintId(c),base=baseId(id),folder=String(base||id).split("-")[0].toUpperCase();
+  return folder&&id?"https://limitlesstcg.nyc3.cdn.digitaloceanspaces.com/one-piece/"+encodeURIComponent(folder)+"/"+encodeURIComponent(id)+"_EN.webp":"";
+};
 const fallbackImageUrl=c=>"https://images.weserv.nl/?url="+encodeURIComponent(officialImageUrl(c).replace("https://","").replace("http://",""));
-function preloadCardImage(c){const u=imageCdnUrl(c);if(!u||imagePreloadCache.has(u))return;const im=new Image();im.src=u;imagePreloadCache.set(u,im)}
+function cardImageFallback(el){
+  if(!el)return;
+  const sources=[el.dataset.imageOfficial,el.dataset.imageCdn,el.dataset.imageEn,el.dataset.imageAsia,el.dataset.imageProxy].filter(Boolean);
+  let step=Number(el.dataset.imageStep||0);
+  while(step<sources.length){
+    const next=sources[step++];
+    el.dataset.imageStep=String(step);
+    if(!next||next===el.src||next===el.currentSrc)continue;
+    el.style.visibility="visible";
+    el.src=next;
+    return;
+  }
+  el.style.visibility="hidden";
+}
+function preloadCardImage(c){const u=limitlessImageUrl(c)||officialImageUrl(c)||imageCdnUrl(c);if(!u||imagePreloadCache.has(u))return;const im=new Image();im.src=u;imagePreloadCache.set(u,im)}
 function cardImg(c,cls="cardimg"){
   const id=visualPrintId(c);
-  const cdn=imageCdnUrl(c),official=officialImageUrl(c);
+  const limitless=limitlessImageUrl(c),cdn=imageCdnUrl(c),official=officialImageUrl(c);
   const canonicalEn="https://en.onepiece-cardgame.com/images/cardlist/card/"+encodeURIComponent(id)+".png";
   const canonicalAsia="https://asia-en.onepiece-cardgame.com/images/cardlist/card/"+encodeURIComponent(id)+".png";
   const proxyEn="https://images.weserv.nl/?url="+encodeURIComponent(canonicalEn.replace("https://",""));
   const competitive=cls.includes("competitive-");
-  // Native lazy-loading was deferring images inside several grid/scroll views
-  // until hover or other interaction. Each view already limits rendered cards,
-  // so eagerly load the images that are actually present in the DOM.
   const loading="eager";
   const priority=(cls.includes("detail")||competitive)?' fetchpriority="high"':' fetchpriority="auto"';
-  return '<img class="'+cls+'" loading="'+loading+'" decoding="async"'+priority+' src="'+esc(cdn)+'" alt="'+esc(c.name||c.id)+'" data-image-official="'+esc(official)+'" data-image-en="'+esc(canonicalEn)+'" data-image-asia="'+esc(canonicalAsia)+'" data-image-proxy="'+esc(proxyEn)+'" onerror="const s=Number(this.dataset.imageStep||0)+1;this.dataset.imageStep=String(s);if(s===1&&this.dataset.imageOfficial&&this.src!==this.dataset.imageOfficial){this.src=this.dataset.imageOfficial}else if(s<=2){this.src=this.dataset.imageEn}else if(s===3){this.src=this.dataset.imageAsia}else if(s===4){this.src=this.dataset.imageProxy}else{this.style.visibility=\'hidden\'}">';
+  return '<img class="'+cls+'" loading="'+loading+'" decoding="async"'+priority+' src="'+esc(limitless||official||cdn)+'" alt="'+esc(c.name||c.id)+'" data-image-official="'+esc(official)+'" data-image-cdn="'+esc(cdn)+'" data-image-en="'+esc(canonicalEn)+'" data-image-asia="'+esc(canonicalAsia)+'" data-image-proxy="'+esc(proxyEn)+'" onerror="cardImageFallback(this)">';
 }
 function deckOwnedImg(c,have,required){
   const total=Math.max(1,Number(required)||1),owned=Math.max(0,Math.min(total,Number(have)||0));
@@ -1604,13 +1619,30 @@ function scannerGroupByName(text){
   const sameBest=hits.filter(g=>norm(g.card?.name)===bestName);
   return sameBest.length===1?hits[0]:null;
 }
-function scannerResolveText(text){
+function scannerResolveCodeOnly(text){
   for(const code of scannerCodeCandidates(text)){
     const group=scannerGroupByCode(code);
-    if(group)return {group,code,method:"Código OCR"};
+    if(group)return {group,code,method:"Código"};
   }
+  return null;
+}
+function scannerResolveText(text){
+  const byCode=scannerResolveCodeOnly(text);
+  if(byCode)return byCode;
   const group=scannerGroupByName(text);
-  return group?{group,code:baseId(group.card?.id),method:"Nombre OCR"}:null;
+  return group?{group,code:baseId(group.card?.id),method:"Nombre"}:null;
+}
+function scannerConfirmCandidate(resolved,confidence,votes=1){
+  if(!resolved)return false;
+  const now=Date.now(),code=String(resolved.code||"");
+  if(votes>=2||Number(confidence)>=72){
+    state.scanner.candidateCode=code;state.scanner.candidateHits=2;state.scanner.candidateAt=now;
+    return true;
+  }
+  if(state.scanner.candidateCode===code&&now-state.scanner.candidateAt<2500)state.scanner.candidateHits++;
+  else{state.scanner.candidateCode=code;state.scanner.candidateHits=1}
+  state.scanner.candidateAt=now;
+  return state.scanner.candidateHits>=2;
 }
 function scannerCurrentGroup(){
   return state.scanner.groupKey?state.groups.find(g=>g.key===state.scanner.groupKey)||null:null;
@@ -1621,7 +1653,7 @@ function scannerVersionSort(a,b){
 }
 function scannerResultHtml(){
   const group=scannerCurrentGroup();
-  if(!group)return '<div class="center muted" style="padding:20px 8px"><b>Apunta la cámara a una carta</b><p>El OCR leerá el número impreso y comprobará tu colección en tiempo real.</p></div>';
+  if(!group)return '<div class="center muted" style="padding:20px 8px"><b>Apunta la cámara a una carta</b><p>El reconocimiento analiza varias zonas de la carta y comprueba tu colección en tiempo real.</p></div>';
   const versions=(group.versions||[]).filter(Boolean).slice().sort(scannerVersionSort);
   const total=versions.reduce((sum,v)=>sum+qty(v.id),0);
   const c=group.card||versions[0];
@@ -1636,7 +1668,7 @@ function scannerResultHtml(){
 function scannerStatusHtml(){
   const s=state.scanner;
   const cls=s.error?"validation bad":(s.active?"validation ok":"notice");
-  return '<div class="'+cls+'"><b>'+(s.error?esc(s.error):esc(s.status||"Cámara detenida"))+'</b>'+(Number.isFinite(Number(s.confidence))?'<div class="small">Confianza OCR: '+Math.round(Number(s.confidence))+'%</div>':"")+'</div>';
+  return '<div class="'+cls+'"><b>'+(s.error?esc(s.error):esc(s.status||"Cámara detenida"))+'</b>'+(Number.isFinite(Number(s.confidence))?'<div class="small">Confianza: '+Math.round(Number(s.confidence))+'%</div>':"")+'</div>';
 }
 function updateScannerControls(){
   const start=$("#scannerStart"),stop=$("#scannerStop"),now=$("#scannerNow");
@@ -1654,10 +1686,10 @@ function renderScannerResult(){
 }
 function scannerView(){
   const s=state.scanner;
-  return '<div class="wrap"><div class="hero"><div><h1>Scanner OCR</h1><p>Escanea cartas en tiempo real y comprueba si ya las tienes.</p></div></div>'+
+  return '<div class="wrap"><div class="hero"><div><h1>Scanner inteligente</h1><p>Reconoce cartas en tiempo real con varias lecturas y comprueba si ya las tienes.</p></div></div>'+
     '<div class="scanner-layout"><div class="section"><div class="scanner-stage"><video id="scannerVideo" playsinline muted aria-label="Vista de cámara para escanear cartas"></video><div class="scanner-frame"></div></div>'+
     '<canvas id="scannerCanvas" hidden></canvas><div class="scanner-controls"><button class="primary btn" id="scannerStart" type="button">'+(s.active?"Cámara activa":"Iniciar cámara")+'</button><button class="secondary btn" id="scannerStop" type="button" '+(!s.active?"disabled":"")+'>Pausar</button><button class="secondary btn" id="scannerNow" type="button" '+(!s.active?"disabled":"")+'>Leer ahora</button></div>'+
-    '<div id="scannerStatus" class="scanner-status">'+scannerStatusHtml()+'</div><p class="hint">Centra una sola carta, evita reflejos y deja visible el código inferior (OPxx-xxx, STxx-xxx, EBxx-xxx, P-xxx…). El procesamiento OCR se hace en tu navegador.</p>'+
+    '<div id="scannerStatus" class="scanner-status">'+scannerStatusHtml()+'</div><p class="hint">Centra una sola carta, evita reflejos y deja visible el código inferior (OPxx-xxx, STxx-xxx, EBxx-xxx, P-xxx…). El reconocimiento se procesa en tu navegador y valida el resultado contra el catálogo.</p>'+
     '<div class="scanner-manual"><input id="scannerManual" class="field" placeholder="También puedes escribir un código, p. ej. OP05-067" autocomplete="off" autocapitalize="characters" spellcheck="false"><button class="secondary btn" id="scannerManualGo" type="button">Buscar</button></div></div>'+
     '<div class="section"><div class="sectionhead"><div><b>Resultado</b><div class="small">Colección exacta por impresión</div></div></div><div id="scannerResult">'+scannerResultHtml()+'</div></div></div></div>';
 }
@@ -1676,10 +1708,10 @@ async function scannerWorkerReady(){
   if(scannerWorker)return scannerWorker;
   if(scannerWorkerPromise)return scannerWorkerPromise;
   if(!window.Tesseract)throw Error("No se pudo cargar el motor OCR");
-  state.scanner.status="Cargando OCR…";renderScannerResult();
+  state.scanner.status="Cargando reconocimiento…";renderScannerResult();
   scannerWorkerPromise=Tesseract.createWorker("eng",1,{logger:m=>{
     if(state.tab!=="scanner"||state.scanner.active===false)return;
-    if(m?.status&&m.status!=="recognizing text"){state.scanner.status="OCR: "+String(m.status);const el=$("#scannerStatus");if(el)el.innerHTML=scannerStatusHtml()}
+    if(m?.status&&m.status!=="recognizing text"){state.scanner.status="Motor: "+String(m.status);const el=$("#scannerStatus");if(el)el.innerHTML=scannerStatusHtml()}
   }}).then(async worker=>{
     scannerWorker=worker;
     try{await worker.setParameters({tessedit_char_whitelist:"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789- ",preserve_interword_spaces:"1",tessedit_pageseg_mode:"6"})}catch{}
@@ -1693,7 +1725,7 @@ async function startScanner(){
   try{
     if(!navigator.mediaDevices?.getUserMedia)throw Error("Este navegador no permite acceso a la cámara");
     scannerStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:"environment"},width:{ideal:1280},height:{ideal:1920}},audio:false});
-    state.scanner.active=true;state.scanner.status="Preparando OCR…";attachScannerStream();renderScannerResult();
+    state.scanner.active=true;state.scanner.status="Preparando reconocimiento…";attachScannerStream();renderScannerResult();
     await scannerWorkerReady();
     state.scanner.status="Buscando carta…";renderScannerResult();
     scheduleScanner(250);
@@ -1713,61 +1745,106 @@ async function scanScannerFrame(){
   if(state.detail||state.scanner.busy){scheduleScanner(350);return}
   const video=$("#scannerVideo"),canvas=$("#scannerCanvas");
   if(!video||!canvas||video.readyState<2){scheduleScanner(350);return}
-  state.scanner.busy=true;state.scanner.status="Leyendo carta…";renderScannerResult();
+  state.scanner.busy=true;state.scanner.status="Analizando carta…";renderScannerResult();
   try{
     const worker=await scannerWorkerReady();
     const vw=video.videoWidth||720,vh=video.videoHeight||1280;
     const cardX=Math.round(vw*.08),cardY=Math.round(vh*.04),cardW=Math.round(vw*.84),cardH=Math.round(vh*.92);
     const ctx=canvas.getContext("2d",{willReadFrequently:true});
-    const recognizeRegion=async(sx,sy,sw,sh,targetW=1200)=>{
-      const scale=Math.max(1,Math.min(3,targetW/Math.max(1,sw)));
+    const recognizeRegion=async(sx,sy,sw,sh,targetW=1300,mode="soft",psm="7")=>{
+      const scale=Math.max(1,Math.min(4,targetW/Math.max(1,sw)));
       canvas.width=Math.max(640,Math.round(sw*scale));
-      canvas.height=Math.max(120,Math.round(sh*scale));
+      canvas.height=Math.max(110,Math.round(sh*scale));
       ctx.save();
-      ctx.filter="grayscale(1) contrast(2.15) brightness(1.08)";
+      ctx.filter=mode==="soft"?"grayscale(1) contrast(1.8) brightness(1.08)":"grayscale(1) contrast(2.35) brightness(1.12)";
       ctx.drawImage(video,sx,sy,sw,sh,0,0,canvas.width,canvas.height);
       ctx.restore();
-      const image=ctx.getImageData(0,0,canvas.width,canvas.height);
-      const d=image.data;
-      for(let i=0;i<d.length;i+=4){
-        const v=d[i];
-        const x=v<105?0:v>205?255:v;
-        d[i]=d[i+1]=d[i+2]=x;
+      if(mode==="binary"){
+        const image=ctx.getImageData(0,0,canvas.width,canvas.height),d=image.data;
+        let sum=0;
+        for(let i=0;i<d.length;i+=4)sum+=d[i];
+        const mean=sum/Math.max(1,d.length/4),lo=Math.max(70,mean-42),hi=Math.min(225,mean+42);
+        for(let i=0;i<d.length;i+=4){
+          const v=d[i],x=v<lo?0:v>hi?255:v;
+          d[i]=d[i+1]=d[i+2]=x;
+        }
+        ctx.putImageData(image,0,0);
       }
-      ctx.putImageData(image,0,0);
+      try{await worker.setParameters({tessedit_pageseg_mode:String(psm)})}catch{}
       return await worker.recognize(canvas);
     };
-    // El código de One Piece está en la zona inferior y es pequeño: leer esa
-    // franja ampliada evita que nombre, efecto y arte dominen el OCR.
-    const bottomY=Math.round(cardY+cardH*.63),bottomH=Math.round(cardH*.35);
-    let result=await recognizeRegion(cardX,bottomY,cardW,bottomH,1500);
-    let text=String(result?.data?.text||"").trim();
-    let resolved=scannerResolveText(text);
-    // Respaldo: si la franja inferior no da un ID válido, leer la carta entera.
-    if(!resolved){
-      const full=await recognizeRegion(cardX,cardY,cardW,cardH,1050);
-      const fullText=String(full?.data?.text||"").trim();
-      if(fullText)text=(text?text+"\n":"")+fullText;
-      result=full;
-      resolved=scannerResolveText(text);
+
+    const passes=[];
+    const runPass=async(label,sx,sy,sw,sh,targetW,mode,psm="7")=>{
+      const result=await recognizeRegion(sx,sy,sw,sh,targetW,mode,psm);
+      const text=String(result?.data?.text||"").trim(),confidence=Number(result?.data?.confidence);
+      const resolved=scannerResolveCodeOnly(text);
+      passes.push({label,text,confidence:Number.isFinite(confidence)?confidence:0,resolved});
+      return passes[passes.length-1];
+    };
+
+    // The printed card code sits at the lower-right edge. Read that area twice
+    // using different preprocessing, then widen the crop only when necessary.
+    const codeX=Math.round(cardX+cardW*.43),codeY=Math.round(cardY+cardH*.76);
+    const codeW=Math.round(cardW*.55),codeH=Math.round(cardH*.22);
+    const p1=await runPass("código suave",codeX,codeY,codeW,codeH,1650,"soft","7");
+    if(!p1.resolved||p1.confidence<72)await runPass("código contraste",codeX,codeY,codeW,codeH,1650,"binary","7");
+
+    let codePasses=passes.filter(p=>p.resolved);
+    if(!codePasses.length){
+      const bottomY=Math.round(cardY+cardH*.62),bottomH=Math.round(cardH*.36);
+      await runPass("franja inferior",cardX,bottomY,cardW,bottomH,1550,"binary","11");
+      codePasses=passes.filter(p=>p.resolved);
     }
-    const confidence=Number(result?.data?.confidence);
-    state.scanner.ocrText=text;state.scanner.confidence=Number.isFinite(confidence)?confidence:null;
-    if(resolved){
+
+    const votes=new Map();
+    for(const p of codePasses){
+      const key=p.resolved.code;
+      const row=votes.get(key)||{count:0,best:p};
+      row.count++;
+      if(p.confidence>row.best.confidence)row.best=p;
+      votes.set(key,row);
+    }
+    const ranked=[...votes.values()].sort((a,b)=>b.count-a.count||b.best.confidence-a.best.confidence);
+    let winner=ranked[0]||null,resolved=winner?.best?.resolved||null;
+    let confidence=winner?.best?.confidence||0;
+
+    // If the code is still unreadable, use a sparse full-card name read as a
+    // last resort. A unique catalog name is much safer than guessing an ID.
+    if(!resolved){
+      const full=await recognizeRegion(cardX,cardY,cardW,cardH,1050,"soft","11");
+      const fullText=String(full?.data?.text||"").trim(),fullConfidence=Number(full?.data?.confidence);
+      const fullResolved=scannerResolveText(fullText);
+      passes.push({label:"carta completa",text:fullText,confidence:Number.isFinite(fullConfidence)?fullConfidence:0,resolved:fullResolved});
+      if(fullResolved){resolved=fullResolved;confidence=Number.isFinite(fullConfidence)?fullConfidence:0;winner={count:1,best:passes[passes.length-1]}}
+    }
+
+    const debugText=passes.map(p=>"["+p.label+"] "+p.text).filter(x=>x.trim()).join("\n");
+    state.scanner.ocrText=debugText;
+    state.scanner.confidence=Number.isFinite(confidence)?confidence:null;
+
+    if(resolved&&scannerConfirmCandidate(resolved,confidence,winner?.count||1)){
       state.scanner.code=resolved.code;
       state.scanner.groupKey=resolved.group.key;
       state.scanner.lastSeen=Date.now();
       state.scanner.locked=true;
       state.scanner.status="Carta detectada · "+resolved.code;
       clearTimeout(scannerTimer);
-    }else state.scanner.status="Buscando número de carta…";
+    }else if(resolved){
+      state.scanner.status="Confirmando "+resolved.code+"…";
+    }else{
+      state.scanner.status="Buscando carta…";
+      if(Date.now()-Number(state.scanner.candidateAt||0)>2500){
+        state.scanner.candidateCode="";state.scanner.candidateHits=0;
+      }
+    }
     state.scanner.error="";
   }catch(e){
-    console.warn("scanner OCR",e);
-    state.scanner.error="OCR no disponible: "+String(e?.message||e);
+    console.warn("scanner recognition",e);
+    state.scanner.error="Reconocimiento no disponible: "+String(e?.message||e);
   }finally{
     state.scanner.busy=false;renderScannerResult();
-    if(!state.scanner.locked)scheduleScanner(650);
+    if(!state.scanner.locked)scheduleScanner(450);
   }
 }
 function scannerManualSearch(){
@@ -1782,6 +1859,9 @@ function scannerUnlock(message="Buscando siguiente carta…"){
   state.scanner.groupKey="";
   state.scanner.ocrText="";
   state.scanner.confidence=null;
+  state.scanner.candidateCode="";
+  state.scanner.candidateHits=0;
+  state.scanner.candidateAt=0;
   state.scanner.status=message;
   state.scanner.error="";
   renderScannerResult();
