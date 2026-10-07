@@ -301,12 +301,38 @@ function cmpPrice(a,b){
   return d*(state.catalog.dir==="desc"?-1:1);
 }
 let priceDatasetPromise=null;
-const PRICE_CACHE_VERSION=9;
+const PRICE_CACHE_VERSION=10;
 const MARKET_DATA_URL="/data/cardmarket-prices.json";
 function priceOf(c){const raw=state.prices[c?.id]??state.prices[norm(c?.id)];const n=Number(raw);return Number.isFinite(n)?n:null}
+function selectPrimaryMarketEntry(id,entry){
+  const cards=Array.isArray(state.cards)?state.cards:[];
+  const card=cards.find(c=>String(c?.id||"")===String(id));
+  const desiredExpansion=card?norm(setName(card.source_set||card.set)):null;
+  const collections=Array.isArray(entry?.collections)?entry.collections:[];
+  if(!desiredExpansion||!collections.length)return entry;
+  const matches=collections.filter(c=>norm(c?.expansion)===desiredExpansion);
+  if(!matches.length)return entry;
+  const m=String(id).match(/_(?:p|r|c)(\d+)$/i);
+  const desiredVersion=m?Number(m[1])+1:1;
+  const sorted=matches.slice().sort((a,b)=>Number(a?.version||1)-Number(b?.version||1));
+  const pick=sorted.find(c=>Number(c?.version||1)===desiredVersion)
+    ||sorted.filter(c=>Number(c?.version||1)<=desiredVersion).at(-1)
+    ||sorted[0];
+  if(!pick)return entry;
+  return {
+    ...entry,
+    eur:Number.isFinite(Number(pick.eur))?Number(pick.eur):entry.eur,
+    cardmarketId:pick.cardmarketId??entry.cardmarketId,
+    expansionId:pick.expansionId??entry.expansionId,
+    expansion:pick.expansion||entry.expansion,
+    version:pick.version??entry.version,
+    url:pick.url||entry.url
+  };
+}
 function mergePriceDataset(d){
   state.prices={};state.collectionPrices={};state.marketMeta={};state.priceDate=d?.updatedAt||null;
-  for(const [id,entry] of Object.entries(d?.cards||{})){
+  for(const [id,rawEntry] of Object.entries(d?.cards||{})){
+    const entry=selectPrimaryMarketEntry(id,rawEntry);
     const n=Number(entry?.eur);
     if(Number.isFinite(n)){state.prices[id]=n;state.prices[norm(id)]=n;}
     const meta={
@@ -318,17 +344,16 @@ function mergePriceDataset(d){
       sourceUrl:String(entry?.sourceUrl||""),
       collections:Array.isArray(entry?.collections)?entry.collections.map(collection=>({
         expansion:String(collection?.expansion||"").trim(),
-        expansionId:Number.isFinite(Number(collection?.expansionId))?Number(collection.expansionId):null,
-        cardmarketId:Number.isFinite(Number(collection?.cardmarketId))?Number(collection.cardmarketId):null,
-        version:Number.isFinite(Number(collection?.version))?Number(collection.version):1,
-        eur:Number.isFinite(Number(collection?.eur))?Number(collection.eur):null,
+        expansionId:Number.isFinite(Number(collection?.expansionId))?Number(collection?.expansionId):null,
+        cardmarketId:Number.isFinite(Number(collection?.cardmarketId))?Number(collection?.cardmarketId):null,
+        version:Number.isFinite(Number(collection?.version))?Number(collection?.version):1,
+        eur:Number.isFinite(Number(collection?.eur))?Number(collection?.eur):null,
         url:String(collection?.url||"")
       })).filter(collection=>collection.expansion||collection.cardmarketId):[]
     };
     state.marketMeta[id]=meta;state.marketMeta[norm(id)]=meta;
   }
 }
-
 async function loadMarketPrices({refresh=false}={}){
   if(!refresh&&priceDatasetPromise)return priceDatasetPromise;
   priceDatasetPromise=(async()=>{
