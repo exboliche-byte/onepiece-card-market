@@ -1,5 +1,6 @@
 name: Update Cardmarket prices
 # Runs after catalog mapping changes so the generated dataset is refreshed with the latest version matching rules.
+# English-only guard: Japanese/Asia-region expansion IDs are excluded before product matching.
 
 on:
   schedule:
