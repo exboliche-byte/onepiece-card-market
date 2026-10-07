@@ -31,7 +31,7 @@ const state={
   catalog:{set:"Todas",category:"Todos",color:"Todos",rarity:"Todos",type:"Todos",attribute:"Todos",ownership:"Todas",sort:"id",dir:"asc",page:1,grouped:true,minCost:"",maxCost:"",minPower:"",maxPower:"",minPrice:"",maxPrice:"",query:"",filtersOpen:false},
   owned:{},collection:{query:"",set:"Todas",category:"Todos",color:"Todos",rarity:"Todos",type:"Todos",attribute:"Todos",quantity:"Todas",playset:"Todas",sort:"id",dir:"asc",page:1,filtersOpen:false},
   album:{set:"",query:"",ownership:"Todas",sort:"id",dir:"asc",page:1},expansions:{query:"",type:"Todos",sort:"set",dir:"asc"},
-  deckQuery:"",deckPage:1,deckLibrary:true,deckFilters:{set:"Todas",category:"Todos",color:"Todos",rarity:"Todos",type:"Todos",attribute:"Todos",ownership:"Todas",sort:"id",dir:"asc",filtersOpen:false},auth:false,authReady:false,authBusy:false,authError:"",authRecovery:false,toast:"",loading:true
+  deckQuery:"",deckPage:1,deckLibrary:true,deckChoosingLeader:false,deckFilters:{set:"Todas",category:"Todos",color:"Todos",rarity:"Todos",type:"Todos",attribute:"Todos",ownership:"Todas",sort:"id",dir:"asc",filtersOpen:false},auth:false,authReady:false,authBusy:false,authError:"",authRecovery:false,toast:"",loading:true
 };
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??"").replace(/[&<>'"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[c]));
@@ -904,14 +904,14 @@ function deckTotalValue(d){let x=0,l=card(d?.leader);if(l)x+=Number(priceOf(l)||
 function deckLibraryView(){
   if(!state.user)return '<div class="wrap"><div class="hero"><div><h1>Mazos</h1><p>Los mazos se guardan asociados a tu cuenta.</p></div></div><div class="section center"><h2>Inicia sesión para gestionar tus mazos</h2><p class="muted">Así tus mazos quedan vinculados a tu cuenta y se sincronizan entre dispositivos.</p><button class="primary btn" id="deckAccountBtn">Entrar o crear cuenta</button></div></div>';
   const tiles=state.decks.map(d=>{const l=card(d.leader),v=deckValidate(d);return '<button class="setcard decktile" data-open-deck="'+esc(d.id)+'">'+(l?cardImg(l,"deckleader"):'<div class="deckleader fallback" style="display:grid">Sin líder</div>')+'<div class="decktilebody"><b>'+esc(d.name)+'</b><div class="small">'+v.total+'/50 cartas · '+deckUniqueCount(d)+' diferentes · '+(d.leader?"1 líder":"sin líder")+'</div><div class="small">'+(v.valid?"✓ Legal":"⚠ No legal")+' · Valor '+money(deckTotalValue(d))+' · te faltan '+money(deckMissingCost(d))+'</div></div></button>'}).join("");
-  return '<div class="wrap"><div class="hero"><div><h1>Mazos</h1><p>Tus mazos sincronizados con '+esc(state.user.email||"tu cuenta")+'.</p></div><div class="inline-actions"><button class="secondary btn" id="importDeckBtn">Importar lista</button><button class="primary btn" id="newDeck">Nuevo mazo</button></div></div><input id="deckImportFile" class="fileinput" type="file" accept=".txt,text/plain,.json,application/json">'+(tiles?'<div class="decklibrary">'+tiles+'</div>':'<div class="section center"><h2>Aún no tienes mazos</h2><button class="primary btn" id="newDeck2">Crear mi primer mazo</button></div>')+'</div>';
+  return '<div class="wrap"><div class="hero"><div><h1>Mazos</h1><p>Tus mazos sincronizados con '+esc(state.user.email||"tu cuenta")+'.</p></div><div class="inline-actions"><button class="secondary btn" id="importDeckBtn">Importar lista</button><button class="primary btn" id="newDeck">Nuevo mazo</button></div></div>'+(tiles?'<div class="decklibrary">'+tiles+'</div>':'<div class="section center"><h2>Aún no tienes mazos</h2><button class="primary btn" id="newDeck2">Crear mi primer mazo</button></div>')+'</div>';
 }
 function decksView(){
   if(!state.user)return deckLibraryView();
   if(state.deckLibrary||!state.decks.length)return deckLibraryView();
   const d=state.decks.find(x=>x.id===state.deckId);if(!d){state.deckLibrary=true;return deckLibraryView()}
-  const v=deckValidate(d),n=deckActiveFilterCount(),l=card(d.leader),choosingLeader=!l;
-  return '<div class="wrap"><div class="hero"><div><button class="linkbtn" id="backDecks">← Mis mazos</button><h1>'+esc(d.name)+'</h1></div><div class="inline-actions"><button class="secondary btn" id="importDeckBtn">Importar lista</button><button class="secondary btn" id="exportDeck">Exportar lista</button><button class="secondary btn" id="shareDeck">Compartir lista</button><button class="danger btn" id="deleteDeck">Eliminar</button><input id="deckImportFile" class="fileinput" type="file" accept=".txt,text/plain,.json,application/json"></div></div>'+
+  const v=deckValidate(d),n=deckActiveFilterCount(),l=card(d.leader),choosingLeader=!l||state.deckChoosingLeader;
+  return '<div class="wrap"><div class="hero"><div><button class="linkbtn" id="backDecks">← Mis mazos</button><h1>'+esc(d.name)+'</h1></div><div class="inline-actions"><button class="secondary btn" id="importDeckBtn">Importar lista</button><button class="secondary btn" id="exportDeck">Exportar lista</button><button class="secondary btn" id="shareDeck">Compartir lista</button><button class="danger btn" id="deleteDeck">Eliminar</button></div></div>'+
     '<div class="section">'+(l?'<div class="deck-leader-row">'+cardImg(l,"thumb")+'<div class="grow"><b>Líder · '+esc(l.name)+'</b><div class="small">'+esc(l.id)+' · '+(priceOf(l)!==null?money(priceOf(l)):"Precio —")+' · '+(qty(l.id)?"en colección":"te falta")+'</div></div><button class="secondary btn" id="changeLeader">Cambiar</button><button class="danger btn" id="removeLeader">Quitar</button></div>':'<div class="notice"><b>1. Elige el líder.</b> Hasta que no selecciones uno, aquí solo aparecen líderes.</div>')+'</div>'+
     '<div class="stats"><div class="stat"><b>'+v.total+'/50</b><span>Cartas</span></div><div class="stat"><b>'+money(deckTotalValue(d))+'</b><span>Valor del mazo</span></div><div class="stat"><b>'+money(deckMissingCost(d))+'</b><span>Te falta comprar</span></div><div class="stat"><b>'+(v.valid?"✓":"⚠")+'</b><span>Legalidad</span></div></div>'+
     '<div class="validation '+(v.valid?"ok":"bad")+'"><b>'+(v.valid?"✓ Mazo válido":"⚠ Mazo no válido")+'</b><div class="small">'+esc(v.messages.join(" · ")||"Cumple las reglas configuradas.")+'</div></div>'+
@@ -942,11 +942,29 @@ function deckListText(d){
   for(const [id,n] of Object.entries(d?.cards||{}).sort(([a],[b])=>String(a).localeCompare(String(b),"es",{numeric:true})))if(Number(n)>0)lines.push(String(Number(n))+' '+id);
   return lines.join("\n");
 }
+function closeDeckListModal(){document.querySelector(".deck-list-modal")?.remove()}
+function openDeckImportDialog(){
+  if(!state.user)return notify("Inicia sesión para importar mazos");
+  closeDeckListModal();
+  const m=document.createElement("div");m.className="modalback deck-list-modal";
+  m.innerHTML='<div class="modal"><div class="sectionhead"><h2>Importar mazo desde lista</h2><button class="close" data-list-close>×</button></div><p class="muted">Pega una lista con una carta por línea. Ejemplo: <b>1 OP01-001</b> para el líder y <b>4 OP01-002</b> para las cartas.</p><input id="deckListName" class="field" placeholder="Nombre del mazo" value="Mazo importado"><textarea id="deckListInput" class="field" rows="16" style="margin-top:8px" placeholder="1 OP01-001\n4 OP01-002\n4 OP01-003"></textarea><div class="inline-actions" style="margin-top:10px"><button class="secondary btn" data-list-close>Cancelar</button><button class="primary btn" id="importDeckListConfirm">Importar lista</button></div></div>';
+  document.body.appendChild(m);
+  m.querySelectorAll("[data-list-close]").forEach(b=>b.onclick=closeDeckListModal);
+  m.addEventListener("click",e=>{if(e.target===m)closeDeckListModal()});
+  $("#importDeckListConfirm").onclick=()=>{const text=$("#deckListInput")?.value||"";if(!text.trim())return notify("Pega una lista de cartas");const name=$("#deckListName")?.value?.trim()||"Mazo importado";if(importDeckText(text,name))closeDeckListModal()};
+  setTimeout(()=>$("#deckListInput")?.focus(),0);
+}
 function exportDeckFile(){
   const d=state.decks.find(x=>x.id===state.deckId);if(!d)return notify("Abre un mazo para exportarlo");
-  const text=deckListText(d),url=URL.createObjectURL(new Blob([text+"\n"],{type:"text/plain;charset=utf-8"})),a=document.createElement("a");
-  a.href=url;a.download=(d.name||"mazo").replace(/[^a-z0-9_-]+/gi,"-")+".txt";document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);notify("Lista exportada");
+  closeDeckListModal();
+  const text=deckListText(d),m=document.createElement("div");m.className="modalback deck-list-modal";
+  m.innerHTML='<div class="modal"><div class="sectionhead"><h2>Exportar lista</h2><button class="close" data-list-close>×</button></div><p class="muted">Copia esta lista y pégala donde quieras.</p><textarea id="deckListExport" class="field" rows="16" readonly>'+esc(text)+'</textarea><div class="inline-actions" style="margin-top:10px"><button class="primary btn" id="copyDeckList">Copiar lista</button><button class="secondary btn" data-list-close>Cerrar</button></div></div>';
+  document.body.appendChild(m);
+  m.querySelectorAll("[data-list-close]").forEach(b=>b.onclick=closeDeckListModal);
+  m.addEventListener("click",e=>{if(e.target===m)closeDeckListModal()});
+  $("#copyDeckList").onclick=async()=>{try{await navigator.clipboard.writeText(text)}catch{const el=$("#deckListExport");el.focus();el.select();document.execCommand?.("copy")}notify("Lista copiada")};
 }
+
 function resolveDeckImportCard(id){
   const raw=String(id||"").trim(),exact=card(raw)||state.cards.find(cc=>norm(cc.id)===norm(raw));if(exact)return exact;
   const base=baseId(raw),g=state.groups.find(g=>g.versions.some(v=>norm(baseId(v.id))===norm(base)));
@@ -961,7 +979,7 @@ function parseDeckListLine(line){
   return {id,quantity:Math.max(1,Math.min(4,Number(qm)||1))};
 }
 function importDeckText(t,n=""){
-  if(!state.user)return notify("Inicia sesión para importar mazos");
+  if(!state.user){notify("Inicia sesión para importar mazos");return false}
   let name=String(n||"Mazo importado").replace(/\.[^.]+$/,"")||"Mazo importado",description="",leader="",cards={};
   try{
     const p=JSON.parse(t);
@@ -978,18 +996,29 @@ function importDeckText(t,n=""){
       else cards[cc.id]=Math.min(4,Number(cards[cc.id]||0)+parsed.quantity);
     }
   }
-  if(!leader)return notify("La lista necesita un líder válido");
-  const d={id:crypto.randomUUID(),name,description,leader,cards,colors:card(leader)?.colors||[],owner_id:state.user.id,updatedAt:new Date().toISOString()};
-  state.decks.unshift(d);state.deckId=d.id;state.deckLibrary=false;saveLocal();syncDeck(d);renderShell();notify("Mazo importado");
+  if(!leader){notify("La lista necesita un líder válido");return false}
+  const leaderCard=card(leader);
+  const incompatible=Object.keys(cards).map(card).filter(cc=>cc&&!deckCardAllowedByLeader(cc,leaderCard));
+  if(incompatible.length){notify("La lista contiene "+incompatible.length+" carta(s) de color no compatible con el líder");return false}
+  const total=Object.values(cards).reduce((s,q)=>s+Number(q||0),0);
+  if(total>50){notify("La lista tiene "+total+" cartas; el máximo es 50");return false}
+  const d={id:crypto.randomUUID(),name,description,leader,cards,colors:leaderCard?.colors||[],owner_id:state.user.id,updatedAt:new Date().toISOString()};
+  state.decks.unshift(d);state.deckId=d.id;state.deckLibrary=false;state.deckChoosingLeader=false;saveLocal();syncDeck(d);renderShell();notify("Mazo importado");return true
 }
 
+function deckCardAllowedByLeader(cc,leader){
+  if(!cc||!leader||cc.category==="Leader")return false;
+  const leaderColors=new Set((leader.colors||[]).map(norm).filter(Boolean));
+  const cardColors=(cc.colors||[]).map(norm).filter(Boolean);
+  return cardColors.length>0&&cardColors.every(color=>leaderColors.has(color));
+}
 function deckValidate(d){
   const total=Object.values(d.cards||{}).reduce((s,n)=>s+Number(n||0),0),messages=[],leader=card(d.leader);
   const banned=new Set(["OP06-047","OP03-040","OP06-086","ST10-001","OP06-116"]);
   const pairs=[["OP07-115","EB04-058"],["OP11-040","OP11-067"],["OP11-040","OP08-069"]];
   let illegal=0;if(!leader)messages.push("Líder no seleccionado");if(total!==50)messages.push(total+"/50 cartas no líder");
   const ids=Object.entries(d.cards||{}),baseCounts=new Map();
-  for(const [id,n] of ids){const c=card(id);const base=baseId(id);baseCounts.set(base,(baseCounts.get(base)||0)+Number(n||0));if(!c){illegal++;continue}if(c.category==="Leader"){illegal++;continue}if(Number(n)>4){illegal++;messages.push(c.id+">4 copias")}if(banned.has(base)){illegal++;messages.push(base+" prohibida")}if(leader&&!(c.colors||[]).some(col=>(leader.colors||[]).includes(col))){illegal++;}}
+  for(const [id,n] of ids){const c=card(id);const base=baseId(id);baseCounts.set(base,(baseCounts.get(base)||0)+Number(n||0));if(!c){illegal++;continue}if(c.category==="Leader"){illegal++;continue}if(Number(n)>4){illegal++;messages.push(c.id+">4 copias")}if(banned.has(base)){illegal++;messages.push(base+" prohibida")}if(leader&&!deckCardAllowedByLeader(c,leader)){illegal++;messages.push(c.id+" color no compatible")}}
   for(const [base,count] of baseCounts)if(count>4){illegal++;messages.push(base+">4 copias totales entre versiones")}
   for(const [a,b] of pairs){if(ids.some(([id,n])=>baseId(id)===a&&Number(n)>0)&&ids.some(([id,n])=>baseId(id)===b&&Number(n)>0)){illegal++;messages.push("pareja prohibida "+a+" + "+b)}}
   if(illegal)messages.push(illegal+" carta(s) ilegales");
@@ -1019,10 +1048,10 @@ function deckGroupedTile(g){
 async function renderDeckResults(){
   const host=$("#deckResults");if(!host)return;
   const d=state.decks.find(x=>x.id===state.deckId);if(!d){host.innerHTML="";return}
-  const leader=card(d.leader),choosingLeader=!leader,q=norm(state.deckQuery),f=state.deckFilters;
+  const leader=card(d.leader),choosingLeader=!leader||state.deckChoosingLeader,q=norm(state.deckQuery),f=state.deckFilters;
   let list=state.cards.slice();
   if(choosingLeader)list=list.filter(c=>c.category==="Leader");
-  else list=list.filter(c=>c.category!=="Leader"&&(c.colors||[]).some(col=>(leader.colors||[]).includes(col)));
+  else list=list.filter(c=>deckCardAllowedByLeader(c,leader));
   if(q){const searchGroups=new Set(state.cards.filter(c=>searchMatchesCard(c,q)).map(groupKey));list=list.filter(c=>searchGroups.has(groupKey(c)))}
   if(f.set!=="Todas")list=list.filter(c=>sameExpansion(c.set,f.set));
   if(!choosingLeader&&f.category!=="Todos"&&f.category!=="Leader")list=list.filter(c=>filterValueMatches(c.category,f.category));
@@ -1090,7 +1119,7 @@ function changeDeckQty(id,delta){
   const cc=card(id);if(!cc||cc.category==="Leader")return;
   if(Number(delta)>0){
     const leader=card(d.leader);if(!leader)return notify("Elige primero un líder");
-    if(!(cc.colors||[]).some(col=>(leader.colors||[]).includes(col)))return notify("Esa carta no coincide con el color del líder");
+    if(!deckCardAllowedByLeader(cc,leader))return notify("Esa carta no coincide con el color o colores del líder");
     if(deckCardTotal(d)>=50)return notify("El mazo ya tiene 50 cartas");
     const used=Object.entries(d.cards||{}).filter(([x])=>baseId(x)===baseId(id)).reduce((s,[,q])=>s+Number(q||0),0);
     if(used>=4)return notify("Máximo 4 copias de ese número de carta");
@@ -1099,15 +1128,19 @@ function changeDeckQty(id,delta){
   if(next===0)delete d.cards[id];else d.cards[id]=next;
   d.updatedAt=new Date().toISOString();saveLocal();syncDeck(d);renderShell();
 }
+function beginLeaderChange(){state.deckChoosingLeader=true;state.deckQuery="";state.deckPage=1;renderShell()}
 function setLeader(id){
   const d=state.decks.find(x=>x.id===state.deckId),cc=card(id);if(!d||!cc||cc.category!=="Leader")return;
-  d.leader=id;d.colors=cc.colors||[];d.updatedAt=new Date().toISOString();
+  const incompatible=Object.entries(d.cards||{}).filter(([,q])=>Number(q)>0).map(([cardId])=>card(cardId)).filter(x=>x&&!deckCardAllowedByLeader(x,cc));
+  if(incompatible.length)return notify("Ese líder no es compatible con "+incompatible.length+" carta(s) que ya hay en el mazo");
+  d.leader=id;d.colors=cc.colors||[];d.updatedAt=new Date().toISOString();state.deckChoosingLeader=false;
   state.deckQuery="";state.deckPage=1;Object.assign(state.deckFilters,{category:"Todos",color:"Todos"});
   saveLocal();syncDeck(d);renderShell();notify("Líder seleccionado");
 }
 function removeLeader(){
   const d=state.decks.find(x=>x.id===state.deckId);if(!d)return;
-  d.leader="";d.colors=[];d.updatedAt=new Date().toISOString();state.deckQuery="";state.deckPage=1;saveLocal();syncDeck(d);renderShell();notify("Líder quitado; las cartas del mazo se conservan");
+  if(deckCardTotal(d)>0)return notify("Quita primero las cartas del mazo o cambia a un líder compatible");
+  d.leader="";d.colors=[];d.updatedAt=new Date().toISOString();state.deckChoosingLeader=false;state.deckQuery="";state.deckPage=1;saveLocal();syncDeck(d);renderShell();notify("Líder quitado");
 }
 function addToDeck(id){
   const d=state.decks.find(x=>x.id===state.deckId);if(!d)return;
@@ -1191,7 +1224,7 @@ function accountView(){
   (state.user?'<div class="section"><h2>Sincronización activa</h2><p class="muted">Tu colección y tus mazos están asociados a esta cuenta. Los datos locales de esta cuenta se guardan separados de otras cuentas.</p><button class="secondary btn" id="logout" type="button">Cerrar sesión</button></div>'+
     '<div class="section"><h2>Seguridad</h2><input id="changePassword" class="field" type="password" placeholder="Nueva contraseña (mín. 6 caracteres)" autocomplete="new-password"><input id="changePassword2" class="field" type="password" style="margin-top:8px" placeholder="Repite la nueva contraseña" autocomplete="new-password"><button class="primary btn" id="changePasswordBtn" type="button" style="margin-top:8px">Cambiar contraseña</button></div>'+
     '<div class="section" style="border-color:#713441"><h2>Eliminar cuenta</h2><p class="muted">Elimina permanentemente la cuenta y los datos sincronizados de colección y mazos.</p><button class="danger btn" id="deleteAccount" type="button">Eliminar mi cuenta</button></div>'
-    :'<div class="section"><h2>Entrar o crear cuenta</h2><input id="authEmail" class="field" type="email" placeholder="Email" autocomplete="email"><input id="authPassword" class="field" type="password" style="margin-top:8px" placeholder="Contraseña (mín. 6 caracteres)" autocomplete="current-password"><div class="inline-actions" style="margin-top:8px"><button class="primary btn" id="login" type="button" '+(state.authBusy?"disabled":"")+'>Entrar</button><button class="secondary btn" id="register" type="button" '+(state.authBusy?"disabled":"")+'>Crear cuenta</button></div><button class="linkbtn" id="forgotPassword" type="button" style="margin-top:12px">He olvidado la contraseña</button></div>')+
+    :'<div class="section"><h2>Entrar o crear cuenta</h2><input id="authEmail" class="field" type="email" placeholder="Email" autocomplete="email"><input id="authPassword" class="field" type="password" style="margin-top:8px" placeholder="Contraseña (mín. 6 caracteres)" autocomplete="current-password"><button class="linkbtn" id="forgotPassword" type="button" style="margin-top:10px;margin-bottom:10px">He olvidado la contraseña</button><div class="inline-actions"><button class="primary btn" id="login" type="button" '+(state.authBusy?"disabled":"")+'>Entrar</button><button class="secondary btn" id="register" type="button" '+(state.authBusy?"disabled":"")+'>Crear cuenta</button></div></div>')+
   '<div class="section"><h2>Estado</h2><div class="small">Catálogo: '+state.cards.length.toLocaleString("es-ES")+' cartas · '+state.packs.length+' expansiones'+(state.priceDate?' · Precios: '+new Date(state.priceDate).toLocaleString("es-ES"):"")+'</div></div></div>';
 }
 
@@ -1235,7 +1268,7 @@ function bindSearch(id,fn){
   let last=el.value;let timer;
   el.addEventListener("input",()=>{last=el.value;clearTimeout(timer);timer=setTimeout(()=>fn(last),80)});
 }
-function authModal(){return '<div class="modalback"><div class="modal"><div class="sectionhead"><h2>Cuenta</h2><button class="close" data-close-auth>×</button></div><p class="muted">Accede para sincronizar tu colección y tus mazos.</p><input id="authEmail2" class="field" placeholder="Email"><input id="authPassword2" type="password" class="field" style="margin-top:8px" placeholder="Contraseña"><div class="inline-actions" style="margin-top:9px"><button class="primary btn" id="login2">Entrar</button><button class="secondary btn" id="register2">Crear cuenta</button></div></div></div>'}
+function authModal(){return '<div class="modalback"><div class="modal"><div class="sectionhead"><h2>Cuenta</h2><button class="close" data-close-auth>×</button></div><p class="muted">Accede para sincronizar tu colección y tus mazos.</p><input id="authEmail2" class="field" placeholder="Email"><input id="authPassword2" type="password" class="field" style="margin-top:8px" placeholder="Contraseña"><button class="linkbtn" id="forgotPassword2" type="button" style="margin-top:10px;margin-bottom:10px">He olvidado la contraseña</button><div class="inline-actions"><button class="primary btn" id="login2">Entrar</button><button class="secondary btn" id="register2">Crear cuenta</button></div></div></div>'}
 function bindShell(){
   document.querySelectorAll("[data-tab]").forEach(b=>b.onclick=()=>{
     if(state.detail&&detailHistoryActive)history.replaceState(null,"",location.href);
@@ -1313,16 +1346,15 @@ function bindShell(){
   }
   if(state.tab==="decks"){
     $("#deckAccountBtn")?.addEventListener("click",()=>{state.tab="account";renderShell()});
-    document.querySelectorAll("[data-open-deck]").forEach(b=>b.onclick=()=>{state.deckId=b.dataset.openDeck;state.deckLibrary=false;renderShell()});
-    $("#backDecks")?.addEventListener("click",()=>{state.deckLibrary=true;renderShell()});
-    $("#importDeckBtn")?.addEventListener("click",()=>$("#deckImportFile")?.click());
-    $("#deckImportFile")?.addEventListener("change",e=>{const f=e.target.files?.[0];if(f)f.text().then(t=>importDeckText(t,f.name))});
+    document.querySelectorAll("[data-open-deck]").forEach(b=>b.onclick=()=>{state.deckId=b.dataset.openDeck;state.deckLibrary=false;state.deckChoosingLeader=false;renderShell()});
+    $("#backDecks")?.addEventListener("click",()=>{state.deckLibrary=true;state.deckChoosingLeader=false;renderShell()});
+    $("#importDeckBtn")?.addEventListener("click",openDeckImportDialog);
     $("#exportDeck")?.addEventListener("click",exportDeckFile);
     $("#newDeck")?.addEventListener("click",()=>{state.newDeck=true;renderShell()});
     $("#newDeck2")?.addEventListener("click",()=>{state.newDeck=true;renderShell()});
     $("#createDeckConfirm")?.addEventListener("click",()=>{const name=$("#newDeckName")?.value.trim();if(!name)return notify("Pon un nombre");if(!state.user){state.newDeck=false;state.tab="account";renderShell();return}const d={id:crypto.randomUUID(),name,description:$("#newDeckDesc")?.value||"",leader:"",cards:{},colors:[],owner_id:state.user.id,updatedAt:new Date().toISOString()};state.decks.unshift(d);state.deckId=d.id;state.deckLibrary=false;state.newDeck=false;saveLocal();syncDeck(d);renderShell()});
     $("#deleteDeck")?.addEventListener("click",()=>{if(confirm("¿Eliminar este mazo?")){const id=state.deckId;state.decks=state.decks.filter(x=>x.id!==id);state.deckId=null;state.deckLibrary=true;saveLocal();syncDeckDelete(id);renderShell()}});
-    $("#changeLeader")?.addEventListener("click",removeLeader);
+    $("#changeLeader")?.addEventListener("click",beginLeaderChange);
     $("#removeLeader")?.addEventListener("click",removeLeader);
     $("#shareDeck")?.addEventListener("click",()=>shareDeck());
     bindSearch("#deckSearch",v=>{state.deckQuery=v;state.deckPage=1;renderDeckResults()});
@@ -1351,6 +1383,7 @@ function bindAccount(){
   $("#register")?.addEventListener("click",()=>registerFrom("#authEmail","#authPassword"));
   $("#authPassword")?.addEventListener("keydown",e=>{if(e.key==="Enter")loginFrom("#authEmail","#authPassword")});
   $("#forgotPassword")?.addEventListener("click",()=>forgotPassword($("#authEmail")?.value));
+  $("#forgotPassword2")?.addEventListener("click",()=>forgotPassword($("#authEmail2")?.value));
   $("#changePasswordBtn")?.addEventListener("click",()=>changePassword($("#changePassword")?.value,$("#changePassword2")?.value));
   $("#saveRecoveredPassword")?.addEventListener("click",()=>changePassword($("#newPassword")?.value,$("#newPassword2")?.value,{recovery:true}));
   $("#deleteAccount")?.addEventListener("click",deleteAccount);
