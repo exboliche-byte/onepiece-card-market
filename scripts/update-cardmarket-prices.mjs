@@ -442,8 +442,8 @@ function normalizeOptcgCatalog(parsed) {
   const packs = [];
   const seen = new Set();
   for (const [key, payload] of entries) {
-    if (!payload?.data) continue;
-    const data = payload.data;
+    const data = payload?.data || payload;
+    if (!data || !Array.isArray(data.cards)) continue;
     const setCode = normalizeOptcgSetCode(data.code || key);
     const setName = String(data.name || "").trim();
     const setCards = Array.isArray(data.cards) ? data.cards : [];
