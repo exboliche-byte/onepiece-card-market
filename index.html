@@ -55,7 +55,7 @@ function isJapaneseCatalogCard(c){
   );
 }
 function card(id){return state.cards.find(c=>c.id===id)}
-function baseId(id){return safeId(id).replace(/_(?:p\d+|r\d+|c\d+|jp\d+)$/i,"")}
+function baseId(id){return safeId(id).replace(/__csv_[a-z0-9]+(?:_[a-z]+)?$/i,"").replace(/_(?:p\d+|r\d+|c\d+|jp\d+)$/i,"")}
 function normalizePrintSet(value){
   const raw=String(value||"").trim().toUpperCase().replace(/[\s_-]+/g,"");
   if(raw==="OP14EB04")return "OP14";
@@ -324,7 +324,7 @@ function cmpPrice(a,b){
   return d*(state.catalog.dir==="desc"?-1:1);
 }
 let priceDatasetPromise=null;
-const PRICE_CACHE_VERSION=12;
+const PRICE_CACHE_VERSION=13;
 const MARKET_DATA_URL="/data/cardmarket-prices.json";
 function priceOf(c){
   const key=c?.id;
@@ -342,10 +342,18 @@ function priceOf(c){
     const n=Number(raw);
     if(Number.isFinite(n)&&n>0)return n;
   }
-  const wantedSet=normalizePrintSet(c?.importPrintSet);
+
+  // Si la versión exacta no tiene precio propio, recuperar el precio de la
+  // impresión indicada por el catálogo/CSV dentro del historial de la carta.
+  const wantedSet=normalizePrintSet(printSetOf(c));
   if(wantedSet){
-    const base=state.marketMeta?.[baseId(key)]||state.marketMeta?.[norm(baseId(key))]||{};
-    const match=(base.collections||[]).find(x=>normalizePrintSet(x?.setCode)===wantedSet);
+    const baseKey=baseId(key);
+    const base=state.marketMeta?.[baseKey]||state.marketMeta?.[norm(baseKey)]||{};
+    const matches=(base.collections||[]).filter(x=>normalizePrintSet(x?.setCode)===wantedSet);
+    const exactVersion=Number(meta?.version);
+    const match=(Number.isFinite(exactVersion)&&exactVersion>0
+      ?matches.find(x=>Number(x?.version)===exactVersion)
+      :null)||matches.find(x=>Number(x?.eur)>0);
     const n=Number(match?.eur);
     if(Number.isFinite(n)&&n>0)return n;
   }
@@ -1045,9 +1053,12 @@ function csvRarity(c){
   return r==="Leader"?"L":r==="Common"?"C":r==="Uncommon"?"UC":r==="Rare"?"R":r==="Super Rare"?"SR":r==="Secret Rare"?"SEC":r==="Special"?"SP":r||"";
 }
 function csvVariant(c){
-  const id=String(c?.id||"");
   const kind=variantKindOf(c);
   const printSet=printSetOf(c);
+  if(c?.importVariantId){
+    return {variant_id:String(c.importVariantId),variant_kind:kind,print_set:printSet};
+  }
+  const id=String(c?.id||"");
   if(kind==="base")return {variant_id:id+"_base",variant_kind:"base",print_set:printSet};
   return {variant_id:id,variant_kind:kind,print_set:printSet};
 }
@@ -1131,30 +1142,39 @@ function resolveCSVPrint(logicalId,rawVariant,kind,printSet){
   const wantedSet=String(printSet||"").trim();
   const normalizedVariant=String(rawVariant||"").trim().replace(/_base$/i,"");
   const candidates=state.cards.filter(c=>norm(baseId(c.id))===norm(logical));
-
-  // El variant_id del CSV es la versión exacta y tiene prioridad absoluta.
-  const exact=candidates.find(c=>norm(c.id)===norm(normalizedVariant));
-  if(exact)return exact;
-
-  // Si esa versión todavía no existe en el catálogo, usamos print_set/card_set
-  // solo para identificar de forma inequívoca la impresión correspondiente.
   const compatible=candidates.filter(c=>variantKindOf(c)===wantedKind);
+
   if(wantedSet){
+    // Si el CSV indica la expansión de impresión, esa expansión manda.
+    // variant_id solo es exacto si además pertenece a esa impresión.
     const bySet=compatible.filter(c=>csvPrintSetMatches(c,wantedSet));
+    const exactSet=bySet.find(c=>norm(c.id)===norm(normalizedVariant));
+    if(exactSet)return exactSet;
     if(bySet.length===1)return bySet[0];
+    // No aceptar una variante de otra expansión solo porque coincida el sufijo.
+    return null;
   }
 
-  // No adivinamos entre varias versiones: el importador conservará literalmente
-  // el variant_id del CSV mediante syntheticCSVCard.
-  if(wantedKind==="base"&&!wantedSet)return candidates.find(c=>norm(c.id)===norm(logical))||null;
+  const exact=compatible.find(c=>norm(c.id)===norm(normalizedVariant));
+  if(exact)return exact;
+  if(wantedKind==="base")return candidates.find(c=>norm(c.id)===norm(logical))||null;
   return null;
 }
 function syntheticCSVCard(row,logicalId,variantId,kind,printSet){
   const logical=String(logicalId||"").trim().toUpperCase();
-  let id=String(variantId||"").trim();
-  if(/_base$/i.test(id))id=logical;
-  if(!id)id=logical;
+  const originalVariant=String(variantId||"").trim()||logical+"_base";
+  let id=originalVariant.replace(/_base$/i,"")||logical;
   const base=state.cards.find(c=>norm(c.id)===norm(logical))||state.cards.find(c=>norm(baseId(c.id))===norm(logical))||null;
+  const wantedSet=normalizePrintSet(printSet);
+
+  // Una misma carta base puede existir en otra expansión con el mismo variant_id.
+  // Usamos una clave interna distinta para no mezclar las cantidades, pero
+  // conservamos el variant_id original al exportar.
+  const existing=state.cards.find(c=>norm(c.id)===norm(id));
+  if(existing&&wantedSet&&!csvPrintSetMatches(existing,printSet)){
+    id=logical+"__csv_"+wantedSet.toLowerCase()+"_"+String(kind||"base").toLowerCase();
+  }
+
   const setCode=printSet?internalSetCode(printSet):String(base?.set||internalSetCode(row.set_code||logical.split("-")[0]));
   return {
     ...(base||{}),
@@ -1168,9 +1188,10 @@ function syntheticCSVCard(row,logicalId,variantId,kind,printSet){
     colors:Array.isArray(base?.colors)?base.colors:[],
     attributes:Array.isArray(base?.attributes)?base.attributes:[],
     types:Array.isArray(base?.types)?base.types:[],
-    image:"https://asia-en.onepiece-cardgame.com/images/cardlist/card/"+encodeURIComponent(id)+".png",
+    image:String(base?.image||base?.imageUrl||"https://asia-en.onepiece-cardgame.com/images/cardlist/card/"+encodeURIComponent(logical)+".png"),
     isParallel:kind==="parallel",
     syntheticImport:true,
+    importVariantId:originalVariant,
     importPrintSet:String(printSet||""),
     importVariantKind:String(kind||"base")
   };
