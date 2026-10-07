@@ -1516,16 +1516,28 @@ function scannerDigits(value){
 }
 function scannerCodeCandidates(text){
   const src=String(text||"").toUpperCase().replace(/[‐‑–—]/g,"-");
+  const compact=src.replace(/[^A-Z0-9]/g,"");
   const out=[];
   const add=v=>{v=String(v||"").toUpperCase();if(v&&!out.includes(v))out.push(v)};
-  const regular=/(OP|0P|ST|EB|PRB)\s*[-_ ]?\s*([0-9OQDILSB]{2})\s*[-_ ]?\s*([0-9OQDILSB]{3})/g;
-  let m;
-  while((m=regular.exec(src))){
-    const prefix=m[1]==="0P"?"OP":m[1],set=scannerDigits(m[2]),num=scannerDigits(m[3]);
-    if(set.length===2&&num.length===3)add(prefix+set+"-"+num);
-  }
+  const parseRegular=(input,regex)=>{
+    let m;
+    while((m=regex.exec(input))){
+      let prefix=m[1].replace(/^0P$/,"OP");
+      if(prefix==="5T")prefix="ST";
+      if(prefix==="E8")prefix="EB";
+      const set=scannerDigits(m[2]),num=scannerDigits(m[3]);
+      if(set.length===2&&num.length===3)add(prefix+set+"-"+num);
+    }
+  };
+  parseRegular(src,/(OP|0P|ST|5T|EB|E8|PRB)\s*[-_ ]?\s*([0-9OQDILSB]{2})\s*[-_ ]?\s*([0-9OQDILSB]{3})/g);
+  parseRegular(compact,/(OP|0P|ST|5T|EB|E8|PRB)([0-9OQDILSB]{2})([0-9OQDILSB]{3})/g);
   const promo=/\bP\s*[-_ ]?\s*([0-9OQDILSB]{3})\b/g;
+  let m;
   while((m=promo.exec(src))){
+    const num=scannerDigits(m[1]);if(num.length===3)add("P-"+num);
+  }
+  const compactPromo=/P([0-9OQDILSB]{3})/g;
+  while((m=compactPromo.exec(compact))){
     const num=scannerDigits(m[1]);if(num.length===3)add("P-"+num);
   }
   return out;
@@ -1621,7 +1633,7 @@ async function scannerWorkerReady(){
     if(m?.status&&m.status!=="recognizing text"){state.scanner.status="OCR: "+String(m.status);const el=$("#scannerStatus");if(el)el.innerHTML=scannerStatusHtml()}
   }}).then(async worker=>{
     scannerWorker=worker;
-    try{await worker.setParameters({tessedit_char_whitelist:"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789- ",preserve_interword_spaces:"1"})}catch{}
+    try{await worker.setParameters({tessedit_char_whitelist:"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789- ",preserve_interword_spaces:"1",tessedit_pageseg_mode:"6"})}catch{}
     return worker;
   }).finally(()=>{scannerWorkerPromise=null});
   return scannerWorkerPromise;
@@ -1656,15 +1668,42 @@ async function scanScannerFrame(){
   try{
     const worker=await scannerWorkerReady();
     const vw=video.videoWidth||720,vh=video.videoHeight||1280;
-    const sx=Math.round(vw*.08),sy=Math.round(vh*.04),sw=Math.round(vw*.84),sh=Math.round(vh*.92);
-    const maxW=900,scale=Math.min(1,maxW/sw);
-    canvas.width=Math.max(320,Math.round(sw*scale));canvas.height=Math.max(450,Math.round(sh*scale));
+    const cardX=Math.round(vw*.08),cardY=Math.round(vh*.04),cardW=Math.round(vw*.84),cardH=Math.round(vh*.92);
     const ctx=canvas.getContext("2d",{willReadFrequently:true});
-    ctx.save();ctx.filter="grayscale(1) contrast(1.45)";ctx.drawImage(video,sx,sy,sw,sh,0,0,canvas.width,canvas.height);ctx.restore();
-    const result=await worker.recognize(canvas,{rotateAuto:true});
-    const text=String(result?.data?.text||"").trim(),confidence=Number(result?.data?.confidence);
+    const recognizeRegion=async(sx,sy,sw,sh,targetW=1200)=>{
+      const scale=Math.max(1,Math.min(3,targetW/Math.max(1,sw)));
+      canvas.width=Math.max(640,Math.round(sw*scale));
+      canvas.height=Math.max(120,Math.round(sh*scale));
+      ctx.save();
+      ctx.filter="grayscale(1) contrast(2.15) brightness(1.08)";
+      ctx.drawImage(video,sx,sy,sw,sh,0,0,canvas.width,canvas.height);
+      ctx.restore();
+      const image=ctx.getImageData(0,0,canvas.width,canvas.height);
+      const d=image.data;
+      for(let i=0;i<d.length;i+=4){
+        const v=d[i];
+        const x=v<105?0:v>205?255:v;
+        d[i]=d[i+1]=d[i+2]=x;
+      }
+      ctx.putImageData(image,0,0);
+      return await worker.recognize(canvas);
+    };
+    // El código de One Piece está en la zona inferior y es pequeño: leer esa
+    // franja ampliada evita que nombre, efecto y arte dominen el OCR.
+    const bottomY=Math.round(cardY+cardH*.63),bottomH=Math.round(cardH*.35);
+    let result=await recognizeRegion(cardX,bottomY,cardW,bottomH,1500);
+    let text=String(result?.data?.text||"").trim();
+    let resolved=scannerResolveText(text);
+    // Respaldo: si la franja inferior no da un ID válido, leer la carta entera.
+    if(!resolved){
+      const full=await recognizeRegion(cardX,cardY,cardW,cardH,1050);
+      const fullText=String(full?.data?.text||"").trim();
+      if(fullText)text=(text?text+"\n":"")+fullText;
+      result=full;
+      resolved=scannerResolveText(text);
+    }
+    const confidence=Number(result?.data?.confidence);
     state.scanner.ocrText=text;state.scanner.confidence=Number.isFinite(confidence)?confidence:null;
-    const resolved=scannerResolveText(text);
     if(resolved){
       state.scanner.code=resolved.code;
       state.scanner.groupKey=resolved.group.key;
