@@ -308,5 +308,15 @@
     "code": "ST-36",
     "name": "STARTER DECK -Yellow Eustass\"Captain\"Kid- [ST-36]",
     "cardCount": 15
+  },
+  {
+    "code": "OTHER-PRODUCT-CARD",
+    "name": "Other Product Card",
+    "cardCount": 189
+  },
+  {
+    "code": "PROMOTION-CARD",
+    "name": "Promotion card",
+    "cardCount": 467
   }
 ]
