@@ -1252,12 +1252,14 @@ function detailView(c){
 }
 function accountView(){
   const status=state.authError?'<div class="notice">'+esc(state.authError)+'</div>':(state.authNotice?'<div class="validation ok"><b>'+esc(state.authNotice)+'</b></div>':(!state.authReady?'<div class="notice">Conectando con la cuenta…</div>':""));
+  const recovery=state.authRecovery?'<div class="section"><h2>Crear nueva contraseña</h2><p class="muted">Escribe la nueva contraseña para terminar la recuperación.</p><input id="newPassword" class="field" type="password" placeholder="Nueva contraseña (mín. 6 caracteres)" autocomplete="new-password"><input id="newPassword2" class="field" type="password" style="margin-top:8px" placeholder="Confirmar nueva contraseña" autocomplete="new-password"><button class="primary btn" id="saveRecoveredPassword" type="button" style="margin-top:8px">Guardar nueva contraseña</button></div>':"";
   const name=accountDisplayName();
-  return '<div class="wrap"><div class="hero"><div><h1>Cuenta</h1><p>'+(state.user?("Sesión: "+esc(name)):"Usa un nombre de usuario y una contraseña. No pedimos email.")+'</p></div></div>'+status+
+  return '<div class="wrap"><div class="hero"><div><h1>Cuenta</h1><p>'+(state.user?("Sesión: "+esc(name)):"Crea tu cuenta con usuario, email y contraseña.")+'</p></div></div>'+status+recovery+
   (state.user?'<div class="section"><h2>Sincronización activa</h2><p class="muted">Tu colección y tus mazos están asociados a <b>'+esc(name)+'</b>.</p><button class="secondary btn" id="logout" type="button">Cerrar sesión</button></div>'+
-    '<div class="section"><h2>Seguridad</h2><input id="changePassword" class="field" type="password" placeholder="Nueva contraseña (mín. 6 caracteres)" autocomplete="new-password"><input id="changePassword2" class="field" type="password" style="margin-top:8px" placeholder="Repite la nueva contraseña" autocomplete="new-password"><button class="primary btn" id="changePasswordBtn" type="button" style="margin-top:8px">Cambiar contraseña</button><p class="muted" style="margin-bottom:0">Sin email no hay recuperación automática si olvidas la contraseña.</p></div>'+
+    '<div class="section"><h2>Seguridad</h2><input id="changePassword" class="field" type="password" placeholder="Nueva contraseña (mín. 6 caracteres)" autocomplete="new-password"><input id="changePassword2" class="field" type="password" style="margin-top:8px" placeholder="Repite la nueva contraseña" autocomplete="new-password"><button class="primary btn" id="changePasswordBtn" type="button" style="margin-top:8px">Cambiar contraseña</button></div>'+
     '<div class="section" style="border-color:#713441"><h2>Eliminar cuenta</h2><p class="muted">Elimina permanentemente la cuenta y los datos sincronizados de colección y mazos.</p><button class="danger btn" id="deleteAccount" type="button">Eliminar mi cuenta</button></div>'
-    :'<div class="section"><h2>Entrar o crear cuenta</h2><input id="authUser" class="field" type="text" placeholder="Usuario" autocomplete="username" autocapitalize="off" spellcheck="false"><input id="authPassword" class="field" type="password" style="margin-top:8px" placeholder="Contraseña (mín. 6 caracteres)" autocomplete="current-password"><div class="inline-actions" style="margin-top:10px"><button class="primary btn" id="login" type="button" '+(state.authBusy?"disabled":"")+'>Entrar</button><button class="secondary btn" id="register" type="button" '+(state.authBusy?"disabled":"")+'>Crear cuenta</button></div><p class="muted" style="margin-bottom:0">Las cuentas nuevas no usan correo electrónico.</p></div>')+
+    :'<div class="section"><h2>Entrar</h2><input id="authLogin" class="field" type="text" placeholder="Usuario o email" autocomplete="username" autocapitalize="off" spellcheck="false"><input id="authPassword" class="field" type="password" style="margin-top:8px" placeholder="Contraseña" autocomplete="current-password"><button class="linkbtn" id="forgotPassword" type="button" style="margin-top:10px">He olvidado la contraseña</button><div class="inline-actions" style="margin-top:10px"><button class="primary btn" id="login" type="button" '+(state.authBusy?"disabled":"")+'>Entrar</button></div></div>'+
+    '<div class="section"><h2>Crear cuenta</h2><input id="registerUser" class="field" type="text" placeholder="Usuario" autocomplete="username" autocapitalize="off" spellcheck="false"><input id="registerEmail" class="field" type="email" style="margin-top:8px" placeholder="Email (solo recuperación de contraseña)" autocomplete="email"><input id="registerPassword" class="field" type="password" style="margin-top:8px" placeholder="Contraseña (mín. 6 caracteres)" autocomplete="new-password"><input id="registerPassword2" class="field" type="password" style="margin-top:8px" placeholder="Confirmar contraseña" autocomplete="new-password"><button class="secondary btn" id="register" type="button" style="margin-top:10px" '+(state.authBusy?"disabled":"")+'>Crear cuenta</button><p class="muted" style="margin-bottom:0">No verificamos el email al crear la cuenta. Solo se utilizará si necesitas recuperar la contraseña.</p></div>')+
   '<div class="section"><h2>Estado</h2><div class="small">Catálogo: '+state.cards.length.toLocaleString("es-ES")+' cartas · '+state.packs.length+' expansiones'+(state.priceDate?' · Precios: '+new Date(state.priceDate).toLocaleString("es-ES"):"")+'</div></div></div>';
 }
 
@@ -1301,7 +1303,7 @@ function bindSearch(id,fn){
   let last=el.value;let timer;
   el.addEventListener("input",()=>{last=el.value;clearTimeout(timer);timer=setTimeout(()=>fn(last),80)});
 }
-function authModal(){return '<div class="modalback"><div class="modal"><div class="sectionhead"><h2>Cuenta</h2><button class="close" data-close-auth>×</button></div><p class="muted">Accede con usuario y contraseña.</p><input id="authUser2" class="field" placeholder="Usuario" autocomplete="username"><input id="authPassword2" type="password" class="field" style="margin-top:8px" placeholder="Contraseña"><div class="inline-actions" style="margin-top:10px"><button class="primary btn" id="login2">Entrar</button><button class="secondary btn" id="register2">Crear cuenta</button></div></div></div>'}
+function authModal(){return '<div class="modalback"><div class="modal"><div class="sectionhead"><h2>Cuenta</h2><button class="close" data-close-auth>×</button></div><h3>Entrar</h3><input id="authLogin2" class="field" placeholder="Usuario o email" autocomplete="username"><input id="authPassword2" type="password" class="field" style="margin-top:8px" placeholder="Contraseña"><button class="linkbtn" id="forgotPassword2" type="button" style="margin-top:10px">He olvidado la contraseña</button><button class="primary btn" id="login2" style="margin-top:10px">Entrar</button><hr style="border:0;border-top:1px solid var(--line);margin:16px 0"><h3>Crear cuenta</h3><input id="registerUser2" class="field" placeholder="Usuario" autocomplete="username"><input id="registerEmail2" type="email" class="field" style="margin-top:8px" placeholder="Email"><input id="registerPassword2a" type="password" class="field" style="margin-top:8px" placeholder="Contraseña"><input id="registerPassword2b" type="password" class="field" style="margin-top:8px" placeholder="Confirmar contraseña"><button class="secondary btn" id="register2" style="margin-top:10px">Crear cuenta</button></div></div>'}
 function bindShell(){
   document.querySelectorAll("[data-tab]").forEach(b=>b.onclick=()=>{
     if(state.detail&&detailHistoryActive)history.replaceState(null,"",location.href);
@@ -1400,6 +1402,11 @@ function bindShell(){
     $("#clearDeckFilters")?.addEventListener("click",()=>{Object.assign(state.deckFilters,{set:"Todas",category:"Todos",color:"Todos",rarity:"Todos",type:"Todos",attribute:"Todos",ownership:"Todas"});state.deckPage=1;renderShell()});
   }
   if(state.tab==="account"){bindAccount()}
+  if(state.auth){
+    $("#login2")?.addEventListener("click",()=>loginFrom("#authLogin2","#authPassword2"));
+    $("#register2")?.addEventListener("click",()=>registerFrom("#registerUser2","#registerEmail2","#registerPassword2a","#registerPassword2b"));
+    $("#authPassword2")?.addEventListener("keydown",e=>{if(e.key==="Enter")loginFrom("#authLogin2","#authPassword2")});
+    }
   if(state.detail&&!state.detail.shareUrl){
     document.querySelectorAll(".modalback").forEach(m=>m.addEventListener("click",e=>{if(e.target===m)closeCardDetail()}));
     document.querySelectorAll(".modalback [data-close]").forEach(b=>b.onclick=()=>closeCardDetail());
@@ -1412,66 +1419,85 @@ function bindShell(){
   }
 }
 function bindAccount(){
-  $("#login")?.addEventListener("click",()=>loginFrom("#authUser","#authPassword"));
-  $("#register")?.addEventListener("click",()=>registerFrom("#authUser","#authPassword"));
-  $("#authPassword")?.addEventListener("keydown",e=>{if(e.key==="Enter")loginFrom("#authUser","#authPassword")});
+  $("#login")?.addEventListener("click",()=>loginFrom("#authLogin","#authPassword"));
+  $("#register")?.addEventListener("click",()=>registerFrom("#registerUser","#registerEmail","#registerPassword","#registerPassword2"));
+  $("#authPassword")?.addEventListener("keydown",e=>{if(e.key==="Enter")loginFrom("#authLogin","#authPassword")});
+  $("#forgotPassword")?.addEventListener("click",forgotPasswordPrompt);
+  $("#forgotPassword2")?.addEventListener("click",forgotPasswordPrompt);
   $("#changePasswordBtn")?.addEventListener("click",()=>changePassword($("#changePassword")?.value,$("#changePassword2")?.value));
+  $("#saveRecoveredPassword")?.addEventListener("click",()=>changePassword($("#newPassword")?.value,$("#newPassword2")?.value,{recovery:true}));
   $("#deleteAccount")?.addEventListener("click",deleteAccount);
   $("#logout")?.addEventListener("click",async()=>{try{await state.sb?.auth.signOut()}catch{}state.user=null;state.authRecovery=false;state.deckId=null;state.deckLibrary=true;loadAccountLocal();notify("Sesión cerrada");renderShell()});
 }
 
 function loginFrom(e,p){loginUser($(e)?.value,$(p)?.value)}
-function registerFrom(e,p){registerUser($(e)?.value,$(p)?.value)}
+function registerFrom(u,e,p,p2){registerUser($(u)?.value,$(e)?.value,$(p)?.value,$(p2)?.value)}
 function accountDisplayName(user=state.user){
-  return String(user?.user_metadata?.username||user?.email||"").replace(/@users\.invalid$/i,"");
+  return String(user?.user_metadata?.username||user?.email||"");
 }
 function normalizeUsername(value){
   return String(value||"").trim().toLowerCase().normalize("NFKC");
 }
-async function internalAccountEmail(identifier,{register=false}={}){
-  const raw=String(identifier||"").trim();
-  if(!register&&raw.includes("@"))return raw.toLowerCase();
-  const username=normalizeUsername(raw);
-  if(!/^[a-z0-9][a-z0-9._-]{2,23}$/.test(username))throw Error("El usuario debe tener entre 3 y 24 caracteres y usar solo letras, números, punto, guion o _");
-  const bytes=new TextEncoder().encode("mialbumonepiece:"+username);
-  const hash=await crypto.subtle.digest("SHA-256",bytes);
-  const hex=[...new Uint8Array(hash)].map(b=>b.toString(16).padStart(2,"0")).join("").slice(0,40);
-  return "u_"+hex+"@users.invalid";
-}
 function authMessage(err){return String(err?.message||err||"Error de autenticación")}
+async function accountAuthRequest(payload){
+  await loadSupabaseConfig();
+  const r=await fetch(SUPABASE_URL+"/functions/v1/account-auth",{
+    method:"POST",
+    headers:{"Content-Type":"application/json","apikey":SUPABASE_KEY},
+    body:JSON.stringify(payload)
+  });
+  const data=await r.json().catch(()=>({}));
+  if(!r.ok)throw Error(data?.error||"Error de autenticación");
+  return data;
+}
 async function loginUser(identifier,password){
   identifier=String(identifier||"").trim();password=String(password||"");
-  if(!identifier||!password)return notify("Introduce usuario y contraseña");
+  if(!identifier||!password)return notify("Introduce usuario o email y contraseña");
   state.authBusy=true;state.authError="";state.authNotice="";renderShell();
   try{
     const sb=state.sb||await initSupabase();if(!sb)throw Error("No se pudo conectar con Supabase");
-    const email=await internalAccountEmail(identifier);
-    const r=await sb.auth.signInWithPassword({email,password});if(r.error)throw r.error;
-    state.user=r.data.user;state.authError="";loadAccountLocal({migrateLegacy:true});await syncCloud();state.tab="decks";state.deckLibrary=true;notify("Sesión iniciada");
-  }catch(e){
-    const msg=authMessage(e);
-    state.authError=/invalid login credentials/i.test(msg)?"Usuario o contraseña incorrectos":msg;
-    notify(state.authError)
-  }finally{state.authBusy=false;renderShell()}
+    const data=await accountAuthRequest({action:"login",identifier,password});
+    const access=data?.session?.access_token,refresh=data?.session?.refresh_token;
+    if(!access||!refresh)throw Error("No se pudo iniciar la sesión");
+    const s=await sb.auth.setSession({access_token:access,refresh_token:refresh});if(s.error)throw s.error;
+    state.user=s.data.user;state.authError="";loadAccountLocal({migrateLegacy:true});await syncCloud();state.tab="decks";state.deckLibrary=true;state.auth=false;notify("Sesión iniciada");
+  }catch(e){state.authError=authMessage(e);notify(state.authError)}
+  finally{state.authBusy=false;renderShell()}
 }
-async function registerUser(username,password){
-  username=normalizeUsername(username);password=String(password||"");
-  if(!username||!password)return notify("Introduce usuario y contraseña");
+async function registerUser(username,email,password,repeat){
+  username=normalizeUsername(username);email=String(email||"").trim().toLowerCase();password=String(password||"");repeat=String(repeat||"");
+  if(!username||!email||!password||!repeat)return notify("Completa usuario, email y las dos contraseñas");
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))return notify("Introduce un email válido");
   if(password.length<6)return notify("La contraseña debe tener al menos 6 caracteres");
+  if(password!==repeat)return notify("Las contraseñas no coinciden");
   state.authBusy=true;state.authError="";state.authNotice="";renderShell();
   try{
     const sb=state.sb||await initSupabase();if(!sb)throw Error("No se pudo conectar con Supabase");
-    const email=await internalAccountEmail(username,{register:true});
-    const r=await sb.auth.signUp({email,password,options:{data:{username}}});if(r.error)throw r.error;
-    if(!r.data.session||!r.data.user){
-      throw Error("La confirmación de email sigue activa en Supabase. Desactiva Authentication → Providers → Email → Confirm email para usar cuentas sin correo.");
-    }
-    state.user=r.data.user;state.authError="";loadAccountLocal({migrateLegacy:true});await syncCloud();state.tab="decks";state.deckLibrary=true;notify("Cuenta creada");
-  }catch(e){
-    const msg=authMessage(e);
-    state.authError=/rate limit|email rate/i.test(msg)?"Supabase todavía está intentando enviar correo. Desactiva Confirm email en Authentication → Providers → Email.":msg;
-    notify(state.authError)
-  }finally{state.authBusy=false;renderShell()}
+    const data=await accountAuthRequest({action:"signup",username,email,password});
+    const access=data?.session?.access_token,refresh=data?.session?.refresh_token;
+    if(!access||!refresh)throw Error("La cuenta se creó, pero no se pudo iniciar sesión");
+    const s=await sb.auth.setSession({access_token:access,refresh_token:refresh});if(s.error)throw s.error;
+    state.user=s.data.user;state.authError="";loadAccountLocal({migrateLegacy:true});await syncCloud();state.tab="decks";state.deckLibrary=true;state.auth=false;notify("Cuenta creada");
+  }catch(e){state.authError=authMessage(e);notify(state.authError)}
+  finally{state.authBusy=false;renderShell()}
+}
+async function forgotPasswordPrompt(){
+  const email=prompt("Introduce el email de tu cuenta para recuperar la contraseña:");
+  if(email===null)return;
+  await forgotPassword(email);
+}
+async function forgotPassword(email){
+  email=String(email||"").trim().toLowerCase();
+  if(!email)return notify("Introduce tu email");
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))return notify("Introduce un email válido");
+  state.authBusy=true;state.authError="";state.authNotice="";renderShell();
+  try{
+    const sb=state.sb||await initSupabase();if(!sb)throw Error("No se pudo conectar con Supabase");
+    const r=await sb.auth.resetPasswordForEmail(email,{redirectTo:PASSWORD_RESET_URL});if(r.error)throw r.error;
+    state.authNotice="Te hemos enviado un correo para cambiar la contraseña.";
+    notify("Correo de recuperación enviado");
+  }catch(e){state.authError=authMessage(e);notify(state.authError)}
+  finally{state.authBusy=false;renderShell()}
 }
 async function changePassword(password,repeat,{recovery=false}={}){
   password=String(password||"");repeat=String(repeat||"");
