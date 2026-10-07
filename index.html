@@ -19,6 +19,7 @@
 let SUPABASE_URL="";
 let SUPABASE_KEY="";
 const AUTH_RETURN_URL="https://onepiece-card-market.vercel.app/auth/confirm";
+const PASSWORD_RESET_URL="https://onepiece-card-market.vercel.app/auth/reset";
 const DATA="/data/";
 const PLAYSET=4;
 const LEADER_PLAYSET=1;
@@ -30,7 +31,7 @@ const state={
   catalog:{set:"Todas",category:"Todos",color:"Todos",rarity:"Todos",type:"Todos",attribute:"Todos",ownership:"Todas",sort:"id",dir:"asc",page:1,grouped:true,minCost:"",maxCost:"",minPower:"",maxPower:"",minPrice:"",maxPrice:"",query:"",filtersOpen:false},
   owned:{},collection:{query:"",set:"Todas",category:"Todos",color:"Todos",rarity:"Todos",type:"Todos",attribute:"Todos",quantity:"Todas",playset:"Todas",sort:"id",dir:"asc",page:1,filtersOpen:false},
   album:{set:"",query:"",ownership:"Todas",sort:"id",dir:"asc",page:1},expansions:{query:"",type:"Todos",sort:"set",dir:"asc"},
-  deckQuery:"",deckPage:1,deckLibrary:true,deckFilters:{set:"Todas",category:"Todos",color:"Todos",rarity:"Todos",type:"Todos",attribute:"Todos",ownership:"Todas",sort:"id",dir:"asc",filtersOpen:false},auth:false,authReady:false,authBusy:false,authError:"",toast:"",loading:true
+  deckQuery:"",deckPage:1,deckLibrary:true,deckFilters:{set:"Todas",category:"Todos",color:"Todos",rarity:"Todos",type:"Todos",attribute:"Todos",ownership:"Todas",sort:"id",dir:"asc",filtersOpen:false},auth:false,authReady:false,authBusy:false,authError:"",authRecovery:false,toast:"",loading:true
 };
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??"").replace(/[&<>'"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[c]));
@@ -1185,8 +1186,12 @@ function detailView(c){
 }
 function accountView(){
   const status=state.authError?'<div class="notice">'+esc(state.authError)+'</div>':(!state.authReady?'<div class="notice">Conectando con la cuenta…</div>':"");
-  return '<div class="wrap"><div class="hero"><div><h1>Cuenta</h1><p>'+(state.user?("Sesión: "+esc(state.user.email||"")):"Inicia sesión para sincronizar colección y mazos.")+'</p></div></div>'+status+
-  (state.user?'<div class="section"><h2>Sincronización activa</h2><p class="muted">Tu colección y tus mazos están asociados a esta cuenta. Los datos locales de esta cuenta se guardan separados de otras cuentas.</p><button class="secondary btn" id="logout" type="button">Cerrar sesión</button></div>':'<div class="section"><h2>Entrar o crear cuenta</h2><input id="authEmail" class="field" type="email" placeholder="Email" autocomplete="email"><input id="authPassword" class="field" type="password" style="margin-top:8px" placeholder="Contraseña (mín. 6 caracteres)" autocomplete="current-password"><div class="inline-actions" style="margin-top:8px"><button class="primary btn" id="login" type="button" '+(state.authBusy?"disabled":"")+'>Entrar</button><button class="secondary btn" id="register" type="button" '+(state.authBusy?"disabled":"")+'>Crear cuenta</button></div></div>')+
+  const recovery=state.authRecovery?'<div class="section"><h2>Crear nueva contraseña</h2><p class="muted">Escribe la nueva contraseña para terminar la recuperación.</p><input id="newPassword" class="field" type="password" placeholder="Nueva contraseña (mín. 6 caracteres)" autocomplete="new-password"><input id="newPassword2" class="field" type="password" style="margin-top:8px" placeholder="Repite la nueva contraseña" autocomplete="new-password"><button class="primary btn" id="saveRecoveredPassword" type="button" style="margin-top:8px">Guardar nueva contraseña</button></div>':"";
+  return '<div class="wrap"><div class="hero"><div><h1>Cuenta</h1><p>'+(state.user?("Sesión: "+esc(state.user.email||"")):"Inicia sesión para sincronizar colección y mazos.")+'</p></div></div>'+status+recovery+
+  (state.user?'<div class="section"><h2>Sincronización activa</h2><p class="muted">Tu colección y tus mazos están asociados a esta cuenta. Los datos locales de esta cuenta se guardan separados de otras cuentas.</p><button class="secondary btn" id="logout" type="button">Cerrar sesión</button></div>'+
+    '<div class="section"><h2>Seguridad</h2><input id="changePassword" class="field" type="password" placeholder="Nueva contraseña (mín. 6 caracteres)" autocomplete="new-password"><input id="changePassword2" class="field" type="password" style="margin-top:8px" placeholder="Repite la nueva contraseña" autocomplete="new-password"><button class="primary btn" id="changePasswordBtn" type="button" style="margin-top:8px">Cambiar contraseña</button></div>'+
+    '<div class="section" style="border-color:#713441"><h2>Eliminar cuenta</h2><p class="muted">Elimina permanentemente la cuenta y los datos sincronizados de colección y mazos.</p><button class="danger btn" id="deleteAccount" type="button">Eliminar mi cuenta</button></div>'
+    :'<div class="section"><h2>Entrar o crear cuenta</h2><input id="authEmail" class="field" type="email" placeholder="Email" autocomplete="email"><input id="authPassword" class="field" type="password" style="margin-top:8px" placeholder="Contraseña (mín. 6 caracteres)" autocomplete="current-password"><div class="inline-actions" style="margin-top:8px"><button class="primary btn" id="login" type="button" '+(state.authBusy?"disabled":"")+'>Entrar</button><button class="secondary btn" id="register" type="button" '+(state.authBusy?"disabled":"")+'>Crear cuenta</button></div><button class="linkbtn" id="forgotPassword" type="button" style="margin-top:12px">He olvidado la contraseña</button></div>')+
   '<div class="section"><h2>Estado</h2><div class="small">Catálogo: '+state.cards.length.toLocaleString("es-ES")+' cartas · '+state.packs.length+' expansiones'+(state.priceDate?' · Precios: '+new Date(state.priceDate).toLocaleString("es-ES"):"")+'</div></div></div>';
 }
 
@@ -1345,8 +1350,13 @@ function bindAccount(){
   $("#login")?.addEventListener("click",()=>loginFrom("#authEmail","#authPassword"));
   $("#register")?.addEventListener("click",()=>registerFrom("#authEmail","#authPassword"));
   $("#authPassword")?.addEventListener("keydown",e=>{if(e.key==="Enter")loginFrom("#authEmail","#authPassword")});
-  $("#logout")?.addEventListener("click",async()=>{try{await state.sb?.auth.signOut()}catch{}state.user=null;state.deckId=null;state.deckLibrary=true;loadAccountLocal();notify("Sesión cerrada");renderShell()});
+  $("#forgotPassword")?.addEventListener("click",()=>forgotPassword($("#authEmail")?.value));
+  $("#changePasswordBtn")?.addEventListener("click",()=>changePassword($("#changePassword")?.value,$("#changePassword2")?.value));
+  $("#saveRecoveredPassword")?.addEventListener("click",()=>changePassword($("#newPassword")?.value,$("#newPassword2")?.value,{recovery:true}));
+  $("#deleteAccount")?.addEventListener("click",deleteAccount);
+  $("#logout")?.addEventListener("click",async()=>{try{await state.sb?.auth.signOut()}catch{}state.user=null;state.authRecovery=false;state.deckId=null;state.deckLibrary=true;loadAccountLocal();notify("Sesión cerrada");renderShell()});
 }
+
 function loginFrom(e,p){loginUser($(e)?.value,$(p)?.value)}
 function registerFrom(e,p){registerUser($(e)?.value,$(p)?.value)}
 function authMessage(err){return String(err?.message||err||"Error de autenticación")}
@@ -1371,6 +1381,55 @@ async function registerUser(email,password){
     const r=await sb.auth.signUp({email,password,options:{emailRedirectTo:AUTH_RETURN_URL}});if(r.error)throw r.error;
     if(r.data.session&&r.data.user){state.user=r.data.user;state.authError="";loadAccountLocal({migrateLegacy:true});await syncCloud();state.tab="decks";state.deckLibrary=true;notify("Cuenta creada y sesión iniciada")}
     else notify("Cuenta creada. Revisa tu email para confirmarla y después inicia sesión.");
+  }catch(e){state.authError=authMessage(e);notify(state.authError)}
+  finally{state.authBusy=false;renderShell()}
+}
+async function forgotPassword(email){
+  email=String(email||"").trim();
+  if(!email)return notify("Introduce tu email primero");
+  state.authBusy=true;state.authError="";renderShell();
+  try{
+    const sb=state.sb||await initSupabase();if(!sb)throw Error("No se pudo conectar con Supabase");
+    const r=await sb.auth.resetPasswordForEmail(email,{redirectTo:PASSWORD_RESET_URL});if(r.error)throw r.error;
+    notify("Te hemos enviado un correo para cambiar la contraseña");
+  }catch(e){state.authError=authMessage(e);notify(state.authError)}
+  finally{state.authBusy=false;renderShell()}
+}
+async function changePassword(password,repeat,{recovery=false}={}){
+  password=String(password||"");repeat=String(repeat||"");
+  if(password.length<6)return notify("La contraseña debe tener al menos 6 caracteres");
+  if(password!==repeat)return notify("Las contraseñas no coinciden");
+  state.authBusy=true;state.authError="";renderShell();
+  try{
+    const sb=state.sb||await initSupabase();if(!sb)throw Error("No se pudo conectar con Supabase");
+    const r=await sb.auth.updateUser({password});if(r.error)throw r.error;
+    state.authRecovery=false;
+    if(location.pathname.startsWith("/auth/"))history.replaceState(null,"","/");
+    notify(recovery?"Contraseña recuperada":"Contraseña actualizada");
+  }catch(e){state.authError=authMessage(e);notify(state.authError)}
+  finally{state.authBusy=false;renderShell()}
+}
+async function deleteAccount(){
+  if(!state.user)return;
+  const first=confirm("¿Eliminar tu cuenta? Se borrarán permanentemente la colección y los mazos sincronizados.");
+  if(!first)return;
+  const typed=prompt('Para confirmar, escribe ELIMINAR');
+  if(String(typed||"").trim().toUpperCase()!=="ELIMINAR")return notify("Eliminación cancelada");
+  state.authBusy=true;state.authError="";renderShell();
+  const userId=state.user.id;
+  try{
+    const sb=state.sb||await initSupabase();if(!sb)throw Error("No se pudo conectar con Supabase");
+    const session=await sb.auth.getSession();const token=session.data.session?.access_token;if(!token)throw Error("Sesión no válida");
+    const res=await fetch(SUPABASE_URL+"/functions/v1/delete-account",{method:"POST",headers:{Authorization:"Bearer "+token,"Content-Type":"application/json"}});
+    const data=await res.json().catch(()=>({}));
+    if(!res.ok)throw Error(data?.error||"No se pudo eliminar la cuenta");
+    localStorage.removeItem(collectionStorageKey(userId));
+    localStorage.removeItem(deckStorageKey(userId));
+    if(localStorage.getItem("mialbumonepiece_collection_legacy_owner")===userId)localStorage.removeItem("mialbumonepiece_collection_legacy_owner");
+    if(localStorage.getItem("mialbumonepiece_decks_legacy_owner")===userId)localStorage.removeItem("mialbumonepiece_decks_legacy_owner");
+    try{await sb.auth.signOut()}catch{}
+    state.user=null;state.owned={};state.decks=[];state.deckId=null;state.deckLibrary=true;state.authRecovery=false;
+    loadAccountLocal();notify("Cuenta eliminada");state.tab="catalog";
   }catch(e){state.authError=authMessage(e);notify(state.authError)}
   finally{state.authBusy=false;renderShell()}
 }
@@ -1431,12 +1490,14 @@ async function initSupabase(){
       state.sb=api.createClient(SUPABASE_URL,SUPABASE_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
       const s=await state.sb.auth.getSession();if(s.error)throw s.error;
       state.user=s.data.session?.user||null;
+      if(location.pathname==="/auth/reset"){state.authRecovery=true;state.tab="account"}
       if(state.user){loadAccountLocal({migrateLegacy:true});await syncCloud()}
       else loadAccountLocal();
       state.authReady=true;state.authError="";renderShell();
       state.sb.auth.onAuthStateChange((event,session)=>setTimeout(async()=>{
         const previous=state.user?.id||null;state.user=session?.user||null;
-        if(state.user&&location.pathname.startsWith("/auth/"))history.replaceState(null,"","/");
+        if(event==="PASSWORD_RECOVERY"){state.authRecovery=true;state.tab="account"}
+        else if(state.user&&location.pathname.startsWith("/auth/")&&!state.authRecovery)history.replaceState(null,"","/");
         if(state.user){loadAccountLocal({migrateLegacy:true});await syncCloud()}
         else if(previous){state.deckId=null;state.deckLibrary=true;loadAccountLocal()}
         state.authReady=true;renderShell();
