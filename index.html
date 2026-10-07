@@ -1066,9 +1066,9 @@ function exportCollectionCSV(){
   notify("CSV exportado");
 }
 function parseCSV(text){
-  text=String(text??"").replace(/^\uFEFF/,"");
+  text=String(text??"").replace(/^(?:\uFEFF|ï»¿)/,"");
   const rows=[];let row=[],cell="",quote=false;
-  const firstLine=(text.split(/\r?\n/,1)[0]||"").replace(/^\uFEFF/,"");
+  const firstLine=(text.split(/\r?\n/,1)[0]||"").replace(/^(?:\uFEFF|ï»¿)/,"");
   const delim=firstLine.includes(",")?",":";";
   for(let i=0;i<text.length;i++){
     const ch=text[i],nx=text[i+1];
@@ -1093,19 +1093,58 @@ function internalSetCode(value){
   const m=raw.match(/^(OP|EB|ST|PRB)(\d{2})$/);
   return m?m[1]+"-"+m[2]:raw||"P";
 }
+function normalizeCSVHeader(value){
+  return norm(String(value||"").replace(/^(?:\uFEFF|ï»¿)/,"")).replace(/[^a-z0-9]+/g,"_").replace(/^_+|_+$/g,"");
+}
+function printSetCodeFromText(value){
+  const raw=String(value||"").trim();
+  if(!raw)return "";
+  const upper=raw.toUpperCase();
+  const bracket=[...upper.matchAll(/\[((?:OP|EB|ST|PRB)-?\d{2})\]/g)];
+  if(bracket.length)return normalizePrintSet(bracket[bracket.length-1][1]);
+  const direct=upper.match(/\b(PRB|OP|EB|ST)[-_\s]?(\d{2})\b/);
+  if(direct)return normalizePrintSet(direct[1]+direct[2]);
+  if(/PROMOTION\s*CARD|\bPROMO(?:TION)?\b/.test(upper)||upper==="P")return "P";
+  return "";
+}
+function csvSetNameKey(value){
+  return norm(value).replace(/[^a-z0-9]+/g,"");
+}
+function catalogPrintSetOf(c){
+  return normalizePrintSet(c?.importPrintSet)||
+    printSetCodeFromText(c?.set_name)||
+    normalizePrintSet(priceMeta(c)?.printSet)||
+    (variantKindOf(c)==="base"?(printSetCodeFromText(c?.set)||normalizePrintSet(c?.set)):"");
+}
+function csvPrintSetMatches(c,value){
+  const raw=String(value||"").trim();
+  if(!raw)return false;
+  const wantedCode=printSetCodeFromText(raw)||normalizePrintSet(raw);
+  const candidateCode=catalogPrintSetOf(c);
+  if(wantedCode&&candidateCode&&wantedCode===candidateCode)return true;
+  const wantedName=csvSetNameKey(raw),candidateName=csvSetNameKey(c?.set_name);
+  return wantedName.length>=5&&candidateName.includes(wantedName);
+}
 function resolveCSVPrint(logicalId,rawVariant,kind,printSet){
   const logical=String(logicalId||"").trim().toUpperCase();
   const wantedKind=String(kind||"").trim().toLowerCase()||"base";
-  const wantedSet=normalizePrintSet(printSet);
+  const wantedSet=String(printSet||"").trim();
   const normalizedVariant=String(rawVariant||"").trim().replace(/_base$/i,"");
   const candidates=state.cards.filter(c=>norm(baseId(c.id))===norm(logical));
   const compatible=candidates.filter(c=>variantKindOf(c)===wantedKind);
+
+  // The print set/card set is the authoritative disambiguator. Upstream catalog
+  // suffixes (_p1/_p2/_r1/...) can move when new printings are added, while the
+  // logical card + kind + printing expansion remains stable.
   if(wantedSet){
-    const bySet=compatible.filter(c=>normalizePrintSet(printSetOf(c))===wantedSet);
+    const bySet=compatible.filter(c=>csvPrintSetMatches(c,wantedSet));
     const exactSet=bySet.find(c=>norm(c.id)===norm(normalizedVariant));
     if(exactSet)return exactSet;
     if(bySet.length===1)return bySet[0];
   }
+
+  // If the catalog cannot identify that expansion (some promos/embedded sets do
+  // not expose it), keep the literal variant from the CSV when it exists.
   const exact=compatible.find(c=>norm(c.id)===norm(normalizedVariant));
   if(exact)return exact;
   if(wantedKind==="base")return candidates.find(c=>norm(c.id)===norm(logical))||null;
@@ -1141,12 +1180,13 @@ function previewImport(text){
   try{
     const rows=parseCSV(text);
     if(rows.length<2)throw Error("CSV vacío: no se encontraron filas de datos.");
-    const h=rows[0].map(x=>norm(String(x).replace(/^\uFEFF/,"")).replace(/\s+/g,"_"));
+    const h=rows[0].map(normalizeCSVHeader);
     const aliases={
       card_id:["card_id","id","numero","number"],
       variant_id:["variant_id","version_id","variant","version"],
       variant_kind:["variant_kind","version_kind","kind"],
       print_set:["print_set","printing_set","reprint_set"],
+      card_set:["card_set","cardset","card_set_name"],
       name:["name","nombre"],
       set_code:["set_code","set"],
       set_name:["set_name","expansion"],
@@ -1164,7 +1204,7 @@ function previewImport(text){
       if(!logicalId)continue;
       const rawVariant=get("variant_id")||logicalId+"_base";
       const kind=(get("variant_kind")||(/_r\d+$/i.test(rawVariant)?"reprint":/_(?:p|c)\d+$/i.test(rawVariant)?"parallel":"base")).toLowerCase();
-      const printSet=get("print_set");
+      const printSet=get("print_set")||get("card_set");
       const rawQty=get("quantity").replace(",",".");
       const n=Number(rawQty);
       const q=Number.isFinite(n)?Math.max(0,Math.min(99,Math.round(n))):NaN;
