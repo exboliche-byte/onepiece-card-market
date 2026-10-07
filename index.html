@@ -649,8 +649,7 @@ async function renderCollectionResults(){
   // Never block the collection UI on the market-price feed. The cards must render
   // from the local/cloud collection even when prices are temporarily unavailable.
   if(state.collection.sort==="price"){
-    try{await ensureCollectionPrices({refresh:true});}catch(e){console.warn("collection prices",e)}
-    try{await ensurePrices();}catch(e){console.warn("collection prices",e)}
+    try{await ensureCollectionPrices();}catch(e){console.warn("collection prices",e)}
   }
   updateCollectionValue();
   const list=filteredCards("collection"),pages=Math.max(1,Math.ceil(list.length/PAGE));state.collection.page=Math.min(state.collection.page,pages);
@@ -1472,14 +1471,21 @@ async function loadCatalogData(){
   throw Error("No se pudo cargar el catálogo.");
 }
 async function boot(){
-  loadLocal();renderShell();
+  loadLocal();
+  // Hydrate the last valid price dataset before the first paint so cards do not
+  // briefly render as "Precio —". Network refresh stays asynchronous.
+  loadCachedPrices();
+  renderShell();
   try{
     const data=await loadCatalogData();
     prepareCatalog(data.cards,data.packs);
     state.loading=false;
     renderShell();
     setTimeout(async()=>{
-      try{loadCachedPrices();await loadMarketPrices();renderVisibleOnly();}catch(e){console.warn("market prices",e)}
+      try{
+        await loadMarketPrices();
+        if(!state.detail)renderVisibleOnly();
+      }catch(e){console.warn("market prices",e)}
     },0);
     await loadShared();
     renderShell();
