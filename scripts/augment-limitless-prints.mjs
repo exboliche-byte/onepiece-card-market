@@ -1,13 +1,13 @@
 import fs from "node:fs/promises";
 
 const PROMOS_URL="https://onepiece.limitlesstcg.com/cards/promos";
-const UA="MiAlbumOnePiece/1.0 (+catalog exact-print sync)";
+const UA="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0 Safari/537.36";
 
 async function fetchText(url){
   const controller=new AbortController();
   const timer=setTimeout(()=>controller.abort(),30000);
   try{
-    const r=await fetch(url,{headers:{"user-agent":UA,"accept":"text/html,application/xhtml+xml"},signal:controller.signal});
+    const r=await fetch(url,{headers:{"user-agent":UA,"accept":"text/html,application/xhtml+xml","accept-language":"en-US,en;q=0.9","referer":"https://onepiece.limitlesstcg.com/cards"},signal:controller.signal,redirect:"follow"});
     if(!r.ok)throw new Error("HTTP "+r.status+" "+url);
     return await r.text();
   }finally{clearTimeout(timer)}
@@ -52,7 +52,8 @@ async function main(){
   }
   const links=productLinks(indexHtml);
   if(!links.length){
-    console.warn("Limitless promo index returned no product links; keeping existing catalog");
+    const title=titleOf(indexHtml,"");
+    console.warn("Limitless promo index returned no product links; title=",title,"length=",indexHtml.length);
     return;
   }
 
