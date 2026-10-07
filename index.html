@@ -1472,21 +1472,22 @@ async function loadCatalogData(){
 }
 async function boot(){
   loadLocal();
-  // Hydrate the last valid price dataset before the first paint so cards do not
-  // briefly render as "Precio —". Network refresh stays asynchronous.
   loadCachedPrices();
   renderShell();
   try{
-    const data=await loadCatalogData();
+    // Load catalog and market data together. On a true first visit there is no
+    // local price cache, so the first card grid must not render until prices are
+    // available (or the market feed has actually failed).
+    const catalogPromise=loadCatalogData();
+    const marketPromise=loadMarketPrices().catch(e=>{console.warn("market prices",e);return null});
+    const data=await catalogPromise;
     prepareCatalog(data.cards,data.packs);
+    if(!Object.keys(state.prices||{}).length)await marketPromise;
     state.loading=false;
     renderShell();
-    setTimeout(async()=>{
-      try{
-        await loadMarketPrices();
-        if(!state.detail)renderVisibleOnly();
-      }catch(e){console.warn("market prices",e)}
-    },0);
+    // If cached prices allowed an immediate paint, apply the fresh dataset as
+    // soon as it arrives without blocking navigation.
+    marketPromise.then(()=>{if(!state.detail)renderVisibleOnly()});
     await loadShared();
     renderShell();
   }catch(e){$("#app").innerHTML='<div class="wrap"><div class="hero"><div><h1>MiAlbumOnePiece</h1><p>No se pudo cargar el catálogo.</p></div></div><div class="section"><div class="notice">Error cargando datos: '+esc(e.message||"desconocido")+'</div><button class="primary btn" onclick="location.reload()">Reintentar</button></div></div>'}
