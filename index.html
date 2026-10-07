@@ -322,30 +322,11 @@ function priceOf(c){
   return null;
 }
 function selectPrimaryMarketEntry(id,entry){
-  const cards=Array.isArray(state.cards)?state.cards:[];
-  const card=cards.find(c=>String(c?.id||"")===String(id));
-  const desiredExpansion=card?norm(setName(card.source_set||card.set)):null;
-  const collections=Array.isArray(entry?.collections)?entry.collections:[];
-  if(!desiredExpansion||!collections.length)return entry;
-  const matches=collections.filter(c=>norm(c?.expansion)===desiredExpansion);
-  if(!matches.length)return entry;
-  const m=String(id).match(/_(?:p|r|c)(\d+)$/i);
-  const desiredVersion=m?Number(m[1])+1:1;
-  const sorted=matches.slice().sort((a,b)=>Number(a?.version||1)-Number(b?.version||1));
-  const pick=sorted.find(c=>Number(c?.version||1)===desiredVersion)
-    ||sorted.filter(c=>Number(c?.version||1)<=desiredVersion).at(-1)
-    ||sorted[0];
-  if(!pick)return entry;
-  return {
-    ...entry,
-    eur:Number.isFinite(Number(pick.eur))?Number(pick.eur):entry.eur,
-    cardmarketId:pick.cardmarketId??entry.cardmarketId,
-    expansionId:pick.expansionId??entry.expansionId,
-    expansion:pick.expansion||entry.expansion,
-    version:pick.version??entry.version,
-    url:pick.url||entry.url
-  };
+  // The data generator is authoritative for the exact print. Do not remap
+  // price/link/expansion from the informational collections list here.
+  return entry;
 }
+
 function mergePriceDataset(d){
   state.prices={};state.collectionPrices={};state.marketMeta={};state.priceDate=d?.updatedAt||null;
   for(const [id,rawEntry] of Object.entries(d?.cards||{})){
