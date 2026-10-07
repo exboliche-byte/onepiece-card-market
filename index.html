@@ -10,7 +10,7 @@
 <style>
 :root{--bg:#080a10;--panel:#101521;--panel2:#171d2b;--line:#2b3548;--text:#f7f9fc;--muted:#98a4b8;--accent:#ffd447;--ok:#71e0b3;--danger:#ff7282;--blue:#74b8ff}
 *{box-sizing:border-box}html,body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif}body{min-height:100vh}button,input,select,textarea{font:inherit}button{cursor:pointer}.app{min-height:100vh;padding-bottom:82px}.top{position:sticky;top:0;z-index:20;padding:11px 14px;background:#080a10ed;border-bottom:1px solid var(--line);backdrop-filter:blur(18px);display:flex;justify-content:space-between;align-items:center;gap:10px}.brand b{display:block;letter-spacing:.12em}.brand span{font-size:10px;color:var(--muted);letter-spacing:.16em}.account{border:1px solid var(--line);background:var(--panel2);color:var(--text);border-radius:999px;padding:8px 12px}.wrap{max-width:1300px;margin:auto;padding:15px}.hero{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;margin:6px 0 15px}.hero h1{margin:0;font-size:clamp(27px,7vw,44px)}.hero p{margin:5px 0 0;color:var(--muted)}.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px}.stat{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:11px}.stat b{font-size:20px;display:block}.stat span{font-size:11px;color:var(--muted)}.toolbar,.toolbar3{display:grid;gap:8px;margin-bottom:9px}.toolbar{grid-template-columns:2fr 1fr 1fr 1fr}.toolbar3{grid-template-columns:repeat(3,1fr)}.field{width:100%;background:var(--panel);border:1px solid var(--line);color:var(--text);border-radius:11px;padding:11px 12px;outline:none}.field:focus{border-color:var(--accent);box-shadow:0 0 0 2px #ffd44722}.btn{border:0;border-radius:10px;padding:10px 12px;font-weight:800}.primary{background:var(--accent);color:#16130b}.secondary{background:var(--panel2);color:var(--text);border:1px solid var(--line)}.danger{background:#3d1720;color:#ffdbe0;border:1px solid #713441}.linkbtn{background:none;border:0;color:var(--accent);padding:0}.hint{color:var(--muted);font-size:11px}.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(145px,1fr));gap:10px}.card{position:relative;overflow:hidden;background:linear-gradient(180deg,#151b29,#0c1119);border:1px solid var(--line);border-radius:14px}.cardimg{display:block;width:100%;aspect-ratio:.716;object-fit:cover;background:#0b0d13}.versionImg{display:block;width:74px;aspect-ratio:.716;object-fit:cover;border-radius:6px}.fallback{display:none;aspect-ratio:.716;place-items:center;background:#141a26;color:var(--muted);font-size:11px;text-align:center;padding:8px}.cardbody{padding:8px}.name{font-weight:850;line-height:1.18;min-height:32px}.small{font-size:11px;color:var(--muted)}.chips{display:flex;flex-wrap:wrap;gap:4px;margin:6px 0}.chip{font-size:9px;border:1px solid var(--line);border-radius:999px;padding:3px 6px;color:#d1d8e5}.tag{position:absolute;top:7px;left:7px;z-index:2;border:1px solid var(--ok);background:#0a1210d9;color:var(--ok);font-size:10px;font-weight:800;border-radius:999px;padding:4px 7px}.card.missing-card .cardbody{opacity:.72}.card.missing-card .cardimg{filter:grayscale(1)}.card.missing-card{filter:grayscale(.75);opacity:.72}.card.missing-card .quick{opacity:1}.tag.missing{left:auto;right:7px;border-color:#73333e;color:#ffb5bf;background:#150b0ed9}.quick{display:grid;grid-template-columns:38px 1fr 38px;gap:5px;margin-top:8px}.quick button{height:34px}.qty{display:grid;place-items:center;height:34px;border:1px solid var(--line);background:var(--panel2);border-radius:9px;font-weight:800}.row{display:flex;align-items:center;justify-content:space-between;gap:8px}.section{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:13px;margin-bottom:12px}.sectionhead{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px}.list{display:grid;gap:7px}.listrow{display:flex;align-items:center;gap:9px;background:var(--panel2);border-radius:11px;padding:8px}.thumb{width:48px;height:67px;object-fit:cover;border-radius:6px;background:#0b0e14}.grow{flex:1;min-width:0}.clickable{cursor:pointer}.progress{height:7px;border-radius:99px;overflow:hidden;background:#0a0e15}.progress i{display:block;height:100%;background:var(--accent)}.setgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:9px}.setcard{border:1px solid var(--line);background:var(--panel2);color:var(--text);border-radius:13px;padding:12px;text-align:left}.setcard.complete{border-color:#2fbf71;background:#10271a;box-shadow:0 0 0 1px #2fbf7133 inset}.setcard.complete .settop{color:#59d98a}.setcard.complete .progress{background:#173521}.setcard.complete .progress i{background:#35c978}.settop{display:flex;justify-content:space-between;color:var(--accent)}.table{width:100%;border-collapse:collapse}.table th,.table td{padding:8px;border-bottom:1px solid var(--line);text-align:left;font-size:12px}.pager{display:flex;justify-content:center;align-items:center;gap:8px;margin:13px 0}.modalback{position:fixed;inset:0;background:#000b;z-index:50;display:grid;place-items:end center}.modal{width:min(900px,100%);max-height:94vh;overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:22px 22px 0 0;padding:16px}.close{border:0;background:var(--panel2);color:var(--text);width:36px;height:36px;border-radius:50%}.detail{display:grid;grid-template-columns:210px 1fr;gap:16px}.detail img{width:100%;border-radius:10px}.notice{padding:10px 12px;border-radius:11px;background:#121926;border:1px solid var(--line);color:var(--muted);margin-bottom:9px}.validation.ok{border:1px solid #2b8564;background:#10211b;padding:10px;border-radius:12px}.validation.bad{border:1px solid #7b3543;background:#251016;padding:10px;border-radius:12px}.nav{position:fixed;bottom:0;left:0;right:0;z-index:30;display:grid;grid-template-columns:repeat(5,1fr);padding:7px 5px max(7px,env(safe-area-inset-bottom));background:#0a0e16ee;border-top:1px solid var(--line);backdrop-filter:blur(18px)}.nav button{border:0;background:transparent;color:var(--muted);padding:7px 3px}.nav button.active{color:var(--accent)}.nav span{display:block;font-size:10px;margin-top:3px}.toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%);z-index:90;background:#f7f9fb;color:#101216;padding:10px 14px;border-radius:999px;font-weight:800;max-width:90vw;text-align:center}.muted{color:var(--muted)}.center{text-align:center}.deckbuilder{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(320px,.9fr);gap:11px} .collection-list{display:grid;gap:8px;margin-top:8px}.collection-row{display:flex;justify-content:space-between;gap:10px;align-items:center;border:1px solid var(--line);border-radius:12px;padding:10px;background:var(--panel)}.collection-main{min-width:0}.collection-title{display:flex;gap:6px;align-items:center;flex-wrap:wrap}.collection-price{display:flex;align-items:center;gap:7px;flex-shrink:0}.collection-link{padding:6px 9px;font-size:11px;text-decoration:none}.version-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(78px,1fr));gap:8px;max-width:100%;min-width:0;padding:4px 2px 8px}.version{min-width:0;width:100%;padding:5px}.version img{width:100%;max-width:82px;margin:auto;aspect-ratio:.716;object-fit:cover;border-radius:6px;display:block}.version small{display:block;font-size:9px;color:var(--muted);margin-top:4px;text-align:center;line-height:1.2;overflow-wrap:anywhere}.detail>div{min-width:0}.modal{min-width:0}.detail{min-width:0}.leaderBadge{border:1px solid var(--accent);color:var(--accent);padding:3px 6px;border-radius:999px;font-size:9px}.filter-panel{background:#0d131e;border:1px solid var(--line);border-radius:14px;padding:12px;margin:0 0 10px}.filter-heading{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px}.filter-heading h3{margin:0;font-size:15px}.filter-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.control-label{display:grid;gap:5px;font-size:11px;font-weight:800;color:var(--muted)}.control-label .field{font-weight:600;color:var(--text)}.catalog-controls{display:grid;gap:8px;margin-bottom:10px}.sort-controls{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;align-items:end}.filter-toggle{width:100%;text-align:left}.filter-actions{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:11px}.active-filters-note{font-size:11px;color:var(--muted)}.fileinput{display:none}@media(max-width:800px){.toolbar{grid-template-columns:1fr 1fr}.toolbar3{grid-template-columns:1fr 1fr}.stats{grid-template-columns:1fr 1fr}.deckbuilder{grid-template-columns:1fr}.detail{grid-template-columns:150px 1fr}.grid{grid-template-columns:repeat(3,minmax(0,1fr))}.setgrid{grid-template-columns:repeat(2,minmax(0,1fr));width:100%;max-width:100%;box-sizing:border-box}.setcard{min-width:0;box-sizing:border-box;overflow:hidden}}@media(max-width:500px){.filter-grid{grid-template-columns:1fr}.sort-controls{grid-template-columns:1fr 1fr}.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.detail{grid-template-columns:1fr}.detail>div:first-child{max-width:260px;margin:auto}.nav{grid-template-columns:repeat(5,1fr)}}
-.decklibrary{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px}.decktile{overflow:hidden;text-align:left;padding:0}.deckleader{width:100%;aspect-ratio:.716;object-fit:cover}.decktilebody{padding:11px}.deckcard-missing{filter:grayscale(1);opacity:.45}.deck-leader-row{display:flex;gap:12px;align-items:center}.deck-leader-row .thumb{width:72px;height:auto}.deck-card-grid{grid-template-columns:repeat(auto-fill,minmax(108px,1fr));gap:8px}.deck-card-grid .cardbody{padding:6px}.deck-card-grid .name{font-size:12px;min-height:28px}.deck-card-grid .small{font-size:9px}.deck-card-grid .chip{font-size:8px;padding:2px 5px}.deck-card-grid .quick{grid-template-columns:30px 1fr 30px;gap:4px}.deck-card-grid .quick button,.deck-card-grid .qty{height:30px}.deck-card-open{display:block;width:100%;text-align:left;color:inherit}.deck-card-open .name{color:var(--text)}@media(max-width:500px){.deck-card-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}</style>
+.decklibrary{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px}.decktile{overflow:hidden;text-align:left;padding:0}.deckleader{width:100%;aspect-ratio:.716;object-fit:cover}.decktilebody{padding:11px}.deckcard-missing{filter:grayscale(1);opacity:.45}.deck-leader-row{display:flex;gap:12px;align-items:center}.deck-leader-row .thumb{width:72px;height:auto}.deck-card-grid{grid-template-columns:repeat(auto-fill,minmax(108px,1fr));gap:8px}.deck-card-grid .cardbody{padding:6px}.deck-card-grid .name{font-size:12px;min-height:28px}.deck-card-grid .small{font-size:9px}.deck-card-grid .chip{font-size:8px;padding:2px 5px}.deck-card-grid .quick{grid-template-columns:30px 1fr 30px;gap:4px}.deck-card-grid .quick button,.deck-card-grid .qty{height:30px}.deck-card-open{display:block;width:100%;text-align:left;color:inherit}.deck-card-open .name{color:var(--text)}@media(max-width:500px){.deck-card-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.decklibrary{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.decktilebody{padding:7px}.decktilebody b{font-size:13px;line-height:1.15;display:block}.decktilebody .small{font-size:9px;line-height:1.25}.deckleader{width:100%}}</style>
 </head>
 <body>
 <div id="app"></div>
@@ -205,7 +205,7 @@ function ensureOwnedCardsInCatalog(){
   state.groupByKey=map;
 }
 function prepareCatalog(raw,packs){
-  state.packs=(Array.isArray(packs)?packs:Object.values(packs)).slice().sort(comparePacks);
+  state.packs=(Array.isArray(packs)?packs:Object.values(packs)).filter(p=>String(p?.code||"").toUpperCase()!=="FAMILYDECKSET"&&norm(p?.name)!=="family deck set").slice().sort(comparePacks);
   const catalogCards=(Array.isArray(raw)?raw:Object.values(raw)).map(c=>({...c,id:String(c.id||"").trim(),set:String(c.set||"").trim(),set_name:c.set_name||setName(c.set||"")})).filter(c=>c.id&&!isJapaneseCatalogCard(c));
   const byId=new Map(catalogCards.map(c=>[c.id,c]));
   for(const imported of Object.values(state.importedCards||{})){
@@ -832,7 +832,7 @@ function collectionToolbar(){
     '</div>'+
     '<button class="secondary btn filter-toggle" id="collectionFilterToggle" type="button" aria-expanded="'+(f.filtersOpen?"true":"false")+'">🔽 FILTRO'+(n?' ('+n+')':'')+'</button>'+
   '</div>'+collectionFilterPanel()+
-  '<div class="row" style="margin-bottom:10px"><span class="hint">Aquí solo aparecen las cartas que tienes.</span><details class="io-details"><summary>Gestionar datos</summary><div class="inline-actions" style="margin-top:8px"><button class="secondary btn" id="exportCsv">Exportar CSV</button><button class="secondary btn" id="importCsv">Importar CSV</button><button class="danger btn" id="clearCollection">Borrar colección completa</button><input id="csvFile" type="file" class="fileinput" accept=".csv,text/csv"></div></details></div>';
+  '<div class="row" style="margin-bottom:10px"><span class="hint">Aquí solo aparecen las cartas que tienes.</span><details class="io-details"><summary>Gestionar datos</summary><div class="inline-actions" style="margin-top:8px"><button class="secondary btn" id="exportCsv">Exportar CSV</button><button class="secondary btn" id="importCsv">Importar CSV</button><input id="csvFile" type="file" class="fileinput" accept=".csv,text/csv"></div></details></div>';
 }
 
 async function renderCollectionResults(){
@@ -1259,7 +1259,7 @@ function accountView(){
     '<div class="section"><h2>Seguridad</h2><input id="changePassword" class="field" type="password" placeholder="Nueva contraseña (mín. 6 caracteres)" autocomplete="new-password"><input id="changePassword2" class="field" type="password" style="margin-top:8px" placeholder="Repite la nueva contraseña" autocomplete="new-password"><button class="primary btn" id="changePasswordBtn" type="button" style="margin-top:8px">Cambiar contraseña</button></div>'+
     '<div class="section" style="border-color:#713441"><h2>Eliminar cuenta</h2><p class="muted">Elimina permanentemente la cuenta y los datos sincronizados de colección y mazos.</p><button class="danger btn" id="deleteAccount" type="button">Eliminar mi cuenta</button></div>'
     :'<div class="section"><h2>Entrar</h2><input id="authLogin" class="field" type="text" placeholder="Usuario o email" autocomplete="username" autocapitalize="off" spellcheck="false"><input id="authPassword" class="field" type="password" style="margin-top:8px" placeholder="Contraseña" autocomplete="current-password"><button class="linkbtn" id="forgotPassword" type="button" style="margin-top:10px">He olvidado la contraseña</button><div class="inline-actions" style="margin-top:10px"><button class="primary btn" id="login" type="button" '+(state.authBusy?"disabled":"")+'>Entrar</button></div></div>'+
-    '<div class="section"><h2>Crear cuenta</h2><input id="registerUser" class="field" type="text" placeholder="Usuario" autocomplete="username" autocapitalize="off" spellcheck="false"><input id="registerEmail" class="field" type="email" style="margin-top:8px" placeholder="Email (solo recuperación de contraseña)" autocomplete="email"><input id="registerPassword" class="field" type="password" style="margin-top:8px" placeholder="Contraseña (mín. 6 caracteres)" autocomplete="new-password"><input id="registerPassword2" class="field" type="password" style="margin-top:8px" placeholder="Confirmar contraseña" autocomplete="new-password"><button class="secondary btn" id="register" type="button" style="margin-top:10px" '+(state.authBusy?"disabled":"")+'>Crear cuenta</button><p class="muted" style="margin-bottom:0">No verificamos el email al crear la cuenta. Solo se utilizará si necesitas recuperar la contraseña.</p></div>')+
+    '<details class="section"><summary style="cursor:pointer;font-weight:800;font-size:18px">Crear cuenta</summary><div style="margin-top:12px"><input id="registerUser" class="field" type="text" placeholder="Usuario" autocomplete="username" autocapitalize="off" spellcheck="false"><input id="registerEmail" class="field" type="email" style="margin-top:8px" placeholder="Email (solo recuperación de contraseña)" autocomplete="email"><input id="registerPassword" class="field" type="password" style="margin-top:8px" placeholder="Contraseña (mín. 6 caracteres)" autocomplete="new-password"><input id="registerPassword2" class="field" type="password" style="margin-top:8px" placeholder="Confirmar contraseña" autocomplete="new-password"><button class="secondary btn" id="register" type="button" style="margin-top:10px" '+(state.authBusy?"disabled":"")+'>Crear cuenta</button><p class="muted" style="margin-bottom:0">No verificamos el email al crear la cuenta. Solo se utilizará si necesitas recuperar la contraseña.</p></div></details>')+
   '<div class="section"><h2>Estado</h2><div class="small">Catálogo: '+state.cards.length.toLocaleString("es-ES")+' cartas · '+state.packs.length+' expansiones'+(state.priceDate?' · Precios: '+new Date(state.priceDate).toLocaleString("es-ES"):"")+'</div></div></div>';
 }
 
@@ -1289,7 +1289,7 @@ function renderVisibleOnly(){
 function bindResultEvents(root){
   root.querySelectorAll("[data-detail]").forEach(b=>b.onclick=e=>{e.preventDefault();openCardDetail(b.dataset.detail)});
   root.querySelectorAll("[data-qty]").forEach(b=>b.onclick=e=>{e.preventDefault();changeQty(b.dataset.qty,Number(b.dataset.d))});
-  root.querySelectorAll("[data-page]").forEach(b=>b.onclick=()=>{const k=b.dataset.page;state[k].page=Math.max(1,state[k].page+Number(b.dataset.p));renderVisibleOnly()});
+  root.querySelectorAll("[data-page]").forEach(b=>b.onclick=()=>{const k=b.dataset.page;state[k].page=Math.max(1,state[k].page+Number(b.dataset.p));renderVisibleOnly();if(k==="catalog"||k==="collection")window.scrollTo({top:0,behavior:"smooth"})});
   root.querySelectorAll("[data-group]").forEach(b=>b.onclick=()=>openCardDetail(b.dataset.group));
   root.querySelectorAll("[data-deckgroup]").forEach(b=>b.onclick=()=>openCardDetail(b.dataset.deckgroup));
   root.querySelectorAll("[data-adddeck]").forEach(b=>b.onclick=()=>addToDeck(b.dataset.adddeck));
@@ -1303,17 +1303,46 @@ function bindSearch(id,fn){
   let last=el.value;let timer;
   el.addEventListener("input",()=>{last=el.value;clearTimeout(timer);timer=setTimeout(()=>fn(last),80)});
 }
-function authModal(){return '<div class="modalback"><div class="modal"><div class="sectionhead"><h2>Cuenta</h2><button class="close" data-close-auth>×</button></div><h3>Entrar</h3><input id="authLogin2" class="field" placeholder="Usuario o email" autocomplete="username"><input id="authPassword2" type="password" class="field" style="margin-top:8px" placeholder="Contraseña"><button class="linkbtn" id="forgotPassword2" type="button" style="margin-top:10px">He olvidado la contraseña</button><button class="primary btn" id="login2" style="margin-top:10px">Entrar</button><hr style="border:0;border-top:1px solid var(--line);margin:16px 0"><h3>Crear cuenta</h3><input id="registerUser2" class="field" placeholder="Usuario" autocomplete="username"><input id="registerEmail2" type="email" class="field" style="margin-top:8px" placeholder="Email"><input id="registerPassword2a" type="password" class="field" style="margin-top:8px" placeholder="Contraseña"><input id="registerPassword2b" type="password" class="field" style="margin-top:8px" placeholder="Confirmar contraseña"><button class="secondary btn" id="register2" style="margin-top:10px">Crear cuenta</button></div></div>'}
+function authModal(){return '<div class="modalback"><div class="modal"><div class="sectionhead"><h2>Cuenta</h2><button class="close" data-close-auth>×</button></div><h3>Entrar</h3><input id="authLogin2" class="field" placeholder="Usuario o email" autocomplete="username"><input id="authPassword2" type="password" class="field" style="margin-top:8px" placeholder="Contraseña"><button class="linkbtn" id="forgotPassword2" type="button" style="margin-top:10px">He olvidado la contraseña</button><button class="primary btn" id="login2" style="margin-top:10px">Entrar</button><details style="margin-top:16px"><summary style="cursor:pointer;font-weight:800">Crear cuenta</summary><div style="margin-top:10px"><input id="registerUser2" class="field" placeholder="Usuario" autocomplete="username"><input id="registerEmail2" type="email" class="field" style="margin-top:8px" placeholder="Email"><input id="registerPassword2a" type="password" class="field" style="margin-top:8px" placeholder="Contraseña"><input id="registerPassword2b" type="password" class="field" style="margin-top:8px" placeholder="Confirmar contraseña"><button class="secondary btn" id="register2" style="margin-top:10px">Crear cuenta</button></div></details></div></div>'}
+function appViewSnapshot(){
+  return {tab:state.tab,albumSet:state.album.set||"",deckLibrary:state.deckLibrary!==false,deckId:state.deckId||null};
+}
+function replaceAppHistory(){
+  const current=history.state&&typeof history.state==="object"?history.state:{};
+  history.replaceState({...current,mialbumView:appViewSnapshot()},"",location.href);
+}
+function pushAppHistory(){
+  history.pushState({mialbumView:appViewSnapshot()},"",location.href);
+}
+function restoreAppView(view){
+  if(!view)return false;
+  state.detail=null;detailHistoryActive=false;state.auth=false;state.newDeck=false;state.shared=false;
+  state.tab=view.tab||"catalog";
+  state.album.set=view.albumSet||"";
+  state.deckLibrary=view.deckLibrary!==false;
+  state.deckId=view.deckId||null;
+  renderShell();
+  window.scrollTo({top:0,behavior:"auto"});
+  return true;
+}
+function navigateApp(mutator){
+  mutator();
+  pushAppHistory();
+  renderShell();
+  window.scrollTo({top:0,behavior:"auto"});
+}
 function bindShell(){
   document.querySelectorAll("[data-tab]").forEach(b=>b.onclick=()=>{
-    if(state.detail&&detailHistoryActive)history.replaceState(null,"",location.href);
+    const next=b.dataset.tab;
+    if(next===state.tab&&!state.detail)return;
+    if(state.detail&&detailHistoryActive)history.replaceState({mialbumView:appViewSnapshot()},"",location.href);
     detailHistoryActive=false;state.detail=null;
-    state.tab=b.dataset.tab;state.shared=false;renderShell();
+    navigateApp(()=>{state.tab=next;state.shared=false});
   });
-  $("#accountBtn")?.addEventListener("click",()=>{state.tab="account";renderShell()});
+  $("#accountBtn")?.addEventListener("click",()=>{if(state.tab!=="account")navigateApp(()=>{state.tab="account";state.shared=false})});
   document.querySelectorAll("[data-close]").forEach(b=>b.onclick=()=>{state.newDeck=false;renderShell()});
   document.querySelectorAll("[data-close-auth]").forEach(b=>b.onclick=()=>{state.auth=false;renderShell()});
-  document.querySelectorAll("[data-open-set]").forEach(b=>b.onclick=()=>{state.tab="album";state.album.set=b.dataset.openSet;state.album.query="";state.album.page=1;renderShell()});
+  document.querySelectorAll("[data-open-set]").forEach(b=>b.onclick=()=>navigateApp(()=>{state.tab="album";state.album.set=b.dataset.openSet;state.album.query="";state.album.page=1}));
   if(state.tab==="catalog"){
     bindSearch("#catalogSearch",v=>{state.catalog.query=v;state.query=v;state.catalog.page=1;renderCatalogResults()});
     const catalogFieldMap={catSet:"set",catCategory:"category",catColor:"color",catRarity:"rarity",catType:"type",catAttribute:"attribute",catMinCost:"minCost",catMaxCost:"maxCost",catMinPower:"minPower",catMaxPower:"maxPower",catMinPrice:"minPrice",catMaxPrice:"maxPrice",catOwnership:"ownership",catSort:"sort",catDir:"dir"};
@@ -1357,7 +1386,6 @@ function bindShell(){
     $("#collectionResetVisible")?.addEventListener("click",()=>{Object.assign(state.collection,{query:"",set:"Todas",category:"Todos",color:"Todos",rarity:"Todos",type:"Todos",attribute:"Todos",quantity:"Todas",playset:"Todas",page:1});renderShell()});
     $("#exportCsv")?.addEventListener("click",exportCollectionCSV);
     $("#importCsv")?.addEventListener("click",()=>$("#csvFile").click());
-    $("#clearCollection")?.addEventListener("click",clearCollection);
     $("#csvFile")?.addEventListener("change",e=>{const f=e.target.files?.[0];if(f)f.text().then(t=>previewImport(t))});
   }
   if(state.tab==="album"&&!state.album.set){
@@ -1367,7 +1395,7 @@ function bindShell(){
     $("#expansionDir")?.addEventListener("change",e=>{state.expansions.dir=e.target.value;renderShell()});
   }
   if(state.tab==="album"){
-    $("#backToExpansions")?.addEventListener("click",()=>{state.album.set="";state.album.query="";state.album.page=1;renderShell()});
+    $("#backToExpansions")?.addEventListener("click",()=>{if(history.state?.mialbumView)history.back();else{state.album.set="";state.album.query="";state.album.page=1;renderShell()}});
     $("#albumOwn")?.addEventListener("change",e=>{state.album.ownership=e.target.value;state.album.page=1;renderAlbumResults()});
     $("#albumSort")?.addEventListener("change",async e=>{
       state.album.sort=e.target.value;
@@ -1380,14 +1408,14 @@ function bindShell(){
     bindSearch("#albumSearch",v=>{state.album.query=v;state.album.page=1;renderAlbumResults()});
   }
   if(state.tab==="decks"){
-    $("#deckAccountBtn")?.addEventListener("click",()=>{state.tab="account";renderShell()});
-    document.querySelectorAll("[data-open-deck]").forEach(b=>b.onclick=()=>{state.deckId=b.dataset.openDeck;state.deckLibrary=false;state.deckChoosingLeader=false;renderShell()});
-    $("#backDecks")?.addEventListener("click",()=>{state.deckLibrary=true;state.deckChoosingLeader=false;renderShell()});
+    $("#deckAccountBtn")?.addEventListener("click",()=>navigateApp(()=>{state.tab="account"}));
+    document.querySelectorAll("[data-open-deck]").forEach(b=>b.onclick=()=>navigateApp(()=>{state.deckId=b.dataset.openDeck;state.deckLibrary=false;state.deckChoosingLeader=false}));
+    $("#backDecks")?.addEventListener("click",()=>{if(history.state?.mialbumView)history.back();else{state.deckLibrary=true;state.deckChoosingLeader=false;renderShell()}});
     $("#importDeckBtn")?.addEventListener("click",openDeckImportDialog);
     $("#exportDeck")?.addEventListener("click",exportDeckFile);
     $("#newDeck")?.addEventListener("click",()=>{state.newDeck=true;renderShell()});
     $("#newDeck2")?.addEventListener("click",()=>{state.newDeck=true;renderShell()});
-    $("#createDeckConfirm")?.addEventListener("click",()=>{const name=$("#newDeckName")?.value.trim();if(!name)return notify("Pon un nombre");if(!state.user){state.newDeck=false;state.tab="account";renderShell();return}const d={id:crypto.randomUUID(),name,description:$("#newDeckDesc")?.value||"",leader:"",cards:{},colors:[],owner_id:state.user.id,updatedAt:new Date().toISOString()};state.decks.unshift(d);state.deckId=d.id;state.deckLibrary=false;state.newDeck=false;saveLocal();syncDeck(d);renderShell()});
+    $("#createDeckConfirm")?.addEventListener("click",()=>{const name=$("#newDeckName")?.value.trim();if(!name)return notify("Pon un nombre");if(!state.user){state.newDeck=false;navigateApp(()=>{state.tab="account"});return}const d={id:crypto.randomUUID(),name,description:$("#newDeckDesc")?.value||"",leader:"",cards:{},colors:[],owner_id:state.user.id,updatedAt:new Date().toISOString()};state.decks.unshift(d);state.deckId=d.id;state.deckLibrary=false;state.newDeck=false;saveLocal();syncDeck(d);pushAppHistory();renderShell()});
     $("#deleteDeck")?.addEventListener("click",()=>{if(confirm("¿Eliminar este mazo?")){const id=state.deckId;state.decks=state.decks.filter(x=>x.id!==id);state.deckId=null;state.deckLibrary=true;saveLocal();syncDeckDelete(id);renderShell()}});
     $("#changeLeader")?.addEventListener("click",beginLeaderChange);
     $("#removeLeader")?.addEventListener("click",removeLeader);
@@ -2125,6 +2153,7 @@ async function boot(){
     prepareCatalog(data.cards,data.packs);
     if(!Object.keys(state.prices||{}).length)await marketPromise;
     state.loading=false;
+    if(!history.state?.mialbumView&&!history.state?.mialbumDetail)replaceAppHistory();
     renderShell();
     // If cached prices allowed an immediate paint, apply the fresh dataset as
     // soon as it arrives without blocking navigation.
@@ -2133,12 +2162,14 @@ async function boot(){
     renderShell();
   }catch(e){$("#app").innerHTML='<div class="wrap"><div class="hero"><div><h1>MiAlbumOnePiece</h1><p>No se pudo cargar el catálogo.</p></div></div><div class="section"><div class="notice">Error cargando datos: '+esc(e.message||"desconocido")+'</div><button class="primary btn" onclick="location.reload()">Reintentar</button></div></div>'}
   initSupabase();
-window.addEventListener("popstate",()=>{
+window.addEventListener("popstate",e=>{
   if(state.detail){
     detailHistoryActive=false;
     state.detail=null;
     renderShell();
+    return;
   }
+  if(restoreAppView(e.state?.mialbumView))return;
 });
 }boot();
 </script>
