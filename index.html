@@ -869,7 +869,7 @@ function csvEscape(v){
   return /[",\n\r]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;
 }
 function csvDownload(rows,filename){
-  const csv="\\ufeff"+rows.map(r=>r.map(csvEscape).join(",")).join("\\r\\n")+"\\r\\n";
+  const csv="\uFEFF"+rows.map(r=>r.map(csvEscape).join(",")).join("\r\n")+"\r\n";
   const a=document.createElement("a");
   a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8"}));
   a.download=filename;
@@ -882,7 +882,7 @@ function csvRarity(c){
 }
 function csvVariant(c){
   const id=String(c?.id||"");
-  const m=id.match(/_(p\\d+|r\\d+|c\\d+)$/i);
+  const m=id.match(/_(p\d+|r\d+|c\d+)$/i);
   if(m)return {variant_id:id,variant_kind:m[1].toLowerCase().startsWith("p")?"parallel":m[1].toLowerCase().startsWith("r")?"reprint":"parallel",print_set:""};
   return {variant_id:id+"_base",variant_kind:"base",print_set:""};
 }
@@ -901,17 +901,17 @@ function exportCollectionCSV(){
   notify("CSV exportado");
 }
 function parseCSV(text){
-  text=String(text||"").replace(/^\\uFEFF/,"");
+  text=String(text??"").replace(/^\uFEFF/,"");
   const rows=[];let row=[],cell="",quote=false;
-  const firstLine=(text.split(/\\r?\\n/,1)[0]||"").replace(/^\\uFEFF/,"");
+  const firstLine=(text.split(/\r?\n/,1)[0]||"").replace(/^\uFEFF/,"");
   const delim=firstLine.includes(",")?",":";";
   for(let i=0;i<text.length;i++){
     const ch=text[i],nx=text[i+1];
     if(ch==='"'&&quote&&nx==='"'){cell+='"';i++;continue}
     if(ch==='"'){quote=!quote;continue}
     if(ch===delim&&!quote){row.push(cell);cell="";continue}
-    if((ch==="\\n"||ch==="\\r")&&!quote){
-      if(ch==="\\r"&&nx==="\\n")i++;
+    if((ch==="\n"||ch==="\r")&&!quote){
+      if(ch==="\r"&&nx==="\n")i++;
       row.push(cell);rows.push(row);row=[];cell="";continue;
     }
     cell+=ch;
@@ -922,8 +922,8 @@ function parseCSV(text){
 function previewImport(text){
   try{
     const rows=parseCSV(text);
-    if(rows.length<2)throw Error("CSV vacío");
-    const h=rows[0].map(x=>norm(String(x).replace(/^\\uFEFF/,"")).replace(/\\s+/g,"_"));
+    if(rows.length<2)throw Error("CSV vacío: no se encontraron filas de datos.");
+    const h=rows[0].map(x=>norm(String(x).replace(/^\uFEFF/,"")).replace(/\s+/g,"_"));
     const aliases={card_id:["card_id","id","numero","number"],quantity:["quantity","cantidad","qty","copias"]};
     const findIndex=names=>names.map(n=>h.indexOf(n)).find(i=>i>=0);
     const idI=findIndex(aliases.card_id),qI=findIndex(aliases.quantity);
@@ -941,11 +941,10 @@ function previewImport(text){
       else unknown.push(id);
     }
     const sum=[...imported.values()].reduce((a,x)=>a+x,0);
-    const oldCopies=Object.values(state.owned).reduce((a,b)=>a+Number(b||0),0);
     const msg="Filas: "+(rows.length-1)+" · reconocidas: "+imported.size+" cartas · "+sum+" copias"+
-      (unknown.length?"\\nNo reconocidas: "+unknown.slice(0,15).join(", ")+(unknown.length>15?" …":""):"")+
-      "\\n\\nLa importación sustituirá las cantidades actuales por las del CSV.";
-    if(confirm(msg+"\\n\\nAceptar = importar. Cancelar = no cambiar nada.")){
+      (unknown.length?"\nNo reconocidas: "+unknown.slice(0,15).join(", ")+(unknown.length>15?" …":""):"")+
+      "\n\nLa importación sustituirá las cantidades actuales por las del CSV.";
+    if(confirm(msg+"\n\nAceptar = importar. Cancelar = no cambiar nada.")){
       state.owned={};
       for(const [id,q] of imported)if(q>0)state.owned[id]=q;
       saveLocal();
@@ -958,14 +957,27 @@ function previewImport(text){
 }
 const REMOTE_ALLSETS="https://raw.githubusercontent.com/hugoprudente/optcgjson/main/output/AllSets.json";
 async function loadCatalogData(){
+  // Prefer the repository's committed catalog. The GitHub Action keeps it current,
+  // and this prevents a temporary upstream format/network change from blanking the app.
+  try{
+    const [localCards,localPacks]=await Promise.all([
+      fetchJson(DATA+"cards.json",20000),
+      fetchJson(DATA+"packs.json",20000)
+    ]);
+    const cards=(Array.isArray(localCards)?localCards:Object.values(localCards||{})).filter(c=>c?.id&&!isJapaneseCatalogCard(c));
+    const packs=Array.isArray(localPacks)?localPacks:Object.values(localPacks||{});
+    if(cards.length&&packs.length)return {cards,packs,remote:false};
+  }catch(e){console.warn("local catalog",e)}
+  // Last-resort upstream fallback.
   try{
     const remoteAllSets=await fetchJson(REMOTE_ALLSETS,30000);
-    const cards=[]; const packs=[]; const seen=new Set();
+    const cards=[];const packs=[];const seen=new Set();
     const normalizeSetCode=raw=>{const v=String(raw||"").trim().toUpperCase();if(v==="OP14")return "OP14-EB04";if(v==="OP15")return "OP15-EB04";const m=v.match(/^(OP|EB|ST|PRB)-?(\d{2})$/i);return m?m[1].toUpperCase()+"-"+m[2]:v};
     const root=remoteAllSets?.data&&typeof remoteAllSets.data==="object"&&!Array.isArray(remoteAllSets.data)?remoteAllSets.data:(remoteAllSets||{});
     for(const [key,payload] of Object.entries(root)){
-      const d=payload?.data||payload;if(!d||!Array.isArray(d.cards))continue;
-      const setCode=normalizeSetCode(d.code||key),setName=String(d.name||"").trim(),setCards=Array.isArray(d.cards)?d.cards:[];
+      const d=payload?.data||payload;
+      if(!d||!Array.isArray(d.cards))continue;
+      const setCode=normalizeSetCode(d.code||key),setName=String(d.name||"").trim(),setCards=d.cards;
       packs.push({code:setCode,name:setName,cardCount:setCards.length});
       for(const c of setCards){
         const id=String(c?.id||"").trim();if(!id||seen.has(id))continue;
@@ -975,13 +987,9 @@ async function loadCatalogData(){
         cards.push({id,set:cardSet,set_name:setName,name:String(c?.name||"").trim(),rarity:c?.rarity==="L"?"Leader":String(c?.rarity||"").trim(),category:c?.cardClass==="LEADER"?"Leader":c?.cardClass==="EVENT"?"Event":c?.cardClass==="STAGE"?"Stage":c?.cardClass==="DON"?"Don":"Character",colors:Array.isArray(c?.color)?c.color:[],cost:c?.cost==null?null:Number(c.cost),power:c?.power==null?null:Number(c.power),counter:c?.counter==null?null:Number(c.counter),block:c?.blockIcon==null?null:Number(c.blockIcon)||c.blockIcon,attributes:Array.isArray(c?.attribute)?c.attribute:[],types:Array.isArray(c?.feature)?c.feature:[],effect:c?.effect||"",trigger:c?.trigger||null,image:c?.imageUrl||"",isParallel:!!c?.isParallel});
       }
     }
-    if(!cards.length||!packs.length)throw Error("Fuente remota vacía");
-    return {cards,packs,remote:true};
-  }catch(e){
-    const [localCards,localPacks]=await Promise.all([fetchJson(DATA+"cards.json"),fetchJson(DATA+"packs.json")]);
-    const cards=(Array.isArray(localCards)?localCards:Object.values(localCards||{})).filter(c=>!isJapaneseCatalogCard(c));
-    return {cards,packs:localPacks,remote:false};
-  }
+    if(cards.length&&packs.length)return {cards,packs,remote:true};
+  }catch(e){console.warn("remote catalog",e)}
+  throw Error("No se pudo cargar el catálogo.");
 }
 async function boot(){
   loadLocal();loadCachedPrices();renderShell();
