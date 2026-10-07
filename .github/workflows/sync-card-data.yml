@@ -24,6 +24,8 @@ jobs:
         run: |
           set -euo pipefail
           curl -fsSL --retry 3 https://raw.githubusercontent.com/hugoprudente/optcgjson/main/output/AllSets.json -o /tmp/optcg-allsets.json
+          curl -fsSL --retry 3 https://raw.githubusercontent.com/michalkiral/optcg-data/main/data/index/cards_by_id.json -o /tmp/optcg-cards-secondary.json
+          curl -fsSL --retry 3 https://raw.githubusercontent.com/michalkiral/optcg-data/main/data/packs.json -o /tmp/optcg-packs-secondary.json
 
       - name: Normalize and validate
         run: |
@@ -69,8 +71,51 @@ jobs:
               });
             }
           }
-          if(cards.length<4500)throw new Error("optcgjson catalog unexpectedly small: "+cards.length);
-          if(packs.length<40)throw new Error("optcgjson pack list unexpectedly small: "+packs.length);
+          // Augment the primary catalog with a second official-site-derived
+          // catalog that preserves exact _pN/_rN print IDs. This prevents a
+          // newly published promo/reprint from disappearing just because one
+          // upstream has not exposed it yet.
+          const secondaryRaw=JSON.parse(fs.readFileSync("/tmp/optcg-cards-secondary.json","utf8"));
+          const secondaryCards=Array.isArray(secondaryRaw)?secondaryRaw:Object.values(secondaryRaw||{});
+          let secondaryAdded=0;
+          for(const c of secondaryCards){
+            const id=String(c?.id||"").trim();
+            if(!id||seen.has(id))continue;
+            if(/_jp\d+$/i.test(id))continue;
+            const setCode=normalizeSetCode(c?.set||"");
+            if(!setCode)continue;
+            seen.add(id);
+            cards.push({
+              ...c,
+              id,
+              set:setCode,
+              source_set:setCode,
+              origin_set:normalizeSetCode(String(id).replace(/_(?:p|r|c)\d+$/i,"").split("-")[0]),
+              set_name:String(c?.set_name||c?.pack_name||setCode),
+              rarity:c?.rarity==="L"?"Leader":c?.rarity,
+              category:c?.category||"Character",
+              colors:Array.isArray(c?.colors)?c.colors:[],
+              attributes:Array.isArray(c?.attributes)?c.attributes:[],
+              types:Array.isArray(c?.types)?c.types:[],
+              image:String(c?.image||c?.imageUrl||""),
+              isParallel:/_(?:p|c)\d+$/i.test(id)||!!c?.isParallel
+            });
+            secondaryAdded++;
+          }
+
+          const secondaryPacksRaw=JSON.parse(fs.readFileSync("/tmp/optcg-packs-secondary.json","utf8"));
+          const secondaryPacks=Array.isArray(secondaryPacksRaw)?secondaryPacksRaw:Object.values(secondaryPacksRaw||{});
+          const packCodes=new Set(packs.map(p=>String(p.code||"").toUpperCase()));
+          for(const p of secondaryPacks){
+            const code=normalizeSetCode(p?.code||p?.id||"");
+            if(!code||packCodes.has(code))continue;
+            packs.push({code,name:String(p?.name||p?.title||code),cardCount:Number(p?.cardCount||0)});
+            packCodes.add(code);
+          }
+
+          if(cards.length<4500)throw new Error("merged catalog unexpectedly small: "+cards.length);
+          if(packs.length<40)throw new Error("merged pack list unexpectedly small: "+packs.length);
+          console.log("Secondary exact-print cards added:",secondaryAdded);
           fs.writeFileSync("data/cards.json",JSON.stringify(cards,null,2)+"\n");
           fs.writeFileSync("data/packs.json",JSON.stringify(packs,null,2)+"\n");
           fs.writeFileSync("data/catalog-meta.json",JSON.stringify({updatedAt:new Date().toISOString(),cardCount:cards.length,packCount:packs.length,source:"hugoprudente/optcgjson"},null,2)+"\n");
