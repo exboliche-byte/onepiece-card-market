@@ -387,7 +387,7 @@ function catalogToolbar(){
   '<div class="row" style="margin-bottom:10px"><span class="hint">Versiones agrupadas · '+state.cards.length.toLocaleString("es-ES")+' cartas en el catálogo.</span></div>';
 }
 
-async async async function renderCatalogResults(){
+async function renderCatalogResults(){
   const host=$("#catalogResults");if(!host)return;
   if(state.loading&&!state.cards.length){host.innerHTML='<div class="notice">Cargando catálogo de cartas…</div>';return}
   if(state.catalog.sort==="price"){state.prices={};await ensurePrices(state.cards.map(c=>c.id),{refresh:true});}
@@ -446,7 +446,7 @@ function collectionToolbar(){
   '<div class="row" style="margin-bottom:10px"><span class="hint">Aquí solo aparecen las cartas que tienes.</span><details class="io-details"><summary>Gestionar datos</summary><div class="inline-actions" style="margin-top:8px"><button class="secondary btn" id="exportCsv">Exportar CSV</button><button class="secondary btn" id="importCsv">Importar CSV</button><input id="csvFile" type="file" class="fileinput" accept=".csv,text/csv"></div></details></div>';
 }
 
-async async async function renderCollectionResults(){
+async function renderCollectionResults(){
   const host=$("#collectionResults");if(!host)return;
   await ensureCollectionPrices({refresh:state.collection.sort==="price"});
   updateCollectionValue();
