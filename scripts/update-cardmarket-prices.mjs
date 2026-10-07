@@ -456,11 +456,16 @@ function allProductsForCard(card, products, englishExpansionIdsBySet) {
     }
 
     const expansionId = Number(product.idExpansion);
-    const matchesConfiguredExpansion = preferredExpansionIds?.size
-      ? preferredExpansionIds.has(expansionId)
-      : expansionMatches(sourceSet, product?.expansionName, card?.set_name);
+    const matchesConfiguredExpansion = preferredExpansionIds?.has(expansionId) || false;
+    const matchesExpansionName = expansionMatches(sourceSet, product?.expansionName, card?.set_name);
 
-    if (matchesConfiguredExpansion) matches.push(product);
+    // Expansion IDs from Cardmarket's historical data can be incomplete or
+    // ambiguous. Keep the configured IDs as a strong signal, but also admit
+    // products whose actual expansion name matches the card's source set.
+    // This recovers valid products without falling back to unrelated
+    // expansions. candidateScore() then strongly prefers the exact main-set
+    // name over promo expansions with the same printed card number.
+    if (matchesConfiguredExpansion || matchesExpansionName) matches.push(product);
   }
 
   return matches;
