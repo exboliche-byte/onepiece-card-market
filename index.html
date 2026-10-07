@@ -231,6 +231,14 @@ function filterValueMatches(value,selected){
   const values=Array.isArray(value)?value:[value];
   return values.some(v=>norm(v)===target);
 }
+function numericCardValue(value){
+  if(value===null||value===undefined||value==="")return null;
+  const normalized=String(value).trim().replace(",",".");
+  const match=normalized.match(/-?\d+(?:\.\d+)?/);
+  if(!match)return null;
+  const n=Number(match[0]);
+  return Number.isFinite(n)?n:null;
+}
 function filteredCards(mode){
   const f=state[mode];
   let list=mode==="collection"
@@ -288,7 +296,7 @@ function filteredCards(mode){
       return String(a.id).localeCompare(String(b.id),"es",{numeric:true})*dir;
     }
     let av,bv;
-    switch(f.sort){case"name":av=norm(a.name);bv=norm(b.name);break;case"rarity":av=norm(a.rarity);bv=norm(b.rarity);break;case"quantity":av=qty(a.id);bv=qty(b.id);break;case"price":av=priceOf(a);bv=priceOf(b);break;case"power":av=Number(a.power??-1);bv=Number(b.power??-1);break;case"cost":av=Number(a.cost??-1);bv=Number(b.cost??-1);break;default:av=a.id;bv=b.id}
+    switch(f.sort){case"name":av=norm(a.name);bv=norm(b.name);break;case"rarity":av=norm(a.rarity);bv=norm(b.rarity);break;case"quantity":av=qty(a.id);bv=qty(b.id);break;case"price":av=priceOf(a);bv=priceOf(b);break;case"power":av=numericCardValue(a.power);bv=numericCardValue(b.power);break;case"cost":av=numericCardValue(a.cost);bv=numericCardValue(b.cost);break;default:av=a.id;bv=b.id}
     const d=cmp(av,bv);
     return d?d*dir:String(a.id).localeCompare(String(b.id),"es",{numeric:true})*dir;
   });
@@ -311,7 +319,7 @@ function groupFiltered(){
   const groups=groupCardList(filteredCards("catalog"));
   const dir=state.catalog.dir==="desc"?-1:1;
   const groupNumber=(g,key)=>{
-    const values=g.versions.map(c=>Number(c?.[key])).filter(Number.isFinite);
+    const values=g.versions.map(c=>numericCardValue(c?.[key])).filter(v=>v!==null);
     return values.length?Math.min(...values):null;
   };
   if(state.catalog.sort==="price"){
