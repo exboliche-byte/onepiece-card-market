@@ -128,7 +128,10 @@ function buildProductVersionIndex(products) {
 
 function isJapaneseExpansion(value) {
   const s = String(value ?? "").toUpperCase();
-  return /(?:^|[-_ ])JP(?:$|[-_ ])/.test(s) || /\bJAPANESE\b|NON-ENGLISH|ASIA REGION LEGAL/.test(s);
+  return /(?:^|[-_ ])JP(?:$|[-_ ])/.test(s)
+    || /\bJAPANESE\b/.test(s)
+    || /\bNON[ -]?ENGLISH\b/.test(s)
+    || /\bASIA[ -]+REGION[ -]+LEGAL\b/.test(s);
 }
 
 function isJapaneseCard(card) {
@@ -141,13 +144,6 @@ function isEnglishProduct(product) {
   // idExpansion globally: the same numeric expansion identifier can be
   // present on legitimate English products in the catalog.
   return !isJapaneseExpansion(product?.expansionName) && !isJapaneseExpansion(product?.name);
-}
-
-function englishExpansionMatches(card, product) {
-  const setCode = sourceSetCode(card);
-  const localSetName = String(card?.set_name || "");
-  if (!(CARDMARKET_SET_NAMES[setCode]?.length || localSetName)) return true;
-  return expansionMatches(setCode, product?.expansionName, localSetName);
 }
 
 function sourceSetCode(card) {
@@ -349,7 +345,6 @@ function allProductsForCard(card, products, primaryExpansionBySet) {
       }
     }
     if (primaryExpansionId && Number(product.idExpansion) !== Number(primaryExpansionId)) continue;
-    if (!englishExpansionMatches(card, product)) continue;
     if (cardNameMatches(card, product) <= 0 && !pCode) continue;
     out.push(product);
   }
@@ -455,9 +450,7 @@ async function main() {
 
   for (const card of cards) {
     const exactCandidates = allProductsForCard(card, products, primaryExpansionBySet);
-    const productPool = exactCandidates.length ? exactCandidates : products.filter(product =>
-      isEnglishProduct(product) && englishExpansionMatches(card, product)
-    );
+    const productPool = exactCandidates.length ? exactCandidates : products;
     const product = chooseProduct(card, productPool, primaryExpansionBySet, productVersions);
     if (!product) {
       unmatched.push(card.id);
