@@ -593,7 +593,7 @@ function cmpPrice(a,b){
   return d*(state.catalog.dir==="desc"?-1:1);
 }
 let priceDatasetPromise=null;
-const PRICE_CACHE_VERSION=18;
+const PRICE_CACHE_VERSION=19;
 const MARKET_DATA_URL="/data/cardmarket-prices.json";
 function priceOf(c){
   const key=c?.id;
@@ -679,7 +679,7 @@ async function loadMarketPrices({refresh=false}={}){
   return priceDatasetPromise;
 }
 async function fillMissingExactPrices(cards=state.cards){
-  const ids=[...new Set((cards||[]).map(c=>String(c?.id||"").trim()).filter(Boolean))]
+  const ids=[...new Set((cards||[]).map(c=>typeof c==="string"?String(c).trim():String(c?.id||"").trim()).filter(Boolean))]
     .filter(id=>!Number.isFinite(Number(state.prices?.[id]))&&!Number.isFinite(Number(state.prices?.[norm(id)])));
   for(let i=0;i<ids.length;i+=500){
     const batch=ids.slice(i,i+500);
