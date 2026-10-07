@@ -324,7 +324,7 @@ function cmpPrice(a,b){
   return d*(state.catalog.dir==="desc"?-1:1);
 }
 let priceDatasetPromise=null;
-const PRICE_CACHE_VERSION=11;
+const PRICE_CACHE_VERSION=12;
 const MARKET_DATA_URL="/data/cardmarket-prices.json";
 function priceOf(c){
   const key=c?.id;
@@ -379,6 +379,7 @@ function mergePriceDataset(d){
       collections:Array.isArray(entry?.collections)?entry.collections.map(collection=>({
         expansion:String(collection?.expansion||"").trim(),
         expansionId:Number.isFinite(Number(collection?.expansionId))?Number(collection?.expansionId):null,
+        setCode:String(collection?.setCode||""),
         cardmarketId:Number.isFinite(Number(collection?.cardmarketId))?Number(collection?.cardmarketId):null,
         version:Number.isFinite(Number(collection?.version))?Number(collection?.version):1,
         eur:Number.isFinite(Number(collection?.eur))?Number(collection?.eur):null,
