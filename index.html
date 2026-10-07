@@ -20,7 +20,7 @@ let SUPABASE_URL="";
 let SUPABASE_KEY="";
 const AUTH_SITE_URL="https://onepiece-card-market.vercel.app";
 const AUTH_RETURN_URL=AUTH_SITE_URL+"/auth/confirm";
-const PASSWORD_RESET_URL="https://onepiece-card-market.vercel.app/auth/reset";
+const PASSWORD_RESET_URL=AUTH_SITE_URL;
 const DATA="/data/";
 const PLAYSET=4;
 const LEADER_PLAYSET=1;
@@ -1466,10 +1466,11 @@ async function resendConfirmation(email){
 async function forgotPassword(email){
   email=String(email||"").trim();
   if(!email)return notify("Introduce tu email primero");
-  state.authBusy=true;state.authError="";renderShell();
+  state.authBusy=true;state.authError="";state.authNotice="";renderShell();
   try{
     const sb=state.sb||await initSupabase();if(!sb)throw Error("No se pudo conectar con Supabase");
     const r=await sb.auth.resetPasswordForEmail(email,{redirectTo:PASSWORD_RESET_URL});if(r.error)throw r.error;
+    state.authNotice="Correo de recuperación enviado. Usa el enlace del correo más reciente.";
     notify("Te hemos enviado un correo para cambiar la contraseña");
   }catch(e){state.authError=authMessage(e);notify(state.authError)}
   finally{state.authBusy=false;renderShell()}
@@ -1482,8 +1483,8 @@ async function changePassword(password,repeat,{recovery=false}={}){
   try{
     const sb=state.sb||await initSupabase();if(!sb)throw Error("No se pudo conectar con Supabase");
     const r=await sb.auth.updateUser({password});if(r.error)throw r.error;
-    state.authRecovery=false;
-    if(location.pathname.startsWith("/auth/"))history.replaceState(null,"","/");
+    state.authRecovery=false;state.authNotice=recovery?"Contraseña cambiada correctamente. Ya puedes iniciar sesión con la nueva contraseña.":"Contraseña actualizada correctamente.";
+    if(location.pathname.startsWith("/auth/")||location.hash||location.search)history.replaceState(null,"","/");
     notify(recovery?"Contraseña recuperada":"Contraseña actualizada");
   }catch(e){state.authError=authMessage(e);notify(state.authError)}
   finally{state.authBusy=false;renderShell()}
@@ -1563,39 +1564,86 @@ async function handleAuthCallback(sb){
   const url=new URL(location.href),params=url.searchParams;
   const hashParams=new URLSearchParams(location.hash.replace(/^#/,""));
   const errorDescription=params.get("error_description")||hashParams.get("error_description");
+  const rawType=String(params.get("type")||hashParams.get("type")||"").toLowerCase();
+  const isRecovery=rawType==="recovery"||location.pathname==="/auth/reset";
+
   if(errorDescription){
     state.authError=decodeURIComponent(errorDescription.replace(/\+/g," "));
-    state.authNotice="";state.tab="account";
+    state.authNotice="";state.authRecovery=false;state.tab="account";
     return {handled:true,error:true};
   }
+
+  // Token-hash links used by customized Supabase email templates.
   const tokenHash=params.get("token_hash");
-  const rawType=String(params.get("type")||"").toLowerCase();
-  if(!tokenHash)return {handled:false};
-  const type=rawType==="signup"?"email":rawType;
-  const allowed=new Set(["email","recovery","invite","magiclink","email_change"]);
-  if(!allowed.has(type)){
-    state.authError="Enlace de autenticación no válido.";
-    state.authNotice="";state.tab="account";
-    return {handled:true,error:true};
+  if(tokenHash){
+    const type=rawType==="signup"?"email":rawType;
+    const allowed=new Set(["email","recovery","invite","magiclink","email_change"]);
+    if(!allowed.has(type)){
+      state.authError="Enlace de autenticación no válido.";
+      state.authNotice="";state.authRecovery=false;state.tab="account";
+      return {handled:true,error:true};
+    }
+    const r=await sb.auth.verifyOtp({token_hash:tokenHash,type});
+    if(r.error){
+      state.authError="No se pudo validar el enlace: "+authMessage(r.error);
+      state.authNotice="";state.authRecovery=false;state.tab="account";
+      return {handled:true,error:true};
+    }
+    state.user=r.data.user||r.data.session?.user||null;
+    state.authError="";state.tab="account";
+    if(type==="recovery"){
+      state.authRecovery=true;
+      state.authNotice="Enlace válido. Elige una nueva contraseña.";
+      history.replaceState(null,"","/");
+    }else{
+      state.authRecovery=false;
+      state.authNotice="Correo confirmado correctamente. Tu cuenta ya está activa.";
+      history.replaceState(null,"","/");
+    }
+    return {handled:true,error:false};
   }
-  const r=await sb.auth.verifyOtp({token_hash:tokenHash,type});
-  if(r.error){
-    state.authError="No se pudo confirmar el enlace: "+authMessage(r.error);
-    state.authNotice="";state.tab="account";
-    return {handled:true,error:true};
-  }
-  state.user=r.data.user||r.data.session?.user||null;
-  state.authError="";state.tab="account";
-  if(type==="recovery"){
-    state.authRecovery=true;
-    state.authNotice="Enlace válido. Elige una nueva contraseña.";
-    history.replaceState(null,"","/auth/reset");
-  }else{
-    state.authRecovery=false;
-    state.authNotice="Correo confirmado correctamente. Tu cuenta ya está activa.";
+
+  // PKCE links return a ?code=... parameter.
+  const code=params.get("code");
+  if(code){
+    const r=await sb.auth.exchangeCodeForSession(code);
+    if(r.error){
+      state.authError="No se pudo abrir el enlace de recuperación: "+authMessage(r.error);
+      state.authNotice="";state.authRecovery=false;state.tab="account";
+      return {handled:true,error:true};
+    }
+    state.user=r.data.user||r.data.session?.user||null;
+    state.authError="";state.tab="account";
+    state.authRecovery=isRecovery||rawType==="recovery";
+    state.authNotice=state.authRecovery?"Enlace válido. Elige una nueva contraseña.":"Cuenta verificada correctamente.";
     history.replaceState(null,"","/");
+    return {handled:true,error:false};
   }
-  return {handled:true,error:false};
+
+  // Implicit-flow recovery links return access/refresh tokens in the URL hash.
+  const accessToken=hashParams.get("access_token"),refreshToken=hashParams.get("refresh_token");
+  if(accessToken&&refreshToken){
+    const r=await sb.auth.setSession({access_token:accessToken,refresh_token:refreshToken});
+    if(r.error){
+      state.authError="No se pudo abrir el enlace de recuperación: "+authMessage(r.error);
+      state.authNotice="";state.authRecovery=false;state.tab="account";
+      return {handled:true,error:true};
+    }
+    state.user=r.data.user||r.data.session?.user||null;
+    state.authError="";state.tab="account";
+    state.authRecovery=isRecovery||rawType==="recovery";
+    state.authNotice=state.authRecovery?"Enlace válido. Elige una nueva contraseña.":"Sesión iniciada.";
+    history.replaceState(null,"","/");
+    return {handled:true,error:false};
+  }
+
+  // Supabase may already have consumed the URL automatically. Preserve recovery mode
+  // whenever the returned URL explicitly says type=recovery.
+  if(isRecovery){
+    state.authRecovery=true;state.authError="";state.authNotice="Enlace de recuperación abierto. Elige una nueva contraseña.";state.tab="account";
+    return {handled:true,error:false};
+  }
+  return {handled:false};
 }
 async function initSupabase(){
   if(state.sb)return state.sb;
@@ -1615,7 +1663,8 @@ async function initSupabase(){
       state.authReady=true;if(!state.authError)state.authError="";renderShell();
       state.sb.auth.onAuthStateChange((event,session)=>setTimeout(async()=>{
         const previous=state.user?.id||null;state.user=session?.user||null;
-        if(event==="PASSWORD_RECOVERY"){state.authRecovery=true;state.tab="account"}
+        const returnedType=new URLSearchParams(location.hash.replace(/^#/,"")).get("type")||new URL(location.href).searchParams.get("type");
+        if(event==="PASSWORD_RECOVERY"||returnedType==="recovery"||location.pathname==="/auth/reset"){state.authRecovery=true;state.authNotice="Enlace válido. Elige una nueva contraseña.";state.tab="account"}
         else if(state.user&&location.pathname.startsWith("/auth/")&&!state.authRecovery)history.replaceState(null,"","/");
         if(state.user){loadAccountLocal({migrateLegacy:true});await syncCloud()}
         else if(previous){state.deckId=null;state.deckLibrary=true;loadAccountLocal()}
