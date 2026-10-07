@@ -39,7 +39,15 @@ assert(/function resolveCSVPrint[\s\S]*?const exact=compatible\.find\(c=>norm\(c
 
 const priceData=JSON.parse(priceRaw);
 const cards=Array.isArray(JSON.parse(cardsRaw))?JSON.parse(cardsRaw):Object.values(JSON.parse(cardsRaw)||{});
-const catalogIds=new Set(cards.map(card=>String(card?.id||"")).filter(Boolean));
+const catalogIdList=cards.map(card=>String(card?.id||"")).filter(Boolean);
+const catalogIds=new Set(catalogIdList);
+assert(catalogIds.size===catalogIdList.length,"Duplicate exact print IDs detected in catalog");
+const op13043=cards.filter(card=>/^OP13-043(?:_|$)/i.test(String(card?.id||"")));
+assert(op13043.length>=3,"OP13-043 regression: expected at least three exact English printings");
+for(const card of cards.filter(card=>card?.limitlessPrint)){
+  const id=String(card?.id||"");
+  assert(String(card?.image||card?.imageUrl||"").includes(id+"_EN.webp"),"Limitless exact image mismatch for "+id);
+}
 const unsafe=[];
 let variants=0,pricedVariants=0;
 for(const [id,entry] of Object.entries(priceData.cards||{})){
