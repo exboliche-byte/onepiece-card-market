@@ -315,6 +315,12 @@ function groupCardList(arr){
   }
   return [...by.values()];
 }
+function groupPriceStats(g){
+  const prices=g.versions.map(priceOf).filter(v=>Number.isFinite(Number(v))).map(Number);
+  if(!prices.length)return {min:null,max:null,sort:null};
+  const min=Math.min(...prices),max=Math.max(...prices);
+  return {min,max,sort:state.catalog.dir==="desc"?max:min};
+}
 function groupFiltered(){
   const groups=groupCardList(filteredCards("catalog"));
   const dir=state.catalog.dir==="desc"?-1:1;
@@ -323,13 +329,12 @@ function groupFiltered(){
     return values.length?Math.min(...values):null;
   };
   if(state.catalog.sort==="price"){
-    const groupPrice=g=>{
-      const ps=g.versions.map(priceOf).filter(v=>v!==null);
-      return ps.length?Math.min(...ps):null;
-    };
     groups.sort((a,b)=>{
-      const d=cmpPrice(groupPrice(a),groupPrice(b));
-      return d||String(a.card?.id||"").localeCompare(String(b.card?.id||""),"es",{numeric:true});
+      const av=groupPriceStats(a).sort,bv=groupPriceStats(b).sort;
+      const am=av===null,bm=bv===null;
+      if(am||bm){if(am&&bm)return String(a.card?.id||"").localeCompare(String(b.card?.id||""),"es",{numeric:true});return am?1:-1}
+      const d=(av-bv)*dir;
+      return d||String(a.card?.id||"").localeCompare(String(b.card?.id||""),"es",{numeric:true})*dir;
     });
   }else if(state.catalog.sort==="cost"||state.catalog.sort==="power"){
     // The UI shows logical cards grouped across variants. Sort the groups by
@@ -534,14 +539,15 @@ function cardTile(c,extra=""){
 function groupedTile(g){
   const c=g.card,q=logicalQty(c);
   const albumMissing=state.tab==="album"&&!q;
-  const versionPrices=g.versions.map(priceOf).filter(v=>v!==null);
-  const minPrice=versionPrices.length?Math.min(...versionPrices):null;
-  const maxPrice=versionPrices.length?Math.max(...versionPrices):null;
+  const priceStats=groupPriceStats(g),minPrice=priceStats.min,maxPrice=priceStats.max;
+  const priceLabel=minPrice===null?"Precio —":
+    state.catalog.sort==="price"&&state.catalog.dir==="desc"?"Hasta "+money(maxPrice):
+    maxPrice!==minPrice?"Desde "+money(minPrice):money(minPrice);
   return '<article class="card '+(albumMissing?"missing-card":"")+'">'+(q?'<span class="tag">×'+q+' total</span>':'<span class="tag missing">Falta</span>')+
     '<button class="linkbtn" data-detail="'+esc(c.id)+'" style="display:block;width:100%;padding:0">'+cardImg(c,"cardimg catalogthumb")+'</button>'+
     '<div class="cardbody"><div class="name">'+esc(c.name)+'</div><div class="small">'+esc(c.id)+'</div><div class="small">'+esc(c.category||"")+' · '+g.versions.length+' versión(es)</div>'+
     '<div class="chips">'+g.sets.slice(0,5).map(x=>'<span class="chip">'+esc(x)+'</span>').join("")+(g.sets.length>5?'<span class="chip">+'+(g.sets.length-5)+'</span>':"")+'</div>'+
-    '<div class="row"><span>'+(minPrice!==null?(maxPrice!==null&&maxPrice!==minPrice?"Desde "+money(minPrice):money(minPrice)):"Precio —")+'</span><span class="small">'+q+' copias</span></div>'+
+    '<div class="row"><span>'+priceLabel+'</span><span class="small">'+q+' copias</span></div>'+
     '<div class="quick"><button class="secondary" data-qty="'+esc(c.id)+'" data-d="-1">−</button><div class="qty">'+q+'</div><button class="primary" data-qty="'+esc(c.id)+'" data-d="1">+</button></div><button class="secondary btn" style="width:100%;margin-top:8px" data-group="'+esc(c.id)+'">Ver versiones</button></div></article>';
 }
 function pagination(total,page,key){
