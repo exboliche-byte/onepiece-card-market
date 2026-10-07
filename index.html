@@ -1659,11 +1659,11 @@ function scannerResultHtml(){
   const c=group.card||versions[0];
   const owned=total>0;
   const status='<div class="scanner-owned '+(owned?"ok":"missing")+'">'+(owned?("La tienes · "+total+" copia"+(total===1?"":"s")):"Te falta")+'</div>';
-  const exactNote=versions.length>1?'<div class="notice" style="margin-top:10px">El OCR identifica el número de carta, pero las paralelas y reimpresiones comparten ese número. Elige la impresión exacta antes de añadirla.</div>':"";
+  const exactNote=versions.length>1?'<div class="notice" style="margin-top:10px">El reconocimiento identifica el número de carta, pero las paralelas y reimpresiones comparten ese número. Elige la impresión exacta antes de añadirla.</div>':"";
   const discard='<button class="secondary btn" data-scanner-discard style="margin-top:10px">Descartar y seguir</button>';
   const one=versions.length===1?'<div class="scanner-main">'+cardImg(versions[0],"cardimg")+'<div><b>'+esc(versions[0].id)+' · '+esc(versions[0].name)+'</b><div class="small" style="margin-top:4px">'+esc(cardPrintLabel(versions[0]))+'</div><div class="small" style="margin-top:4px">En tu colección: ×'+qty(versions[0].id)+'</div><button class="primary btn" data-scanner-add="'+esc(versions[0].id)+'" style="margin-top:10px">Añadir +1 y seguir</button>'+discard+'<button class="secondary btn" data-scanner-detail="'+esc(versions[0].id)+'" style="margin-top:10px;margin-left:6px">Ver carta</button></div></div>':"";
   const many=versions.length>1?'<div class="scanner-versions">'+versions.map(v=>'<div class="scanner-version">'+cardImg(v,"cardimg")+'<b style="margin-top:5px">'+esc(v.id)+'</b><span class="small">'+esc(cardPrintLabel(v))+'</span><span class="small">Tengo ×'+qty(v.id)+'</span><button class="primary btn" data-scanner-add="'+esc(v.id)+'">Añadir +1 y seguir</button><button class="secondary btn" data-scanner-detail="'+esc(v.id)+'" style="margin-top:5px;width:100%">Ver</button></div>').join("")+'</div><div style="margin-top:10px">'+discard+'</div>':"";
-  return '<div class="scanner-result-head"><div><div class="small">'+esc(state.scanner.code||baseId(c?.id))+'</div><h2 style="margin:2px 0 0">'+esc(c?.name||"Carta detectada")+'</h2></div>'+status+'</div><div class="validation ok" style="margin-top:10px"><b>Lectura bloqueada.</b> Añade la impresión correcta o descarta para continuar escaneando.</div>'+exactNote+one+many+(state.scanner.ocrText?'<details class="scanner-debug"><summary>Texto leído por OCR</summary><pre style="white-space:pre-wrap">'+esc(state.scanner.ocrText.slice(0,700))+'</pre></details>':"");
+  return '<div class="scanner-result-head"><div><div class="small">'+esc(state.scanner.code||baseId(c?.id))+'</div><h2 style="margin:2px 0 0">'+esc(c?.name||"Carta detectada")+'</h2></div>'+status+'</div><div class="validation ok" style="margin-top:10px"><b>Lectura bloqueada.</b> Añade la impresión correcta o descarta para continuar escaneando.</div>'+exactNote+one+many+(state.scanner.ocrText?'<details class="scanner-debug"><summary>Lecturas de reconocimiento</summary><pre style="white-space:pre-wrap">'+esc(state.scanner.ocrText.slice(0,700))+'</pre></details>':"");
 }
 function scannerStatusHtml(){
   const s=state.scanner;
@@ -1707,7 +1707,7 @@ function stopScanner(options={}){
 async function scannerWorkerReady(){
   if(scannerWorker)return scannerWorker;
   if(scannerWorkerPromise)return scannerWorkerPromise;
-  if(!window.Tesseract)throw Error("No se pudo cargar el motor OCR");
+  if(!window.Tesseract)throw Error("No se pudo cargar el motor de reconocimiento");
   state.scanner.status="Cargando reconocimiento…";renderScannerResult();
   scannerWorkerPromise=Tesseract.createWorker("eng",1,{logger:m=>{
     if(state.tab!=="scanner"||state.scanner.active===false)return;
