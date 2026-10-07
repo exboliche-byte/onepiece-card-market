@@ -14,7 +14,7 @@ const CARDMARKET_SET_NAMES = {
   "OP-04": ["Kingdoms of Intrigue"],
   "OP-05": ["Awakening of the New Era"],
   "OP-06": ["Wings of the Captain"],
-  "OP-07": ["500 Years in the Future"],
+  "OP-07": ["500 Years into the Future", "500 Years in the Future"],
   "OP-08": ["Two Legends"],
   "OP-09": ["Emperors in the New World"],
   "OP-10": ["Royal Blood"],
@@ -29,7 +29,8 @@ const CARDMARKET_SET_NAMES = {
   "OP-18": ["The Dominance of God"],
   "EB-01": ["Memorial Collection"],
   "EB-02": ["Anime 25th Collection"],
-  "EB-03": ["One Piece Heroines Edition"],
+  "EB-03": ["Heroines Edition", "One Piece Heroines Edition"],
+  "EB-04": ["The Azure Sea's Seven", "The Azure Sea’s Seven"],
   "PRB-01": ["One Piece Card The Best", "The Best"],
   "PRB-02": ["One Piece Card The Best Vol.2", "The Best Vol.2"],
   "ST-01": ["Starter Deck Straw Hat Crew"],
@@ -42,18 +43,18 @@ const CARDMARKET_SET_NAMES = {
   "ST-08": ["Starter Deck Monkey D Luffy"],
   "ST-09": ["Starter Deck Yamato"],
   "ST-10": ["Starter Deck The Three Captains"],
-  "ST-11": ["Starter Deck Uta"],
-  "ST-12": ["Starter Deck Zoro and Sanji"],
+  "ST-11": ["Starter Deck: Uta", "Starter Deck Uta"],
+  "ST-12": ["Starter Deck: Zoro & Sanji", "Starter Deck Zoro and Sanji"],
   "ST-13": ["Starter Deck The Three Brothers"],
   "ST-14": ["Starter Deck 3D2Y"],
-  "ST-15": ["Starter Deck Red Edward Newgate"],
-  "ST-16": ["Starter Deck Green Uta"],
-  "ST-17": ["Starter Deck Blue Donquixote Doflamingo"],
-  "ST-18": ["Starter Deck Purple Monkey D Luffy"],
-  "ST-19": ["Starter Deck Black Smoker"],
-  "ST-20": ["Starter Deck Yellow Charlotte Katakuri"],
-  "ST-21": ["Starter Deck GEAR5"],
-  "ST-22": ["Starter Deck Ace & Newgate"],
+  "ST-15": ["Starter Deck: Edward.Newgate", "Starter Deck Red Edward Newgate"],
+  "ST-16": ["Starter Deck: Green Uta", "Starter Deck Green Uta"],
+  "ST-17": ["Starter Deck: Donquixote Doflamingo", "Starter Deck Blue Donquixote Doflamingo"],
+  "ST-18": ["Starter Deck: Purple Monkey.D.Luffy", "Starter Deck Purple Monkey D Luffy"],
+  "ST-19": ["Starter Deck: Smoker", "Starter Deck Black Smoker"],
+  "ST-20": ["Starter Deck: Charlotte Katakuri", "Starter Deck Yellow Charlotte Katakuri"],
+  "ST-21": ["Starter Deck: EX Gear 5", "Starter Deck GEAR5"],
+  "ST-22": ["Starter Deck: EX Ace & Newgate", "Starter Deck Ace & Newgate"],
   "ST-23": ["Starter Deck RED Shanks"],
   "ST-24": ["Starter Deck GREEN Jewelry Bonney"],
   "ST-25": ["Starter Deck BLUE Buggy"],
@@ -61,7 +62,7 @@ const CARDMARKET_SET_NAMES = {
   "ST-27": ["Starter Deck BLACK Marshall D Teach"],
   "ST-28": ["Starter Deck GREEN YELLOW Yamato"],
   "ST-29": ["Starter Deck Egghead"],
-  "ST-30": ["Starter Deck Luffy & Ace"],
+  "ST-30": ["Starter Deck: EX Luffy & Ace", "Starter Deck Luffy & Ace"],
   "ST-31": ["Starter Deck RED Monkey D Luffy"],
   "ST-32": ["Starter Deck GREEN Roronoa Zoro"],
   "ST-33": ["Starter Deck BLUE Kuzan"],
@@ -740,14 +741,6 @@ async function main() {
   };
 
   if (coverage < MIN_COVERAGE) {
-    const bySet = new Map();
-    for (const id of unmatched) {
-      const card = cards.find(c => String(c?.id || "") === String(id));
-      const set = sourceSetCode(card || {id});
-      bySet.set(set, (bySet.get(set) || 0) + 1);
-    }
-    console.error("Unmatched by source set:", Object.fromEntries([...bySet.entries()].sort((a,b)=>b[1]-a[1])));
-    console.error("Unmatched sample:", unmatched.slice(0, 100).join(", "));
     throw new Error("Safety check failed: only " + mapped + "/" + cards.length + " cards matched to an exact Cardmarket product (" + (coverage * 100).toFixed(1) + "%)");
   }
 
