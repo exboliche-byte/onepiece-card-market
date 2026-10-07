@@ -173,6 +173,36 @@ function expansionList(){
   });
   return list;
 }
+function ensureOwnedCardsInCatalog(){
+  if(!state.cards?.length)return;
+  const byId=new Map(state.cards.map(c=>[c.id,c]));
+  let changed=false;
+  for(const [ownedId,ownedQty] of Object.entries(state.owned||{})){
+    if(Number(ownedQty)<=0||byId.has(ownedId))continue;
+    const saved=state.importedCards?.[ownedId];
+    if(saved?.id){byId.set(ownedId,{...saved,id:ownedId,syntheticImport:true});changed=true;continue}
+    const logical=baseId(ownedId);
+    const base=state.cards.find(x=>!x.syntheticImport&&norm(baseId(x.id))===norm(logical));
+    const kind=/_r\d+$/i.test(ownedId)?"reprint":/_(?:p|c)\d+$/i.test(ownedId)?"parallel":"base";
+    if(base)byId.set(ownedId,{...base,id:ownedId,syntheticImport:true,importVariantId:ownedId,importVariantKind:kind,importResolvedCardId:base.id});
+    else{
+      const setCode=String(logical).split("-")[0]||"";
+      byId.set(ownedId,{id:ownedId,number:logical,name:logical,set:setCode,set_name:setCode,rarity:"",category:"Character",colors:[],attributes:[],types:[],effect:"",trigger:null,image:"",syntheticImport:true,importVariantId:ownedId,importVariantKind:kind});
+    }
+    changed=true;
+  }
+  if(!changed)return;
+  state.cards=[...byId.values()];
+  const map=new Map();
+  for(const cc of state.cards){
+    cc.search=norm([cc.id,cc.name,cc.set,cc.set_name,cc.category,cc.rarity,...(cc.colors||[]),...(cc.types||[]),...(cc.attributes||[]),cc.effect,cc.trigger].join(" "));
+    const k=groupKey(cc);
+    if(!map.has(k))map.set(k,{key:k,card:cc,ids:[],sets:new Set()});
+    const g=map.get(k);g.ids.push(cc.id);g.sets.add(cc.set);
+  }
+  state.groups=[...map.values()].map(g=>({...g,sets:[...g.sets].sort(),versions:g.ids.map(id=>card(id))}));
+  state.groupByKey=map;
+}
 function prepareCatalog(raw,packs){
   state.packs=(Array.isArray(packs)?packs:Object.values(packs)).slice().sort(comparePacks);
   const catalogCards=(Array.isArray(raw)?raw:Object.values(raw)).map(c=>({...c,id:String(c.id||"").trim(),set:String(c.set||"").trim(),set_name:c.set_name||setName(c.set||"")})).filter(c=>c.id&&!isJapaneseCatalogCard(c));
@@ -656,13 +686,14 @@ function cardmarketUrl(c){
   return "";
 }
 function cardTile(c,extra=""){
-  const q=qty(c.id);const p=priceOf(c);const albumMissing=state.tab==="album"&&!q;
-  return '<article class="card '+(albumMissing?"missing-card":"")+'">'+(q?'<span class="tag">×'+q+'</span>':'<span class="tag missing">0/'+playsetTarget(c)+'</span>')+
+  const q=qty(c.id),p=collectionPriceOf(c),target=playsetTarget(c);
+  return '<article class="card">'+
+    '<span class="tag">×'+q+'</span>'+
     '<button class="linkbtn" data-detail="'+esc(c.id)+'" style="display:block;width:100%;padding:0">'+cardImg(c,"cardimg catalogthumb")+'</button>'+
-    '<div class="cardbody"><div class="name">'+esc(c.name)+'</div><div class="small">'+esc(c.id)+' · '+esc(c.set)+' · '+esc(c.rarity||"—")+'</div>'+
+    '<div class="cardbody"><div class="name">'+esc(c.name||c.id)+'</div><div class="small">'+esc(c.id)+' · '+esc(c.set||"—")+' · '+esc(c.rarity||"—")+'</div>'+
     '<div class="chips">'+(c.colors||[]).map(x=>'<span class="chip">'+esc(x)+'</span>').join("")+'</div>'+
-    '<div class="row"><span>'+ (p!==null?money(p):"Precio —")+'</span><span class="small">'+q+'/'+playsetTarget(c)+'</span></div>'+
-    '<div class="quick"><button class="secondary" data-qty="'+esc(c.id)+'" data-d="-1">−</button><div class="qty">'+q+'</div><button class="primary" data-qty="'+esc(c.id)+'" data-d="1">+</button></div>'+(deckMode?'<button class="primary btn" style="width:100%;margin-top:8px" data-adddeck="'+esc(c.id)+'">Añadir esta versión al mazo</button>':'')+
+    '<div class="row"><span>'+(p!==null?money(p):"Precio —")+'</span><span class="small">'+q+'/'+target+'</span></div>'+
+    '<div class="quick"><button class="secondary" data-qty="'+esc(c.id)+'" data-d="-1">−</button><div class="qty">'+q+'</div><button class="primary" data-qty="'+esc(c.id)+'" data-d="1">+</button></div>'+
     extra+'</div></article>';
 }
 function groupedTile(g){
@@ -1495,6 +1526,7 @@ async function syncCloud(){
     const ci=await state.sb.from("collection_items").select("card_id,quantity,updated_at").eq("user_id",state.user.id);if(ci.error)throw ci.error;
     const remoteOwned={};for(const r of ci.data||[])remoteOwned[r.card_id]=Number(r.quantity||0);
     state.owned=mergeOwnedCollections(remoteOwned,localOwned);
+    ensureOwnedCardsInCatalog();
     const collectionUpserts=Object.entries(localOwned)
       .filter(([id,q])=>Number(q)>Number(remoteOwned[id]||0))
       .map(([card_id,quantity])=>({user_id:state.user.id,card_id,quantity:Number(quantity),updated_at:new Date().toISOString()}));
