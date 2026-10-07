@@ -24,7 +24,7 @@ const state={
   cards:[],packs:[],groups:[],groupByKey:new Map(),prices:{},priceDate:null,
   collection:{},decks:[],wishlist:{},user:null,sb:null,
   tab:"catalog",set:"",query:"",detail:null,deckId:null,
-  catalog:{set:"Todas",category:"Todos",color:"Todos",rarity:"Todos",type:"Todos",attribute:"Todos",ownership:"Todas",sort:"id",dir:"asc",page:1,grouped:true,minCost:"",maxCost:"",minPower:"",maxPower:"",query:"",filtersOpen:false},
+  catalog:{set:"Todas",category:"Todos",color:"Todos",rarity:"Todos",type:"Todos",attribute:"Todos",ownership:"Todas",sort:"id",dir:"asc",page:1,grouped:true,minCost:"",maxCost:"",minPower:"",maxPower:"",minPrice:"",maxPrice:"",query:"",filtersOpen:false},
   owned:{},collection:{query:"",set:"Todas",category:"Todos",color:"Todos",rarity:"Todos",type:"Todos",attribute:"Todos",quantity:"Todas",playset:"Todas",sort:"id",dir:"asc",page:1,filtersOpen:false},
   album:{set:"",query:"",ownership:"Todas",sort:"id",dir:"asc",page:1},expansions:{query:"",type:"Todos",sort:"set",dir:"asc"},
   deckQuery:"",deckPage:1,deckFilters:{category:"Todos",color:"Todos",rarity:"Todos",filtersOpen:false},auth:false,toast:"",loading:true
@@ -180,6 +180,8 @@ function filteredCards(mode){
     if(f.maxCost!=="")list=list.filter(c=>Number(c.cost??9999)<=Number(f.maxCost));
     if(f.minPower!=="")list=list.filter(c=>Number(c.power??-1)>=Number(f.minPower));
     if(f.maxPower!=="")list=list.filter(c=>Number(c.power??9999)<=Number(f.maxPower));
+    if(f.minPrice!=="")list=list.filter(c=>{const p=priceOf(c);return p!==null&&p>=Number(f.minPrice)});
+    if(f.maxPrice!=="")list=list.filter(c=>{const p=priceOf(c);return p!==null&&p<=Number(f.maxPrice)});
     if(f.ownership==="Tengo")list=list.filter(c=>qty(c.id)>0);
     if(f.ownership==="Me faltan")list=list.filter(c=>qty(c.id)<PLAYSET);
   }
@@ -348,6 +350,7 @@ function catalogActiveFilterCount(){
   if(f.ownership!=="Todas")n++;
   if(f.minCost!==""||f.maxCost!=="")n++;
   if(f.minPower!==""||f.maxPower!=="")n++;
+  if(f.minPrice!==""||f.maxPrice!=="")n++;
   return n;
 }
 function filterLabel(label,control){
@@ -370,6 +373,8 @@ function catalogFilterPanel(){
       filterLabel("Coste máximo",'<input id="catMaxCost" class="field" type="number" min="0" inputmode="numeric" placeholder="Sin máximo" value="'+esc(f.maxCost)+'">')+
       filterLabel("Poder mínimo",'<input id="catMinPower" class="field" type="number" min="0" inputmode="numeric" placeholder="Sin mínimo" value="'+esc(f.minPower)+'">')+
       filterLabel("Poder máximo",'<input id="catMaxPower" class="field" type="number" min="0" inputmode="numeric" placeholder="Sin máximo" value="'+esc(f.maxPower)+'">')+
+      filterLabel("Precio mínimo",'<input id="catMinPrice" class="field" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Sin mínimo" value="'+esc(f.minPrice)+'">')+
+      filterLabel("Precio máximo",'<input id="catMaxPrice" class="field" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Sin máximo" value="'+esc(f.maxPrice)+'">')+
     '</div>'+
     '<div class="filter-actions"><span class="active-filters-note">Los cambios se aplican automáticamente</span><button class="secondary btn" id="closeCatalogFilters" type="button">Cerrar filtros</button></div>'+
   '</div>';
@@ -390,7 +395,8 @@ function catalogToolbar(){
 async function renderCatalogResults(){
   const host=$("#catalogResults");if(!host)return;
   if(state.loading&&!state.cards.length){host.innerHTML='<div class="notice">Cargando catálogo de cartas…</div>';return}
-  if(state.catalog.sort==="price"){state.prices={};await ensurePrices(state.cards.map(c=>c.id),{refresh:true});}
+  const needsPrices=state.catalog.sort==="price"||state.catalog.minPrice!==""||state.catalog.maxPrice!=="";
+  if(needsPrices)await ensurePrices();
   const data=groupFiltered(),pages=Math.max(1,Math.ceil(data.length/PAGE));state.catalog.page=Math.min(state.catalog.page,pages);
   const start=(state.catalog.page-1)*PAGE,visible=data.slice(start,start+PAGE);
   visible.slice(0,12).forEach(g=>preloadCardImage(g.card));
@@ -451,8 +457,7 @@ async function renderCollectionResults(){
   await ensureCollectionPrices({refresh:state.collection.sort==="price"});
   updateCollectionValue();
   if(state.collection.sort==="price"){
-    state.prices={};
-    await ensurePrices(state.cards.filter(c=>qty(c.id)>0).map(c=>c.id),{refresh:true});
+    await ensurePrices();
   }
   const list=filteredCards("collection"),pages=Math.max(1,Math.ceil(list.length/PAGE));state.collection.page=Math.min(state.collection.page,pages);
   const start=(state.collection.page-1)*PAGE,visible=list.slice(start,start+PAGE),active=collectionActiveFilterCount();
@@ -600,6 +605,30 @@ function addToDeck(id){const d=state.decks.find(x=>x.id===state.deckId);if(!d)re
 function newDeckModal(){
   return '<div class="modalback"><div class="modal"><div class="sectionhead"><h2>Nuevo mazo</h2><button class="close" data-close>×</button></div><input id="newDeckName" class="field" placeholder="Nombre del mazo"><textarea id="newDeckDesc" class="field" style="margin-top:8px" rows="3" placeholder="Descripción (opcional)"></textarea><div class="row" style="margin-top:9px"><button class="secondary btn" data-close>Cancelar</button><button class="primary btn" id="createDeckConfirm">Crear</button></div></div></div>';
 }
+let detailHistoryActive=false;
+function openCardDetail(id,{replace=false}={}){
+  const c=card(id);if(!c)return;
+  if(!detailHistoryActive){
+    history.pushState({mialbumDetail:true,cardId:c.id},"",location.href);
+    detailHistoryActive=true;
+  }else if(replace){
+    history.replaceState({mialbumDetail:true,cardId:c.id},"",location.href);
+  }else{
+    history.replaceState({mialbumDetail:true,cardId:c.id},"",location.href);
+  }
+  state.detail=c;
+  renderShell();
+}
+function closeCardDetail({fromHistory=false}={}){
+  if(!state.detail)return;
+  if(!fromHistory&&detailHistoryActive){
+    history.back();
+    return;
+  }
+  detailHistoryActive=false;
+  state.detail=null;
+  renderShell();
+}
 function detailView(c){
   const versions=state.groups.find(g=>g.ids.includes(c.id))?.versions||[c],q=qty(c.id);
   return '<div class="modalback"><div class="modal"><div class="sectionhead"><div><b>'+esc(c.id)+'</b><div class="small">'+esc(c.name)+'</div></div><button class="close" data-close>×</button></div><div class="detail"><div>'+cardImg(c,"cardimg detailimg")+'</div><div><h2 style="margin-top:0">'+esc(c.name)+'</h2><div class="small">'+esc(c.set)+' · '+esc(c.rarity||"—")+' · '+esc(c.category||"—")+'</div><div class="chips">'+(c.colors||[]).map(x=>'<span class="chip">'+esc(x)+'</span>').join("")+'</div><p style="white-space:pre-wrap">'+esc(c.effect||"Sin efecto disponible")+'</p><div class="small">Coste '+esc(c.cost??"—")+' · Poder '+esc(c.power??"—")+' · Counter '+esc(c.counter??"—")+'</div><div class="row" style="margin-top:10px"><b>Mi colección: '+q+'</b><b>'+(priceOf(c)!==null?money(priceOf(c)):"Precio —")+'</b></div><div class="small" style="margin-top:5px">Precio de salida (referencia): '+(priceMeta(c)?.launchPrice!==null&&priceMeta(c)?.launchPrice!==undefined?money(priceMeta(c).launchPrice):"—")+"</div>"+'<div class="quick"><button class="secondary" data-qty="'+esc(c.id)+'" data-d="-1">−</button><div class="qty">'+q+'</div><button class="primary" data-qty="'+esc(c.id)+'" data-d="1">+</button></div><a class="secondary btn" style="display:block;text-align:center;margin-top:8px;text-decoration:none" target="_blank" rel="noopener" href="'+esc(cardmarketUrl(c))+'">Buscar en Cardmarket ↗</a><h3>Versiones / reimpresiones</h3><div class="version-list">'+versions.map(v=>'<button class="version secondary" data-detail="'+esc(v.id)+'">'+cardImg(v,"versionImg")+'<small>'+esc(v.set)+' · '+(priceOf(v)!==null?money(priceOf(v)):"Precio —")+' · ×'+qty(v.id)+'</small></button>').join("")+'</div></div></div></div></div>';
@@ -633,10 +662,10 @@ function renderVisibleOnly(){
   renderToast();
 }
 function bindResultEvents(root){
-  root.querySelectorAll("[data-detail]").forEach(b=>b.onclick=e=>{e.preventDefault();state.detail=card(b.dataset.detail);renderShell()});
+  root.querySelectorAll("[data-detail]").forEach(b=>b.onclick=e=>{e.preventDefault();openCardDetail(b.dataset.detail)});
   root.querySelectorAll("[data-qty]").forEach(b=>b.onclick=e=>{e.preventDefault();changeQty(b.dataset.qty,Number(b.dataset.d))});
   root.querySelectorAll("[data-page]").forEach(b=>b.onclick=()=>{const k=b.dataset.page;state[k].page=Math.max(1,state[k].page+Number(b.dataset.p));renderVisibleOnly()});
-  root.querySelectorAll("[data-group]").forEach(b=>b.onclick=()=>{state.detail=card(b.dataset.group);renderShell()});
+  root.querySelectorAll("[data-group]").forEach(b=>b.onclick=()=>openCardDetail(b.dataset.group));
   root.querySelectorAll("[data-adddeck]").forEach(b=>b.onclick=()=>addToDeck(b.dataset.adddeck));
   root.querySelectorAll("[data-deckqty]").forEach(b=>b.onclick=()=>changeDeckQty(b.dataset.deckqty,Number(b.dataset.d)));
 }
@@ -647,14 +676,18 @@ function bindSearch(id,fn){
 }
 function authModal(){return '<div class="modalback"><div class="modal"><div class="sectionhead"><h2>Cuenta</h2><button class="close" data-close-auth>×</button></div><p class="muted">Accede para sincronizar tu colección y tus mazos.</p><input id="authEmail2" class="field" placeholder="Email"><input id="authPassword2" type="password" class="field" style="margin-top:8px" placeholder="Contraseña"><div class="inline-actions" style="margin-top:9px"><button class="primary btn" id="login2">Entrar</button><button class="secondary btn" id="register2">Crear cuenta</button></div></div></div>'}
 function bindShell(){
-  document.querySelectorAll("[data-tab]").forEach(b=>b.onclick=()=>{state.tab=b.dataset.tab;state.shared=false;state.detail=null;renderShell()});
+  document.querySelectorAll("[data-tab]").forEach(b=>b.onclick=()=>{
+    if(state.detail&&detailHistoryActive)history.replaceState(null,"",location.href);
+    detailHistoryActive=false;state.detail=null;
+    state.tab=b.dataset.tab;state.shared=false;renderShell();
+  });
   $("#accountBtn")?.addEventListener("click",()=>{state.tab="account";renderShell()});
   document.querySelectorAll("[data-close]").forEach(b=>b.onclick=()=>{state.newDeck=false;renderShell()});
   document.querySelectorAll("[data-close-auth]").forEach(b=>b.onclick=()=>{state.auth=false;renderShell()});
   document.querySelectorAll("[data-open-set]").forEach(b=>b.onclick=()=>{state.tab="album";state.album.set=b.dataset.openSet;state.album.page=1;renderShell()});
   if(state.tab==="catalog"){
     bindSearch("#catalogSearch",v=>{state.catalog.query=v;state.query=v;state.catalog.page=1;renderCatalogResults()});
-    const catalogFieldMap={catSet:"set",catCategory:"category",catColor:"color",catRarity:"rarity",catType:"type",catAttribute:"attribute",catMinCost:"minCost",catMaxCost:"maxCost",catMinPower:"minPower",catMaxPower:"maxPower",catOwnership:"ownership",catSort:"sort",catDir:"dir"};
+    const catalogFieldMap={catSet:"set",catCategory:"category",catColor:"color",catRarity:"rarity",catType:"type",catAttribute:"attribute",catMinCost:"minCost",catMaxCost:"maxCost",catMinPower:"minPower",catMaxPower:"maxPower",catMinPrice:"minPrice",catMaxPrice:"maxPrice",catOwnership:"ownership",catSort:"sort",catDir:"dir"};
     const syncCatalogControl=async(target)=>{
       const key=catalogFieldMap[target?.id];
       if(!key)return;
@@ -666,13 +699,13 @@ function bindShell(){
     const catalogArea=catalogToolbar?.parentElement;
     catalogArea?.addEventListener("change",e=>syncCatalogControl(e.target));
     catalogArea?.addEventListener("input",e=>{
-      if(/^cat(?:MinCost|MaxCost|MinPower|MaxPower)$/.test(e.target?.id))syncCatalogControl(e.target);
+      if(/^cat(?:MinCost|MaxCost|MinPower|MaxPower|MinPrice|MaxPrice)$/.test(e.target?.id))syncCatalogControl(e.target);
     });
     $("#applyCatalogFilters")?.remove();
     $("#applyCatalogFilters2")?.remove();
     $("#catalogFilterToggle")?.addEventListener("click",()=>{state.catalog.filtersOpen=!state.catalog.filtersOpen;renderShell()});
     $("#closeCatalogFilters")?.addEventListener("click",()=>{state.catalog.filtersOpen=false;renderShell()});
-    $("#clearCatalogFilters")?.addEventListener("click",()=>{Object.assign(state.catalog,{set:"Todas",category:"Todos",color:"Todos",rarity:"Todos",type:"Todos",attribute:"Todos",ownership:"Todas",minCost:"",maxCost:"",minPower:"",maxPower:"",page:1});renderShell()});
+    $("#clearCatalogFilters")?.addEventListener("click",()=>{Object.assign(state.catalog,{set:"Todas",category:"Todos",color:"Todos",rarity:"Todos",type:"Todos",attribute:"Todos",ownership:"Todas",minCost:"",maxCost:"",minPower:"",maxPower:"",minPrice:"",maxPrice:"",page:1});renderShell()});
   }
   if(state.tab==="collection"){
     bindSearch("#collectionSearch",v=>{state.collection.query=v;state.collection.page=1;renderCollectionResults()});
@@ -712,10 +745,10 @@ function bindShell(){
   }
   if(state.tab==="account"){bindAccount()}
   if(state.detail&&!state.detail.shareUrl){
-    document.querySelectorAll(".modalback").forEach(m=>m.addEventListener("click",e=>{if(e.target===m){state.detail=null;renderShell()}}));
-    document.querySelectorAll(".modalback [data-close]").forEach(b=>b.onclick=()=>{state.detail=null;renderShell()});
+    document.querySelectorAll(".modalback").forEach(m=>m.addEventListener("click",e=>{if(e.target===m)closeCardDetail()}));
+    document.querySelectorAll(".modalback [data-close]").forEach(b=>b.onclick=()=>closeCardDetail());
     document.querySelectorAll(".modalback [data-qty]").forEach(b=>b.onclick=()=>changeQty(b.dataset.qty,Number(b.dataset.d)));
-    document.querySelectorAll(".modalback [data-detail]").forEach(b=>b.onclick=()=>{state.detail=card(b.dataset.detail);renderShell()});
+    document.querySelectorAll(".modalback [data-detail]").forEach(b=>b.onclick=()=>openCardDetail(b.dataset.detail,{replace:true}));
   }
 }
 function bindAccount(){
@@ -821,6 +854,13 @@ async function boot(){
   loadLocal();loadCachedPrices();renderShell();
   try{const data=await loadCatalogData();prepareCatalog(data.cards,data.packs);state.loading=false;try{await loadMarketPrices()}catch{}await loadShared();renderShell();}catch(e){$("#app").innerHTML='<div class="wrap"><div class="hero"><div><h1>MiAlbumOnePiece</h1><p>No se pudo cargar el catálogo.</p></div></div><div class="section"><div class="notice">Error cargando datos: '+esc(e.message||"desconocido")+'</div><button class="primary btn" onclick="location.reload()">Reintentar</button></div></div>'}
   initSupabase();
+window.addEventListener("popstate",()=>{
+  if(state.detail){
+    detailHistoryActive=false;
+    state.detail=null;
+    renderShell();
+  }
+});
 }boot();
 </script>
 </body>
