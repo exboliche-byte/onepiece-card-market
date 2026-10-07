@@ -309,15 +309,30 @@ function groupCardList(arr){
 }
 function groupFiltered(){
   const groups=groupCardList(filteredCards("catalog"));
+  const dir=state.catalog.dir==="desc"?-1:1;
+  const groupNumber=(g,key)=>{
+    const values=g.versions.map(c=>Number(c?.[key])).filter(Number.isFinite);
+    return values.length?Math.min(...values):null;
+  };
   if(state.catalog.sort==="price"){
     const groupPrice=g=>{
       const ps=g.versions.map(priceOf).filter(v=>v!==null);
-      if(!ps.length)return null;
-      return state.catalog.dir==="desc"?Math.max(...ps):Math.min(...ps);
+      return ps.length?Math.min(...ps):null;
     };
     groups.sort((a,b)=>{
       const d=cmpPrice(groupPrice(a),groupPrice(b));
       return d||String(a.card?.id||"").localeCompare(String(b.card?.id||""),"es",{numeric:true});
+    });
+  }else if(state.catalog.sort==="cost"||state.catalog.sort==="power"){
+    // The UI shows logical cards grouped across variants. Sort the groups by
+    // the same numeric value instead of inheriting the pre-group variant order.
+    const key=state.catalog.sort;
+    groups.sort((a,b)=>{
+      const av=groupNumber(a,key),bv=groupNumber(b,key);
+      const am=av===null,bm=bv===null;
+      if(am||bm){if(am&&bm)return 0;return am?1:-1}
+      const d=(av-bv)*dir;
+      return d||String(a.card?.id||"").localeCompare(String(b.card?.id||""),"es",{numeric:true})*dir;
     });
   }
   return groups;
