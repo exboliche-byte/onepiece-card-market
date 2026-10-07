@@ -1545,9 +1545,16 @@ function scannerStatusHtml(){
   const cls=s.error?"validation bad":(s.active?"validation ok":"notice");
   return '<div class="'+cls+'"><b>'+(s.error?esc(s.error):esc(s.status||"Cámara detenida"))+'</b>'+(Number.isFinite(Number(s.confidence))?'<div class="small">Confianza OCR: '+Math.round(Number(s.confidence))+'%</div>':"")+'</div>';
 }
+function updateScannerControls(){
+  const start=$("#scannerStart"),stop=$("#scannerStop"),now=$("#scannerNow");
+  if(start){start.textContent=state.scanner.active?"Cámara activa":"Iniciar cámara";start.disabled=state.scanner.active}
+  if(stop)stop.disabled=!state.scanner.active;
+  if(now)now.disabled=!state.scanner.active;
+}
 function renderScannerResult(){
   const host=$("#scannerResult");if(host)host.innerHTML=scannerResultHtml();
   const status=$("#scannerStatus");if(status)status.innerHTML=scannerStatusHtml();
+  updateScannerControls();
   document.querySelectorAll("[data-scanner-add]").forEach(b=>b.onclick=()=>scannerAdd(b.dataset.scannerAdd));
   document.querySelectorAll("[data-scanner-detail]").forEach(b=>b.onclick=()=>openCardDetail(b.dataset.scannerDetail));
 }
