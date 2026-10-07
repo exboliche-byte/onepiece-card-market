@@ -949,10 +949,15 @@ async function main() {
     const currentPrintSet = printSetCode(card);
     const currentVariantKind = variantKind(card);
     const exactCandidates = allProductsForCard(card, products, languageMap.englishExpansionIdsBySet, languageMap.expansionNamesById);
-    // Never fall back to the whole Cardmarket catalog here: a matching
-    // card number can exist in several expansions/reprints. The primary
-    // product must belong to this card's own expansion.
-    const productPool = exactCandidates;
+    // A variant without an exact-print oracle/Limitless mapping must never be
+    // guessed from Cardmarket's expansion pool: that is how sibling prints
+    // ended up sharing another version's price/link. Base prints can still use
+    // the expansion product catalog; variants require exact-print evidence.
+    const hasExactOracle = !!(
+      exactPrintOracle?.urlsByPrint?.get(String(card.id))?.length ||
+      priceNumber(exactPrintOracle?.priceByPrint?.get(String(card.id))) !== null
+    );
+    const productPool = isVariant && !hasExactOracle ? [] : exactCandidates;
     const desiredMarketVersion = localVersion(card.id);
     const product = chooseProduct(
       card,
