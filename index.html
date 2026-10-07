@@ -319,7 +319,7 @@ function groupPriceStats(g){
   const prices=g.versions.map(priceOf).filter(v=>Number.isFinite(Number(v))).map(Number);
   if(!prices.length)return {min:null,max:null,sort:null};
   const min=Math.min(...prices),max=Math.max(...prices);
-  return {min,max,sort:state.catalog.dir==="desc"?max:min};
+  return {min,max,sort:min};
 }
 function groupFiltered(){
   const groups=groupCardList(filteredCards("catalog"));
