@@ -20,10 +20,13 @@ function titleOf(html,fallback){
 }
 function productLinks(html){
   const out=new Set();
-  for(const m of String(html||"").matchAll(/href=["'](\/cards\/en\/[^"'?#]+)["']/gi)){
-    const path=m[1];
-    if(/^\/cards\/en\/(?:P-\d{3}|(?:OP|ST|EB|PRB)\d{2}-\d{3})$/i.test(path))continue;
-    out.add(new URL(path,"https://onepiece.limitlesstcg.com").toString());
+  const text=String(html||"");
+  // Limitless has used absolute, root-relative and bare relative links over time.
+  // Parse the route itself instead of depending on one HTML href shape.
+  for(const m of text.matchAll(/(?:https?:\/\/onepiece\.limitlesstcg\.com)?\/?cards\/en\/([a-z0-9][a-z0-9-]+)/gi)){
+    const slug=m[1];
+    if(/^(?:P-\d{3}|(?:OP|ST|EB|PRB)\d{2}-\d{3})$/i.test(slug))continue;
+    out.add("https://onepiece.limitlesstcg.com/cards/en/"+slug);
   }
   return [...out];
 }
