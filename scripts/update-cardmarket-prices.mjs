@@ -205,7 +205,12 @@ async function loadCardmarketExpansionLanguageMap() {
     for (const entry of entries) {
       const id = Number(entry?.expansionId);
       if (!Number.isFinite(id) || japaneseIds.has(id)) continue;
+      const entryExpansion = norm(entry?.expansionName);
+      const entryIsPromo = /(^|\\s)(promo|promos)(\\s|:|-|$)/i.test(entryExpansion);
       for (const setCode of Object.keys(CARDMARKET_SET_NAMES)) {
+        // Do not let "Promos: <set>" satisfy the fuzzy match for the main
+        // "<set>" expansion. Promo cards reuse the same printed card number.
+        if (entryIsPromo) continue;
         if (expansionMatches(setCode, entry?.expansionName)) {
           if (!englishExpansionIdsBySet.has(setCode)) englishExpansionIdsBySet.set(setCode, new Set());
           englishExpansionIdsBySet.get(setCode).add(id);
@@ -251,24 +256,13 @@ function extractCardCode(text) {
 }
 
 function expansionMatches(setCode, expansionName, localSetName = "") {
-  const wanted = [...(CARDMARKET_SET_NAMES[setCode] || []), localSetName]
-    .map(norm)
-    .filter(Boolean);
+  const wanted = [...(CARDMARKET_SET_NAMES[setCode] || []), localSetName];
   const target = norm(expansionName);
   if (!target) return false;
-
-  // Cardmarket has dedicated promo expansions such as
-  // "Promos: Wings of the Captain" whose products reuse the printed OP06
-  // numbers. They must never be considered part of the main expansion.
-  const isPromo = /(^|\\s)(promo|promos)(\\s|:|-|$)/i.test(target);
-  const wantedIsPromo = wanted.some(name => /(^|\\s)(promo|promos)(\\s|:|-|$)/i.test(name));
-  if (isPromo !== wantedIsPromo) return false;
-
-  // Keep the tolerant matching for harmless naming differences, but only
-  // after explicitly separating promo expansions from their main set.
-  return wanted.some(candidate =>
-    candidate === target || candidate.includes(target) || target.includes(candidate)
-  );
+  return wanted.some(name => {
+    const candidate = norm(name);
+    return candidate && (candidate === target || candidate.includes(target) || target.includes(candidate));
+  });
 }
 
 function readProducts(data) {
