@@ -8,6 +8,7 @@ const REMOTE_ALLSETS_URL = "https://raw.githubusercontent.com/hugoprudente/optcg
 const OPASSETS_HISTORY_DIR_URL = "https://api.github.com/repos/ryscode/OPASSETS/contents/CM-Data/Final/PriceHistory?ref=main";
 const EXACT_PRINTMAP_URL = "https://raw.githubusercontent.com/michalkiral/optcg-data/main/data/prices/printmap.json";
 const EXACT_PRINT_PRICES_URL = "https://raw.githubusercontent.com/michalkiral/optcg-data/main/data/prices/summary.json";
+const LIMITLESS_CARD_URL = "https://onepiece.limitlesstcg.com/cards/en/";
 
 const CARDMARKET_SET_NAMES = {
   "P": ["Promos", "Special Tournaments Promos", "Premium Bandai Products"],
@@ -327,6 +328,144 @@ function cardNameMatches(card, product) {
   if (actual === wanted) return 6;
   if (actual.includes(wanted) || wanted.includes(actual)) return 3;
   return 0;
+}
+
+
+function parseLimitlessPrice(value) {
+  const raw = String(value || "").trim().replace(/[^\d.,]/g, "");
+  if (!raw) return null;
+  const normalized = raw.includes(",") && raw.includes(".")
+    ? raw.replace(/\./g, "").replace(",", ".")
+    : raw.replace(",", ".");
+  const n = Number(normalized);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+function parseLimitlessPage(html, requestedUrl) {
+  const text = String(html || "");
+  const titleMatch = text.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+  const title = String(titleMatch?.[1] || "").replace(/\s+/g, " ").trim();
+  const titleParts = title.split(/\s*[•|]\s*/);
+  const expansion = String(titleParts[1] || "")
+    .replace(/\s*[–-]\s*Limitless One Piece.*$/i, "")
+    .trim();
+
+  const imageMatch = text.match(/<div class="card-image">[\s\S]*?<img[^>]+(?:src|data-src)="([^"]+)"/i);
+  const imageUrl = String(imageMatch?.[1] || "");
+  const imageNameMatch = imageUrl.match(/\/one-piece\/[^/]+\/([^/?"]+?)(?:_(?:EN|ES|JP))?\.(?:webp|png|jpe?g)(?:[?#].*)?$/i);
+  const printId = imageNameMatch ? decodeURIComponent(imageNameMatch[1]) : null;
+
+  const vendorMatch = text.match(/<a[^>]+class="card-buy-button eur"[^>]+href="([^"]+)"[\s\S]*?<span class="card-price eur">([^<]+)<\/span>/i);
+  const cardmarketUrl = vendorMatch?.[1]
+    ? String(vendorMatch[1])
+        .replace(/[?&]utm_source=[^&"]+/gi, "")
+        .replace(/[?&]utm_medium=[^&"]+/gi, "")
+        .replace(/[?&]utm_campaign=[^&"]+/gi, "")
+        .replace(/[?&]$/, "")
+    : null;
+  const eur = vendorMatch?.[2] ? parseLimitlessPrice(vendorMatch[2]) : null;
+
+  const versionLinks = [...text.matchAll(/href="(\/cards\/en\/[^"?]+)\?v=(\d+)"/gi)]
+    .map(match => ({
+      version: Number(match[2]),
+      url: new URL(match[1] + "?v=" + match[2], "https://onepiece.limitlesstcg.com").toString()
+    }))
+    .filter(item => Number.isFinite(item.version));
+
+  return {requestedUrl, title, expansion, imageUrl, printId, eur, cardmarketUrl, versionLinks};
+}
+
+async function loadLimitlessPrintMappings(cards) {
+  const groups = new Map();
+  for (const card of cards) {
+    const base = baseId(card?.id).toUpperCase();
+    if (!groups.has(base)) groups.set(base, []);
+    groups.get(base).push(card);
+  }
+
+  const needed = [];
+  for (const [base, group] of groups) {
+    const hasVariants = group.some(card => String(card?.id || "").toUpperCase() !== base);
+    const isPromo = /^P-\d{3}$/i.test(base);
+    if (hasVariants || isPromo) needed.push([base, group]);
+  }
+
+  const result = new Map();
+  let cursor = 0;
+
+  const fetchHtml = async (url) => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
+    try {
+      const response = await fetch(url, {
+        cache: "no-store",
+        signal: controller.signal,
+        headers: {
+          "accept": "text/html,application/xhtml+xml",
+          "user-agent": "MiAlbumOnePiece/1.0 (+Limitless exact printing mapper)"
+        }
+      });
+      if (!response.ok) return null;
+      return await response.text();
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+
+  const assignPage = (map, localIds, page, limitlessVersion) => {
+    const printId = String(page?.printId || "").toUpperCase();
+    if (!printId || !localIds.has(printId)) return;
+    if (!page.cardmarketUrl && page.eur === null) return;
+    map.set(printId, {
+      eur: page.eur,
+      url: page.cardmarketUrl ? page.cardmarketUrl.replace("/en/OnePiece/", "/es/OnePiece/") : null,
+      expansion: page.expansion || null,
+      limitlessUrl: page.requestedUrl,
+      limitlessVersion
+    });
+  };
+
+  const worker = async () => {
+    while (true) {
+      const index = cursor++;
+      if (index >= needed.length) return;
+      const [base, group] = needed[index];
+      const localIds = new Set(group.map(card => String(card.id).toUpperCase()));
+      try {
+        const baseUrl = LIMITLESS_CARD_URL + encodeURIComponent(base);
+        const baseHtml = await fetchHtml(baseUrl);
+        if (!baseHtml) continue;
+        const basePage = parseLimitlessPage(baseHtml, baseUrl);
+
+        // The un-versioned Limitless page is the exact base print.
+        if (localIds.has(base)) {
+          assignPage(result, localIds, basePage, null);
+        }
+
+        // Every versioned Limitless page carries the official image filename,
+        // which is the exact local print ID (P-001_p1, OP06-021_p2, ...).
+        const versions = [...new Map(
+          (basePage.versionLinks || []).map(item => [item.version, item])
+        ).values()];
+
+        await Promise.all(versions.map(async ({version, url}) => {
+          try {
+            const html = await fetchHtml(url);
+            if (!html) return;
+            const page = parseLimitlessPage(html, url);
+            assignPage(result, localIds, page, version);
+          } catch (error) {
+            console.warn("Limitless version mapping failed:", base, version, error?.message || error);
+          }
+        }));
+      } catch (error) {
+        console.warn("Limitless base mapping failed:", base, error?.message || error);
+      }
+    }
+  };
+
+  await Promise.all(Array.from({length:4}, () => worker()));
+  return result;
 }
 
 function externalExpansionSlug(url) {
@@ -686,6 +825,7 @@ async function main() {
   const cards = catalog.cards.map(card => ({
     ...card, set_name: String(card.set_name || dynamicSetNames.get(card.set) || "")
   })).filter(card => !isJapaneseCard(card));
+  const limitlessPrintMappings = await loadLimitlessPrintMappings(cards);
 
   const allProducts = readProducts(productsRaw);
   const products = allProducts.filter(product => isEnglishProduct(product, languageMap.japaneseExpansionIds));
@@ -728,15 +868,13 @@ async function main() {
       exactPrintOracle,
       prices
     );
-    if (!product) {
+    const limitlessPrint = limitlessPrintMappings.get(String(card.id).toUpperCase());
+
+    if (!product && !limitlessPrint) {
       unmatched.push(card.id);
       const prior = oldCards[card.id] || {};
-
-    const oraclePrice = Number(exactPrintOracle?.priceByPrint?.get(String(card.id)));
-    const oracleUrls = exactPrintOracle?.urlsByPrint?.get(String(card.id)) || [];
-    const oracleUrl = oracleUrls[0] || null;
-    outputCards[card.id] = {
-        eur: Number.isFinite(oraclePrice) && oraclePrice > 0 ? oraclePrice : null,
+      outputCards[card.id] = {
+        eur: null,
         trend: null,
         low: null,
         avg: null,
@@ -747,7 +885,7 @@ async function main() {
         expansionId: null,
         expansion: String(CARDMARKET_SET_NAMES[sourceSetCode(card)]?.[0] || card.set_name || sourceSetCode(card)),
         version: desiredMarketVersion,
-        url: oracleUrl ? oracleUrl.replace("/en/OnePiece/", "/es/OnePiece/") : cardmarketCardUrl(baseCard),
+        url: cardmarketCardUrl(baseCard),
         variantOf: isParallelVariant && baseCard.id !== card.id ? baseCard.id : null,
         launchPrice: priceNumber(prior.launchPrice),
         launchPriceDate: prior.launchPriceDate || null,
@@ -757,8 +895,8 @@ async function main() {
       continue;
     }
 
-    const guide = prices.get(String(product.idProduct));
-    const eur = guide ? priceNumber(
+    const guide = product ? prices.get(String(product.idProduct)) : null;
+    const cardmarketEur = guide ? priceNumber(
       guide.trend,
       guide.TREND,
       guide["Trend Price"],
@@ -767,6 +905,7 @@ async function main() {
       guide.sell,
       guide.SELL
     ) : null;
+    const eur = limitlessPrint?.eur ?? cardmarketEur;
 
     mapped++;
     if (eur !== null) priced++;
@@ -809,13 +948,13 @@ async function main() {
       avg1: guide ? priceNumber(guide.avg1, guide.AVG1, guide["AVG1"]) : null,
       avg7: guide ? priceNumber(guide.avg7, guide.AVG7, guide["AVG7"]) : null,
       avg30: guide ? priceNumber(guide.avg30, guide.AVG30, guide["AVG30"]) : null,
-      cardmarketId: Number(product.idProduct),
-      expansionId: Number(product.idExpansion),
-      expansion: String(languageMap.expansionNamesById?.get(Number(product.idExpansion)) || CARDMARKET_SET_NAMES[sourceSetCode(card)]?.[0] || sourceSetCode(card)),
+      cardmarketId: product ? Number(product.idProduct) : null,
+      expansionId: product ? Number(product.idExpansion) : null,
+      expansion: limitlessPrint?.expansion || String(languageMap.expansionNamesById?.get(Number(product?.idExpansion)) || CARDMARKET_SET_NAMES[sourceSetCode(card)]?.[0] || sourceSetCode(card)),
       version: productVersions?.get(String(product.idProduct)) ?? productVersion(product.name) ?? desiredMarketVersion,
-      url: (exactPrintOracle?.urlsByPrint?.get(String(card.id))?.[0]
+      url: limitlessPrint?.url || (exactPrintOracle?.urlsByPrint?.get(String(card.id))?.[0]
         ? exactPrintOracle.urlsByPrint.get(String(card.id))[0].replace("/en/OnePiece/", "/es/OnePiece/")
-        : "https://www.cardmarket.com/es/OnePiece/Products?idProduct=" + encodeURIComponent(String(product.idProduct))),
+        : (product ? "https://www.cardmarket.com/es/OnePiece/Products?idProduct=" + encodeURIComponent(String(product.idProduct)) : cardmarketCardUrl(baseCard))),
       collections,
       launchPrice,
       launchPriceDate,
