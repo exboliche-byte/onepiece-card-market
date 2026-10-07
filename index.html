@@ -36,9 +36,12 @@ const norm=s=>String(s??"").toLowerCase().normalize("NFD").replace(/[\u0300-\u03
 const money=n=>Number.isFinite(Number(n))?Number(n).toLocaleString("es-ES",{style:"currency",currency:"EUR"}):"—";
 const safeId=id=>String(id||"");
 const imagePreloadCache=new Map();
-const officialImageUrl=c=>String(c?.image||"").trim()||("https://en.onepiece-cardgame.com/images/cardlist/card/"+encodeURIComponent(c?.id||"")+".png");
+const officialImageUrl=c=>{
+  const source=importedSourceCard(c)||c;
+  return String(source?.image||source?.imageUrl||c?.image||"").trim()||("https://en.onepiece-cardgame.com/images/cardlist/card/"+encodeURIComponent(source?.id||c?.id||"")+".png");
+};
 const imageUrl=c=>officialImageUrl(c);
-const imageCdnUrl=c=>"https://optcg-api.arjunbansal-ai.workers.dev/images/"+encodeURIComponent(c?.id||"");
+const imageCdnUrl=c=>{const source=importedSourceCard(c)||c;return "https://optcg-api.arjunbansal-ai.workers.dev/images/"+encodeURIComponent(source?.id||c?.id||"")};
 const fallbackImageUrl=c=>"https://images.weserv.nl/?url="+encodeURIComponent(officialImageUrl(c).replace("https://","").replace("http://",""));
 function preloadCardImage(c){const u=imageCdnUrl(c);if(!u||imagePreloadCache.has(u))return;const im=new Image();im.src=u;imagePreloadCache.set(u,im)}
 function cardImg(c,cls="cardimg"){
@@ -71,7 +74,9 @@ function variantKindOf(c){
   return "base";
 }
 function printSetOf(c){
-  return String(c?.importPrintSet||priceMeta(c)?.printSet||"").trim();
+  const saved=state.importedCards?.[c?.id]||{};
+  const imported=String(c?.importPrintSet||saved?.importPrintSet||"").trim();
+  return imported||catalogPrintSetOf(c)||String(directMarketMeta(c)?.printSet||"").trim();
 }
 function groupKey(c){
   return norm(baseId(c?.id));
@@ -324,7 +329,7 @@ function cmpPrice(a,b){
   return d*(state.catalog.dir==="desc"?-1:1);
 }
 let priceDatasetPromise=null;
-const PRICE_CACHE_VERSION=14;
+const PRICE_CACHE_VERSION=15;
 const MARKET_DATA_URL="/data/cardmarket-prices.json";
 function priceOf(c){
   const key=c?.id;
@@ -357,6 +362,14 @@ function priceOf(c){
     const n=Number(match?.eur);
     if(Number.isFinite(n)&&n>0)return n;
   }
+
+  // Último recurso para una impresión importada que aún no existe en el
+  // catálogo dinámico: conservar el último precio conocido del propio CSV.
+  // En cuanto exista una resolución dinámica exacta, los candidatos de arriba
+  // tienen prioridad y este valor deja de usarse automáticamente.
+  const saved=state.importedCards?.[c?.id]||{};
+  const importedPrice=Number(c?.importUnitPrice??saved?.importUnitPrice);
+  if(Number.isFinite(importedPrice)&&importedPrice>0)return importedPrice;
   return null;
 }
 function selectPrimaryMarketEntry(id,entry){
@@ -437,8 +450,14 @@ function cardmarketVersionLabel(c){
   const m=String(c?.id||"").match(/_(?:p|r|c)(\d+)$/i);
   return m?"(V."+(Number(m[1])+1)+")":"(V.1)";
 }
-function priceMeta(c){
+function directMarketMeta(c){
   return state.marketMeta?.[c?.id] || state.marketMeta?.[norm(c?.id)] || {};
+}
+function priceMeta(c){
+  const own=directMarketMeta(c);
+  if(own&&Object.keys(own).length)return own;
+  const source=importedSourceCard(c);
+  return source?directMarketMeta(source):{};
 }
 function cardmarketUrl(c){
   const meta=priceMeta(c);
@@ -1066,10 +1085,11 @@ function csvRarity(c){
   return r==="Leader"?"L":r==="Common"?"C":r==="Uncommon"?"UC":r==="Rare"?"R":r==="Super Rare"?"SR":r==="Secret Rare"?"SEC":r==="Special"?"SP":r||"";
 }
 function csvVariant(c){
-  const kind=variantKindOf(c);
-  const printSet=printSetOf(c);
-  if(c?.importVariantId){
-    return {variant_id:String(c.importVariantId),variant_kind:kind,print_set:printSet};
+  const saved=c?.importVariantId?c:(state.importedCards?.[c?.id]||{});
+  const kind=String(saved?.importVariantKind||variantKindOf(c)||"base").toLowerCase();
+  const printSet=String(saved?.importPrintSet||printSetOf(c)||"").trim();
+  if(saved?.importVariantId){
+    return {variant_id:String(saved.importVariantId),variant_kind:kind,print_set:printSet};
   }
   const id=String(c?.id||"");
   if(kind==="base")return {variant_id:id+"_base",variant_kind:"base",print_set:printSet};
@@ -1154,11 +1174,34 @@ function marketCollectionMatchesSet(collection,wantedSet){
     .filter(Boolean);
   return names.some(name=>name===target||name.includes(target)||target.includes(name));
 }
+function exactMarketSetOf(c){
+  const meta=directMarketMeta(c);
+  const productId=Number(meta?.cardmarketId);
+  if(!Number.isFinite(productId))return "";
+  const exact=(meta?.collections||[]).find(x=>
+    Number(x?.cardmarketId)===productId&&normalizePrintSet(x?.setCode)
+  );
+  return normalizePrintSet(exact?.setCode);
+}
 function catalogPrintSetOf(c){
-  return normalizePrintSet(c?.importPrintSet)||
-    printSetCodeFromText(c?.set_name)||
-    normalizePrintSet(priceMeta(c)?.printSet)||
-    (variantKindOf(c)==="base"?(printSetCodeFromText(c?.set)||normalizePrintSet(c?.set)):"");
+  const imported=normalizePrintSet(c?.importPrintSet);
+  if(imported)return imported;
+
+  // "Promotion card" es más específico que el set lógico de la carta.
+  const nameCode=printSetCodeFromText(c?.set_name);
+  if(nameCode==="P")return "P";
+
+  // Para casos como EB04 dentro de OP14, usar el set del MISMO producto
+  // Cardmarket. No usar toda la lista collections: contiene otras reimpresiones.
+  const exactMarketSet=exactMarketSetOf(c);
+  if(exactMarketSet)return exactMarketSet;
+  if(nameCode)return nameCode;
+
+  const metaSet=normalizePrintSet(directMarketMeta(c)?.printSet);
+  if(metaSet)return metaSet;
+  return variantKindOf(c)==="base"
+    ?(printSetCodeFromText(c?.set)||normalizePrintSet(c?.set))
+    :"";
 }
 function csvPrintSetMatches(c,value){
   const raw=String(value||"").trim();
@@ -1167,18 +1210,55 @@ function csvPrintSetMatches(c,value){
   const candidateCode=catalogPrintSetOf(c);
   if(wantedCode&&candidateCode&&wantedCode===candidateCode)return true;
 
-  // Some official catalog entries keep the printed card under its EB code while
-  // Cardmarket/CSV identifies the release as OP14/OP15. Accept any set code
-  // explicitly attached to this exact print by the live market dataset.
-  const meta=priceMeta(c);
-  const marketCodes=[
-    normalizePrintSet(meta?.printSet),
-    ...(meta?.collections||[]).map(x=>normalizePrintSet(x?.setCode))
-  ].filter(Boolean);
-  if(wantedCode&&(marketCodes.includes(wantedCode)||(meta?.collections||[]).some(x=>marketCollectionMatchesSet(x,wantedCode))))return true;
-
+  // Solo comparar la identidad propia de esta impresión. La lista histórica
+  // collections nunca debe convertir otra versión de la carta en candidata.
   const wantedName=csvSetNameKey(raw),candidateName=csvSetNameKey(c?.set_name);
   return wantedName.length>=5&&candidateName.includes(wantedName);
+}
+function importMarketSource(logicalId,kind,printSet,rawVariant="",priceHint=null){
+  const logical=String(logicalId||"").trim().toUpperCase();
+  const wantedKind=String(kind||"").trim().toLowerCase()||"base";
+  const wantedSet=String(printSet||"").trim();
+  if(!logical||!wantedSet)return null;
+
+  const candidates=state.cards.filter(c=>
+    !c?.syntheticImport&&
+    norm(baseId(c?.id))===norm(logical)&&
+    variantKindOf(c)===wantedKind&&
+    csvPrintSetMatches(c,wantedSet)
+  );
+  const normalizedVariant=String(rawVariant||"").trim().replace(/_base$/i,"");
+  const exact=candidates.find(c=>norm(c.id)===norm(normalizedVariant));
+  if(exact)return exact;
+  if(candidates.length===1)return candidates[0];
+
+  const hint=Number(priceHint);
+  if(Number.isFinite(hint)&&hint>0&&candidates.length>1){
+    const ranked=candidates.map(c=>({
+      card:c,
+      price:Number(state.prices?.[c.id]??state.prices?.[norm(c.id)])
+    })).filter(x=>Number.isFinite(x.price)&&x.price>0)
+      .map(x=>({...x,diff:Math.abs(Math.log(x.price/hint))}))
+      .sort((a,b)=>a.diff-b.diff);
+    if(ranked.length===1||(ranked.length>1&&ranked[1].diff-ranked[0].diff>0.08))return ranked[0].card;
+  }
+  return null;
+}
+function importedSourceCard(c){
+  if(!c?.syntheticImport&&!c?.importVariantId)return null;
+  const wantedSet=String(c?.importPrintSet||"").trim();
+  const explicit=String(c?.importResolvedCardId||"").trim();
+  if(explicit){
+    const source=state.cards.find(x=>!x?.syntheticImport&&norm(x.id)===norm(explicit));
+    if(source&&(!wantedSet||csvPrintSetMatches(source,wantedSet)))return source;
+  }
+  return importMarketSource(
+    baseId(c?.id||c?.importVariantId),
+    c?.importVariantKind||"base",
+    wantedSet,
+    c?.importVariantId||"",
+    c?.importUnitPrice
+  );
 }
 function resolveCSVPrint(logicalId,rawVariant,kind,printSet){
   const logical=String(logicalId||"").trim().toUpperCase();
@@ -1189,14 +1269,12 @@ function resolveCSVPrint(logicalId,rawVariant,kind,printSet){
   const compatible=candidates.filter(c=>variantKindOf(c)===wantedKind);
 
   if(wantedSet){
-    // Si el CSV indica la expansión de impresión, esa expansión manda.
-    // variant_id solo es exacto si además pertenece a esa impresión.
-    const bySet=compatible.filter(c=>csvPrintSetMatches(c,wantedSet));
-    const exactSet=bySet.find(c=>norm(c.id)===norm(normalizedVariant));
-    if(exactSet)return exactSet;
-    if(bySet.length===1)return bySet[0];
-    // No aceptar una variante de otra expansión solo porque coincida el sufijo.
-    return null;
+    // variant_id es la identidad de la fila. Nunca sustituirlo por otro sufijo:
+    // solo reutilizamos una carta del catálogo si ID, tipo e impresión coinciden.
+    const exact=compatible.find(c=>
+      norm(c.id)===norm(normalizedVariant)&&csvPrintSetMatches(c,wantedSet)
+    );
+    return exact||null;
   }
 
   const exact=compatible.find(c=>norm(c.id)===norm(normalizedVariant));
@@ -1210,10 +1288,13 @@ function syntheticCSVCard(row,logicalId,variantId,kind,printSet){
   let id=originalVariant.replace(/_base$/i,"")||logical;
   const base=state.cards.find(c=>norm(c.id)===norm(logical))||state.cards.find(c=>norm(baseId(c.id))===norm(logical))||null;
   const wantedSet=normalizePrintSet(printSet);
+  const rawPrice=Number(String(row?.unit_price||"").replace(",","."));
+  const priceHint=Number.isFinite(rawPrice)&&rawPrice>0?rawPrice:null;
+  const marketSource=importMarketSource(logical,kind,printSet,originalVariant,priceHint);
 
   // Una misma carta base puede existir en otra expansión con el mismo variant_id.
-  // Usamos una clave interna distinta para no mezclar las cantidades, pero
-  // conservamos el variant_id original al exportar.
+  // Usamos una clave interna distinta para no mezclar cantidades, pero el
+  // variant_id original del CSV se conserva intacto para la siguiente exportación.
   const existing=state.cards.find(c=>norm(c.id)===norm(id));
   if(existing&&wantedSet&&!csvPrintSetMatches(existing,printSet)){
     id=logical+"__csv_"+wantedSet.toLowerCase()+"_"+String(kind||"base").toLowerCase();
@@ -1235,13 +1316,16 @@ function syntheticCSVCard(row,logicalId,variantId,kind,printSet){
     image:(()=>{
       const visualId=originalVariant.replace(/_base$/i,"")||logical;
       const exactVisual=state.cards.find(c=>norm(c.id)===norm(visualId));
-      return String(exactVisual?.image||exactVisual?.imageUrl||"https://asia-en.onepiece-cardgame.com/images/cardlist/card/"+encodeURIComponent(visualId)+".png");
+      const visual=marketSource||exactVisual;
+      return String(visual?.image||visual?.imageUrl||"https://asia-en.onepiece-cardgame.com/images/cardlist/card/"+encodeURIComponent(visual?.id||visualId)+".png");
     })(),
     isParallel:kind==="parallel",
     syntheticImport:true,
     importVariantId:originalVariant,
     importPrintSet:String(printSet||""),
-    importVariantKind:String(kind||"base")
+    importVariantKind:String(kind||"base"),
+    importResolvedCardId:String(marketSource?.id||""),
+    importUnitPrice:priceHint
   };
 }
 function previewImport(text){
@@ -1255,6 +1339,7 @@ function previewImport(text){
       variant_kind:["variant_kind","version_kind","kind"],
       print_set:["print_set","printing_set","reprint_set"],
       card_set:["card_set","cardset","card_set_name"],
+      unit_price:["unit_price","price","precio"],
       name:["name","nombre"],
       set_code:["set_code","set"],
       set_name:["set_name","expansion"],
@@ -1265,7 +1350,7 @@ function previewImport(text){
     const idx={};for(const [k,names] of Object.entries(aliases))idx[k]=findIndex(names);
     if(idx.card_id===undefined||idx.quantity===undefined)throw Error("El CSV debe contener las columnas card_id y quantity.");
 
-    const imported=new Map(),unknown=[],created={},resolvedByPrintSet=[];
+    const imported=new Map(),unknown=[],created={},importMeta={},resolvedByPrintSet=[];
     for(const r of rows.slice(1)){
       const get=k=>idx[k]===undefined?"":String(r[idx[k]]??"").trim();
       const logicalId=get("card_id").toUpperCase();
@@ -1280,10 +1365,23 @@ function previewImport(text){
 
       let match=resolveCSVPrint(logicalId,rawVariant,kind,printSet);
       if(match&&printSet&&norm(match.id)!==norm(rawVariant.replace(/_base$/i,"")))resolvedByPrintSet.push(logicalId+" → "+match.id);
+      const unitPriceRaw=Number(get("unit_price").replace(",","."));
+      const unitPrice=Number.isFinite(unitPriceRaw)&&unitPriceRaw>0?unitPriceRaw:null;
       if(!match){
-        const row={name:get("name"),set_code:get("set_code"),set_name:get("set_name"),rarity:get("rarity")};
+        const row={name:get("name"),set_code:get("set_code"),set_name:get("set_name"),rarity:get("rarity"),unit_price:get("unit_price")};
         match=syntheticCSVCard(row,logicalId,rawVariant,kind,printSet);
         created[match.id]=match;
+      }else if(unitPrice!==null){
+        // Guardar el precio de la fila solo como respaldo. No modifica el
+        // catálogo ni sustituye el precio dinámico cuando éste existe.
+        importMeta[match.id]={
+          id:match.id,
+          importVariantId:rawVariant,
+          importVariantKind:kind,
+          importPrintSet:String(printSet||""),
+          importUnitPrice:unitPrice,
+          metadataOnly:true
+        };
       }
       imported.set(match.id,(imported.get(match.id)||0)+q);
     }
@@ -1301,7 +1399,7 @@ function previewImport(text){
       "\n\nCada cantidad se guardará en su impresión exacta. No se sustituirá una reimpresión/paralela por la carta base.";
     if(confirm(msg+"\n\nAceptar = importar. Cancelar = no cambiar nada.")){
       state.owned={};
-      state.importedCards={...state.importedCards,...created};
+      state.importedCards={...state.importedCards,...created,...importMeta};
       for(const [id,q] of imported)if(q>0)state.owned[id]=q;
       saveLocal();
       prepareCatalog(state.cards.filter(c=>!c.syntheticImport),state.packs);
