@@ -92,8 +92,24 @@ function localVersion(id) {
 
 function productVersion(name) {
   const m = String(name || "").match(/\(\s*V\.?\s*(\d+)\s*\)/i);
-  return m ? Number(m[1]) : 1;
+  return m ? Number(m[1]) : null;
 }
+
+function sourceSetCode(card) {
+  const code = extractCardCode(baseId(card?.id));
+  if (!code) return String(card?.set || "").toUpperCase();
+  const prefix = code.split("-")[0];
+  const m = prefix.match(/^(OP|EB|ST|PRB)(\d{2})$/i);
+  return m ? m[1].toUpperCase() + "-" + m[2] : prefix.toUpperCase();
+}
+
+function cardmarketCardUrl(card) {
+  const code = extractCardCode(baseId(card?.id));
+  const slug = norm(card?.name || "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  if (!code || !slug) return "https://www.cardmarket.com/es/OnePiece/Cards";
+  return "https://www.cardmarket.com/es/OnePiece/Cards/" + slug + "-" + code;
+}
+
 
 function extractCardCode(text) {
   const m = String(text || "").toUpperCase().match(/\b((?:OP|EB|ST|PRB)\d{2})[- ](\d{3})\b/);
@@ -195,12 +211,13 @@ function candidateScore(card, product) {
   return score;
 }
 
-function chooseProduct(card, productsBySetAndNumber) {
+function chooseProduct(card, productsBySetAndNumber, primaryExpansionBySet) {
   const base = baseId(card.id).toUpperCase();
   const cardCode = extractCardCode(base);
-  const cardSet = String(card.set || "").toUpperCase();
   const number = numberPart(base);
   const desiredVersion = localVersion(card.id);
+  const sourceSet = sourceSetCode(card);
+  const primaryExpansionId = primaryExpansionBySet.get(sourceSet);
 
   const pool = [];
   for (const product of productsBySetAndNumber) {
@@ -208,16 +225,24 @@ function chooseProduct(card, productsBySetAndNumber) {
     const code = extractCardCode(product?.name);
     if (code && cardCode) {
       if (code !== cardCode) continue;
+    } else if (number) {
+      const pNumber = String(product.number ?? "").trim().replace(/^0+/, "");
+      if (pNumber !== number.replace(/^0+/, "")) continue;
     } else {
-      if (number) {
-        const pNumber = String(product.number ?? "").trim().replace(/^0+/, "");
-        const cNumber = number.replace(/^0+/, "");
-        if (pNumber !== cNumber) continue;
-      }
-      if (!expansionMatches(cardSet, product?.expansionName, card?.set_name)) continue;
+      continue;
     }
+
+    if (primaryExpansionId && Number(product.idExpansion) !== Number(primaryExpansionId)) continue;
+
     const score = candidateScore(card, product);
-    if (score > 0) pool.push({product, score, explicitVersion: /\(\s*V\.?\s*\d+\s*\)/i.test(String(product.name || ""))});
+    if (score > 0) {
+      pool.push({
+        product,
+        score,
+        explicitVersion: productVersion(product.name) !== null,
+        version: productVersion(product.name)
+      });
+    }
   }
 
   pool.sort((a, b) => b.score - a.score || Number(a.product.idProduct) - Number(b.product.idProduct));
@@ -225,7 +250,7 @@ function chooseProduct(card, productsBySetAndNumber) {
 
   const explicitVersions = pool.some(x => x.explicitVersion);
   if (explicitVersions) {
-    return pool.find(x => productVersion(x.product.name) === desiredVersion)?.product || pool[0].product;
+    return pool.find(x => x.version === desiredVersion)?.product || pool[0].product;
   }
 
   return pool[Math.min(desiredVersion - 1, pool.length - 1)].product;
@@ -247,23 +272,28 @@ function buildProductIndex(products) {
   return groups;
 }
 
-function allProductsForCard(card, products) {
+function allProductsForCard(card, products, primaryExpansionBySet) {
   const out = [];
   const base = baseId(card.id).toUpperCase();
   const code = extractCardCode(base);
   const number = numberPart(base);
+  const sourceSet = sourceSetCode(card);
+  const primaryExpansionId = primaryExpansionBySet.get(sourceSet);
+
   for (const product of products) {
     if (!product?.idProduct) continue;
     const pCode = extractCardCode(product.name);
     if (pCode && code) {
       if (pCode !== code) continue;
     } else {
-      if (!expansionMatches(String(card.set || "").toUpperCase(), product.expansionName, card?.set_name)) continue;
       if (number) {
         const pNumber = String(product.number ?? "").trim().replace(/^0+/, "");
         if (pNumber !== number.replace(/^0+/, "")) continue;
+      } else {
+        continue;
       }
     }
+    if (primaryExpansionId && Number(product.idExpansion) !== Number(primaryExpansionId)) continue;
     if (cardNameMatches(card, product) <= 0 && !pCode) continue;
     out.push(product);
   }
@@ -295,6 +325,42 @@ async function readPreviousDataset() {
   }
 }
 
+function primaryExpansionMap(products) {
+  const counts = new Map();
+  const firstSeen = new Map();
+
+  for (const product of products) {
+    const code = extractCardCode(product?.name);
+    const idExpansion = Number(product?.idExpansion);
+    if (!code || !Number.isFinite(idExpansion)) continue;
+
+    const prefix = code.split("-")[0];
+    const m = prefix.match(/^(OP|EB|ST|PRB)(\d{2})$/i);
+    const setCode = m ? m[1].toUpperCase() + "-" + m[2] : prefix.toUpperCase();
+
+    if (!counts.has(setCode)) counts.set(setCode, new Map());
+    const byExpansion = counts.get(setCode);
+    byExpansion.set(idExpansion, (byExpansion.get(idExpansion) || 0) + 1);
+
+    const date = String(product?.dateAdded || "");
+    const key = setCode + "|" + idExpansion;
+    const previous = firstSeen.get(key);
+    if (!previous || (date && date < previous)) firstSeen.set(key, date);
+  }
+
+  const out = new Map();
+  for (const [setCode, byExpansion] of counts.entries()) {
+    const candidates = [...byExpansion.entries()].map(([idExpansion, count]) => ({
+      idExpansion,
+      count,
+      firstSeen: firstSeen.get(setCode + "|" + idExpansion) || ""
+    }));
+    candidates.sort((a,b) => b.count - a.count || String(a.firstSeen).localeCompare(String(b.firstSeen)) || a.idExpansion - b.idExpansion);
+    if (candidates[0]) out.set(setCode, candidates[0].idExpansion);
+  }
+  return out;
+}
+
 async function main() {
   const [localRaw, packsRaw, productsRaw, pricesRaw, previous] = await Promise.all([
     fs.readFile(new URL("../data/cards.json", import.meta.url), "utf8").then(JSON.parse),
@@ -317,13 +383,7 @@ async function main() {
   if (!cards.length) throw new Error("Local card catalog is empty");
   if (!products.length) throw new Error("Cardmarket product catalog is empty");
   if (!prices.size) throw new Error("Cardmarket price guide is empty");
-  console.log("CM_DIAGNOSTIC", JSON.stringify({
-    productCount: products.length,
-    zoroProducts: products.filter(p => /Roronoa Zoro \(OP01-001\)/i.test(String(p?.name || ""))).slice(0, 10).map(p => ({idProduct:p?.idProduct,name:p?.name,idExpansion:p?.idExpansion,idMetacard:p?.idMetacard,dateAdded:p?.dateAdded,categoryName:p?.categoryName})),
-    zoroCards: cards.filter(c => c.set === "OP-01" && /^Roronoa Zoro$/i.test(String(c.name || ""))).slice(0, 10).map(c => ({id:c.id,name:c.name,set:c.set,set_name:c.set_name}))
-  }));
-
-  const productIndex = buildProductIndex(products);
+  const primaryExpansionBySet = primaryExpansionMap(products);
   const oldCards = previous?.cards || {};
   const outputCards = {};
   const unmatched = [];
@@ -331,10 +391,28 @@ async function main() {
   let mapped = 0;
 
   for (const card of cards) {
-    const exactCandidates = allProductsForCard(card, products);
-    const product = chooseProduct(card, exactCandidates.length ? exactCandidates : products);
+    const exactCandidates = allProductsForCard(card, products, primaryExpansionBySet);
+    const product = chooseProduct(card, exactCandidates.length ? exactCandidates : products, primaryExpansionBySet);
     if (!product) {
       unmatched.push(card.id);
+      const prior = oldCards[card.id] || {};
+      outputCards[card.id] = {
+        eur: null,
+        trend: null,
+        low: null,
+        avg: null,
+        avg1: null,
+        avg7: null,
+        avg30: null,
+        cardmarketId: null,
+        expansion: String(card.set_name || sourceSetCode(card)),
+        version: localVersion(card.id),
+        url: cardmarketCardUrl(card),
+        launchPrice: priceNumber(prior.launchPrice),
+        launchPriceDate: prior.launchPriceDate || null,
+        source: "Cardmarket public product catalog; fallback to card page when no exact product is published",
+        sourceUrl: "https://www.cardmarket.com/es/OnePiece/Data"
+      };
       continue;
     }
 
@@ -365,7 +443,7 @@ async function main() {
       avg30: guide ? priceNumber(guide.avg30, guide.AVG30, guide["AVG30"]) : null,
       cardmarketId: Number(product.idProduct),
       expansion: String(product.expansionName || card.set_name || card.set),
-      version: productVersion(product.name),
+      version: localVersion(card.id),
       url: "https://www.cardmarket.com/es/OnePiece/Products?idProduct=" + encodeURIComponent(String(product.idProduct)),
       launchPrice,
       launchPriceDate,
@@ -374,7 +452,8 @@ async function main() {
     };
   }
 
-  const coverage = Object.keys(outputCards).length / Math.max(1, cards.length);
+  const coverage = mapped / Math.max(1, cards.length);
+  const linkCoverage = Object.keys(outputCards).length / Math.max(1, cards.length);
   const createdAt = pricesRaw?.createdAt || new Date().toISOString();
   const payload = {
     schemaVersion: 7,
@@ -397,7 +476,7 @@ async function main() {
   };
 
   if (coverage < MIN_COVERAGE) {
-    throw new Error("Safety check failed: only " + Object.keys(outputCards).length + "/" + cards.length + " cards matched to a Cardmarket product (" + (coverage * 100).toFixed(1) + "%)");
+    throw new Error("Safety check failed: only " + mapped + "/" + cards.length + " cards matched to an exact Cardmarket product (" + (coverage * 100).toFixed(1) + "%)");
   }
 
   const previousUpdated = String(previous?.updatedAt || "");
