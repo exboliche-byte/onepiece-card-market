@@ -36,7 +36,8 @@ jobs:
             return m?m[1]+"-"+m[2]:v;
           };
           const cards=[],packs=[],seen=new Set();
-          for(const [key,payload] of Object.entries(raw||{})){
+          const root=raw?.data&&typeof raw.data==="object"&&!Array.isArray(raw.data)?raw.data:(raw||{});
+          for(const [key,payload] of Object.entries(root)){
             const d=payload?.data||payload;if(!d||!Array.isArray(d.cards))continue;
             const setCode=normalizeSetCode(d.code||key), setName=String(d.name||"").trim(), list=Array.isArray(d.cards)?d.cards:[];
             packs.push({code:setCode,name:setName,cardCount:list.length});
