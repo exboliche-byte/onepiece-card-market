@@ -421,8 +421,7 @@ function allCardmarketProductsForCard(card, products) {
 }
 
 function allProductsForCard(card, products, englishExpansionIdsBySet) {
-  const preferred = [];
-  const fallback = [];
+  const matches = [];
   const base = baseId(card.id).toUpperCase();
   const code = extractCardCode(base);
   const number = numberPart(base);
@@ -440,14 +439,15 @@ function allProductsForCard(card, products, englishExpansionIdsBySet) {
       if (pNumber !== number.replace(/^0+/, "")) continue;
     }
 
-    if (preferredExpansionIds?.size) {
-      (preferredExpansionIds.has(Number(product.idExpansion)) ? preferred : fallback).push(product);
-    } else {
-      fallback.push(product);
-    }
+    const expansionId = Number(product.idExpansion);
+    const matchesConfiguredExpansion = preferredExpansionIds?.size
+      ? preferredExpansionIds.has(expansionId)
+      : expansionMatches(sourceSet, product?.expansionName, card?.set_name);
+
+    if (matchesConfiguredExpansion) matches.push(product);
   }
 
-  return preferredExpansionIds?.size && preferred.length ? preferred : fallback;
+  return matches;
 }
 
 function normalizeOptcgSetCode(raw) {
@@ -596,7 +596,10 @@ async function main() {
     const isParallelVariant = Boolean(card.isParallel) || /_p\d+$/i.test(String(card.id));
     const baseCard = cardByBaseId.get(baseId(card.id).toUpperCase()) || card;
     const exactCandidates = allProductsForCard(card, products, languageMap.englishExpansionIdsBySet);
-    const productPool = exactCandidates.length ? exactCandidates : products;
+    // Never fall back to the whole Cardmarket catalog here: a matching
+    // card number can exist in several expansions/reprints. The primary
+    // product must belong to this card's own expansion.
+    const productPool = exactCandidates;
     const desiredMarketVersion = localVersion(card.id);
     const product = chooseProduct(card, productPool, primaryExpansionBySet, productVersions, desiredMarketVersion);
     if (!product) {
