@@ -934,6 +934,7 @@ async function main() {
   const unmatched = [];
   let priced = 0;
   let mapped = 0;
+  let verified = 0;
 
   const cardByBaseId = new Map();
   for (const candidate of cards) {
@@ -976,6 +977,7 @@ async function main() {
       // price or URL when this run cannot verify the exact printing.
       const fallbackEur = oracleEur;
       if (fallbackEur !== null) priced++;
+      if (fallbackEur !== null || oracleUrl) verified++;
       outputCards[card.id] = {
         eur: fallbackEur,
         trend: null,
@@ -1024,6 +1026,7 @@ async function main() {
       : (cardmarketEur ?? oracleEur ?? previousEur);
 
     mapped++;
+    verified++;
     if (eur !== null) priced++;
     const launchPrice = priceNumber(prior.launchPrice) ?? eur;
     const launchPriceDate = prior.launchPriceDate || (launchPrice !== null ? pricesRaw?.createdAt || new Date().toISOString() : null);
@@ -1137,7 +1140,24 @@ async function main() {
     oracleOnly++;
   }
 
-  const coverage = mapped / Math.max(1, cards.length);
+  const mappedCoverage = mapped / Math.max(1, cards.length);
+  const coverage = verified / Math.max(1, cards.length);
+
+  // Regression guard: a versioned printing must never regain an inferred
+  // Cardmarket product ID/expansion. Variant prices and links are exact-only.
+  const unsafeVariants = cards.filter(card => {
+    const id = String(card?.id || "");
+    if (id.toUpperCase() === baseId(id).toUpperCase()) return false;
+    const entry = outputCards[id];
+    if (!entry) return false;
+    if (entry.cardmarketId != null || entry.expansionId != null) return true;
+    if (/\/Cards\//i.test(String(entry.url || ""))) return true;
+    if (priceNumber(entry.eur) !== null && !/(exact[- ]print|Limitless\/Cardmarket)/i.test(String(entry.source || ""))) return true;
+    return false;
+  });
+  if (unsafeVariants.length) {
+    throw new Error("Exact-print safety check failed for variants: " + unsafeVariants.slice(0,12).map(card => card.id).join(", "));
+  }
 
   const createdAt = pricesRaw?.createdAt || new Date().toISOString();
   const payload = {
@@ -1152,6 +1172,8 @@ async function main() {
       productCatalogSingles: products.length,
       priceGuideRows: prices.size,
       mappedCards: mapped,
+      verifiedCards: verified,
+      mappedCoverage: Number(mappedCoverage.toFixed(4)),
       pricedCards: priced,
       priceCards: Object.keys(outputCards).length,
       oracleOnly,
@@ -1164,7 +1186,7 @@ async function main() {
 
   const priceCoverage = priced / Math.max(1, cards.length);
   if (coverage < MIN_COVERAGE) {
-    throw new Error("Safety check failed: only " + mapped + "/" + cards.length + " cards matched to an exact Cardmarket product (" + (coverage * 100).toFixed(1) + "%)");
+    throw new Error("Safety check failed: only " + verified + "/" + cards.length + " catalog cards have verified exact market identity (" + (coverage * 100).toFixed(1) + "%)");
   }
   if (priceCoverage < MIN_COVERAGE) {
     throw new Error("Safety check failed: only " + priced + "/" + cards.length + " catalog cards have a usable EUR price (" + (priceCoverage * 100).toFixed(1) + "%)");
