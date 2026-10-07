@@ -1,4 +1,5 @@
 name: Update Cardmarket prices
+# Runs after catalog mapping changes so the generated dataset is refreshed with the latest version matching rules.
 
 on:
   schedule:
