@@ -836,7 +836,20 @@ async function syncCloud(){
   }catch(e){console.warn("cloud sync",e)}
 }
 async function initSupabase(){
-  try{const m=await import("https://esm.sh/@supabase/supabase-js@2");state.sb=m.createClient(SUPABASE_URL,SUPABASE_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});const s=await state.sb.auth.getSession();state.user=s.data.session?.user||null;if(state.user)await syncCloud();state.sb.auth.onAuthStateChange(()=>setTimeout(async()=>{const s=await state.sb.auth.getSession();state.user=s.data.session?.user||null;if(state.user)await syncCloud();renderShell()},0));}catch(e){console.warn("supabase",e)}
+  try{
+    const m=await import("https://esm.sh/@supabase/supabase-js@2");
+    state.sb=m.createClient(SUPABASE_URL,SUPABASE_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
+    const s=await state.sb.auth.getSession();
+    state.user=s.data.session?.user||null;
+    if(state.user)await syncCloud();
+    renderShell();
+    state.sb.auth.onAuthStateChange(()=>setTimeout(async()=>{
+      const s=await state.sb.auth.getSession();
+      state.user=s.data.session?.user||null;
+      if(state.user)await syncCloud();
+      renderShell();
+    },0));
+  }catch(e){console.warn("supabase",e)}
 }
 async function shareDeck(){
   const d=state.decks.find(x=>x.id===state.deckId);if(!d)return;
