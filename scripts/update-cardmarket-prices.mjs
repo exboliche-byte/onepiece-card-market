@@ -466,9 +466,11 @@ async function main() {
     if (!product) {
       unmatched.push(card.id);
       const prior = oldCards[card.id] || {};
-      if (["OP04-083","OP02-004","ST01-001"].includes(baseId(card.id).toUpperCase())) {
+      if (/_p\d+$/i.test(String(card.id))) {
       console.log(JSON.stringify({
         debugCard: card.id,
+        set: card.set,
+        debugName: card.name,
         chosen: product && {
           idProduct: product.idProduct,
           name: product.name,
