@@ -141,21 +141,7 @@ function isJapaneseCard(card) {
 }
 
 function isEnglishProduct(product = null) {
-  if (isJapaneseExpansion(product?.expansionName) || isJapaneseExpansion(product?.name)) return false;
-  if (japaneseExpansionIds && japaneseExpansionIds.has(Number(product?.idExpansion))) return false;
-  return true;
-}
-
-function collectJapaneseExpansionIds(products) {
-  const ids = new Set();
-  for (const product of products) {
-    const id = Number(product?.idExpansion);
-    if (!Number.isFinite(id)) continue;
-    if (isJapaneseExpansion(product?.expansionName) || isJapaneseExpansion(product?.name)) {
-      ids.add(id);
-    }
-  }
-  return ids;
+  return !isJapaneseExpansion(product?.expansionName) && !isJapaneseExpansion(product?.name);
 }
 
 function sourceSetCode(card) {
