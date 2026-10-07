@@ -135,21 +135,12 @@ function isJapaneseCard(card) {
   return isJapaneseExpansion(card?.id) || isJapaneseExpansion(card?.set) || isJapaneseExpansion(card?.set_name);
 }
 
-function isEnglishProduct(product, japaneseExpansionIds = null) {
-  if (isJapaneseExpansion(product?.expansionName) || isJapaneseExpansion(product?.name)) return false;
-  if (japaneseExpansionIds && japaneseExpansionIds.has(Number(product?.idExpansion))) return false;
-  return true;
-}
-
-function collectJapaneseExpansionIds(products) {
-  const ids = new Set();
-  for (const product of products) {
-    if (!Number.isFinite(Number(product?.idExpansion))) continue;
-    if (isJapaneseExpansion(product?.expansionName) || isJapaneseExpansion(product?.name)) {
-      ids.add(Number(product.idExpansion));
-    }
-  }
-  return ids;
+function isEnglishProduct(product) {
+  // Cardmarket uses separate expansion names for Japanese / Asia Region Legal
+  // products (for example OP17-JP and ST31-JP). Do not blacklist an
+  // idExpansion globally: the same numeric expansion identifier can be
+  // present on legitimate English products in the catalog.
+  return !isJapaneseExpansion(product?.expansionName) && !isJapaneseExpansion(product?.name);
 }
 
 function englishExpansionMatches(card, product) {
@@ -336,7 +327,7 @@ function buildProductIndex(products) {
   return groups;
 }
 
-function allProductsForCard(card, products, primaryExpansionBySet, japaneseExpansionIds) {
+function allProductsForCard(card, products, primaryExpansionBySet) {
   const out = [];
   const base = baseId(card.id).toUpperCase();
   const code = extractCardCode(base);
@@ -345,7 +336,7 @@ function allProductsForCard(card, products, primaryExpansionBySet, japaneseExpan
   const primaryExpansionId = primaryExpansionBySet.get(sourceSet);
 
   for (const product of products) {
-    if (!product?.idProduct || !isEnglishProduct(product, japaneseExpansionIds)) continue;
+    if (!product?.idProduct || !isEnglishProduct(product)) continue;
     const pCode = extractCardCode(product.name);
     if (pCode && code) {
       if (pCode !== code) continue;
@@ -449,8 +440,7 @@ async function main() {
   const ids = new Set(normalized17.map(card => card.id));
   cards = cards.filter(card => !ids.has(card.id)).concat(normalized17).filter(card => !isJapaneseCard(card));
   const allProducts = readProducts(productsRaw);
-  const japaneseExpansionIds = collectJapaneseExpansionIds(allProducts);
-  const products = allProducts.filter(product => isEnglishProduct(product, japaneseExpansionIds));
+  const products = allProducts.filter(product => isEnglishProduct(product));
   const productVersions = buildProductVersionIndex(products);
   const prices = priceGuideIndex(readPrices(pricesRaw));
   if (!cards.length) throw new Error("Local card catalog is empty");
@@ -464,9 +454,9 @@ async function main() {
   let mapped = 0;
 
   for (const card of cards) {
-    const exactCandidates = allProductsForCard(card, products, primaryExpansionBySet, japaneseExpansionIds);
+    const exactCandidates = allProductsForCard(card, products, primaryExpansionBySet);
     const productPool = exactCandidates.length ? exactCandidates : products.filter(product =>
-      isEnglishProduct(product, japaneseExpansionIds) && englishExpansionMatches(card, product)
+      isEnglishProduct(product) && englishExpansionMatches(card, product)
     );
     const product = chooseProduct(card, productPool, primaryExpansionBySet, productVersions);
     if (!product) {
