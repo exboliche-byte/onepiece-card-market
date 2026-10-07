@@ -1,4 +1,4 @@
-const CACHE="mialbumonepiece-v6";
+const CACHE="mialbumonepiece-v7";
 const SHELL=["/","/index.html","/manifest.json","/icon.svg","/data/cards.json","/data/packs.json","/data/cardmarket-prices.json"];
 self.addEventListener("install",event=>{
   event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(SHELL).catch(()=>{})).then(()=>self.skipWaiting()));
@@ -18,8 +18,20 @@ self.addEventListener("fetch",event=>{
     return;
   }
   const isData=url.pathname.startsWith("/data/");
+  if(isData){
+    event.respondWith(
+      caches.match(event.request).then(cached=>{
+        const refresh=fetch(event.request,{cache:"no-store"}).then(response=>{
+          if(response.ok)caches.open(CACHE).then(cache=>cache.put(event.request,response.clone())).catch(()=>{});
+          return response;
+        }).catch(()=>null);
+        return cached||refresh.then(response=>response||new Response("",{status:504}));
+      })
+    );
+    return;
+  }
   event.respondWith(
-    fetch(event.request,{cache:isData?"no-store":"default"}).then(response=>{
+    fetch(event.request,{cache:"default"}).then(response=>{
       if(response.ok)caches.open(CACHE).then(cache=>cache.put(event.request,response.clone())).catch(()=>{});
       return response;
     }).catch(()=>caches.match(event.request).then(cached=>cached||caches.match("/index.html")))

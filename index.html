@@ -317,7 +317,7 @@ async function loadMarketPrices({refresh=false}={}){
   if(!refresh&&priceDatasetPromise)return priceDatasetPromise;
   priceDatasetPromise=(async()=>{
     try{
-      const d=await fetchJson(MARKET_DATA_URL+"?v="+Date.now(),30000);
+      const d=await fetchJson(MARKET_DATA_URL,30000);
       if(!d?.cards||d?.schemaVersion===undefined)throw Error("Invalid Cardmarket dataset");
       mergePriceDataset(d);
       localStorage.setItem("mialbumonepiece_prices",JSON.stringify({version:PRICE_CACHE_VERSION,prices:state.prices,meta:state.marketMeta,updatedAt:state.priceDate}));
@@ -1073,8 +1073,18 @@ async function loadCatalogData(){
   throw Error("No se pudo cargar el catálogo.");
 }
 async function boot(){
-  loadLocal();loadCachedPrices();renderShell();
-  try{const data=await loadCatalogData();prepareCatalog(data.cards,data.packs);state.loading=false;try{await loadMarketPrices()}catch{}await loadShared();renderShell();}catch(e){$("#app").innerHTML='<div class="wrap"><div class="hero"><div><h1>MiAlbumOnePiece</h1><p>No se pudo cargar el catálogo.</p></div></div><div class="section"><div class="notice">Error cargando datos: '+esc(e.message||"desconocido")+'</div><button class="primary btn" onclick="location.reload()">Reintentar</button></div></div>'}
+  loadLocal();renderShell();
+  try{
+    const data=await loadCatalogData();
+    prepareCatalog(data.cards,data.packs);
+    state.loading=false;
+    renderShell();
+    setTimeout(async()=>{
+      try{loadCachedPrices();await loadMarketPrices();renderVisibleOnly();}catch(e){console.warn("market prices",e)}
+    },0);
+    await loadShared();
+    renderShell();
+  }catch(e){$("#app").innerHTML='<div class="wrap"><div class="hero"><div><h1>MiAlbumOnePiece</h1><p>No se pudo cargar el catálogo.</p></div></div><div class="section"><div class="notice">Error cargando datos: '+esc(e.message||"desconocido")+'</div><button class="primary btn" onclick="location.reload()">Reintentar</button></div></div>'}
   initSupabase();
 window.addEventListener("popstate",()=>{
   if(state.detail){
