@@ -21,7 +21,7 @@ assert(cardImgStart>=0&&cardImgEnd>cardImgStart,"cardImg function not found");
 const cardImg=html.slice(cardImgStart,cardImgEnd);
 assert(cardImg.includes('const loading="eager"'),"Rendered card images are not forced to eager loading");
 assert(!cardImg.includes('"lazy"'),"cardImg still contains lazy loading");
-assert(html.includes("function limitlessImageUrl(c)"),"Limitless exact-print image source missing");
+assert(html.includes("const limitlessImageUrl=c=>"),"Limitless exact-print image source missing");
 assert(cardImg.includes("limitlessImageUrl(c)"),"cardImg does not use the exact-print Limitless image source");
 assert(html.includes("function cardImageFallback(el)"),"Multi-source image fallback missing");
 
