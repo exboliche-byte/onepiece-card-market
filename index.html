@@ -838,7 +838,8 @@ async function loadCatalogData(){
     const remoteAllSets=await fetchJson(REMOTE_ALLSETS,30000);
     const cards=[]; const packs=[]; const seen=new Set();
     const normalizeSetCode=raw=>{const v=String(raw||"").trim().toUpperCase();if(v==="OP14")return "OP14-EB04";if(v==="OP15")return "OP15-EB04";const m=v.match(/^(OP|EB|ST|PRB)-?(\d{2})$/i);return m?m[1].toUpperCase()+"-"+m[2]:v};
-    for(const [key,payload] of Object.entries(remoteAllSets||{})){
+    const root=remoteAllSets?.data&&typeof remoteAllSets.data==="object"&&!Array.isArray(remoteAllSets.data)?remoteAllSets.data:(remoteAllSets||{});
+    for(const [key,payload] of Object.entries(root)){
       const d=payload?.data||payload;if(!d||!Array.isArray(d.cards))continue;
       const setCode=normalizeSetCode(d.code||key),setName=String(d.name||"").trim(),setCards=Array.isArray(d.cards)?d.cards:[];
       packs.push({code:setCode,name:setName,cardCount:setCards.length});
