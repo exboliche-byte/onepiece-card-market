@@ -349,7 +349,7 @@ function priceOf(c){
   if(wantedSet){
     const baseKey=baseId(key);
     const base=state.marketMeta?.[baseKey]||state.marketMeta?.[norm(baseKey)]||{};
-    const matches=(base.collections||[]).filter(x=>normalizePrintSet(x?.setCode)===wantedSet);
+    const matches=(base.collections||[]).filter(x=>marketCollectionMatchesSet(x,wantedSet));
     const exactVersion=Number(meta?.version);
     const match=(Number.isFinite(exactVersion)&&exactVersion>0
       ?matches.find(x=>Number(x?.version)===exactVersion&&Number(x?.eur)>0)
@@ -446,7 +446,7 @@ function cardmarketUrl(c){
   const wantedSet=normalizePrintSet(printSetOf(c));
   if(wantedSet){
     const baseMeta=state.marketMeta?.[baseId(c?.id)]||state.marketMeta?.[norm(baseId(c?.id))]||{};
-    const matches=(baseMeta.collections||[]).filter(x=>normalizePrintSet(x?.setCode)===wantedSet);
+    const matches=(baseMeta.collections||[]).filter(x=>marketCollectionMatchesSet(x,wantedSet));
     const exactVersion=Number(meta?.version);
     const edition=(Number.isFinite(exactVersion)&&exactVersion>0
       ?matches.find(x=>Number(x?.version)===exactVersion&&/^https?:\/\//i.test(String(x?.url||"")))
@@ -1134,6 +1134,26 @@ function printSetCodeFromText(value){
 function csvSetNameKey(value){
   return norm(value).replace(/[^a-z0-9]+/g,"");
 }
+function marketExpansionKey(value){
+  return norm(value)
+    .replace(/\b(?:op|eb|st|prb)\s*0*\d+\b/g," ")
+    .replace(/\b(?:starter deck|ultra deck|ultimate deck|extra booster|booster pack|premium booster)\b/g," ")
+    .replace(/\s+/g," ")
+    .trim();
+}
+function marketCollectionMatchesSet(collection,wantedSet){
+  const wanted=normalizePrintSet(wantedSet);
+  if(!wanted)return false;
+  if(normalizePrintSet(collection?.setCode)===wanted)return true;
+
+  const target=marketExpansionKey(collection?.expansion);
+  if(!target)return false;
+  const names=state.packs
+    .filter(p=>normalizePrintSet(p?.code)===wanted)
+    .map(p=>marketExpansionKey(p?.name))
+    .filter(Boolean);
+  return names.some(name=>name===target||name.includes(target)||target.includes(name));
+}
 function catalogPrintSetOf(c){
   return normalizePrintSet(c?.importPrintSet)||
     printSetCodeFromText(c?.set_name)||
@@ -1155,7 +1175,7 @@ function csvPrintSetMatches(c,value){
     normalizePrintSet(meta?.printSet),
     ...(meta?.collections||[]).map(x=>normalizePrintSet(x?.setCode))
   ].filter(Boolean);
-  if(wantedCode&&marketCodes.includes(wantedCode))return true;
+  if(wantedCode&&(marketCodes.includes(wantedCode)||(meta?.collections||[]).some(x=>marketCollectionMatchesSet(x,wantedCode))))return true;
 
   const wantedName=csvSetNameKey(raw),candidateName=csvSetNameKey(c?.set_name);
   return wantedName.length>=5&&candidateName.includes(wantedName);
@@ -1212,7 +1232,11 @@ function syntheticCSVCard(row,logicalId,variantId,kind,printSet){
     colors:Array.isArray(base?.colors)?base.colors:[],
     attributes:Array.isArray(base?.attributes)?base.attributes:[],
     types:Array.isArray(base?.types)?base.types:[],
-    image:String(base?.image||base?.imageUrl||"https://asia-en.onepiece-cardgame.com/images/cardlist/card/"+encodeURIComponent(logical)+".png"),
+    image:(()=>{
+      const visualId=originalVariant.replace(/_base$/i,"")||logical;
+      const exactVisual=state.cards.find(c=>norm(c.id)===norm(visualId));
+      return String(exactVisual?.image||exactVisual?.imageUrl||"https://asia-en.onepiece-cardgame.com/images/cardlist/card/"+encodeURIComponent(visualId)+".png");
+    })(),
     isParallel:kind==="parallel",
     syntheticImport:true,
     importVariantId:originalVariant,
