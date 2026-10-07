@@ -1436,16 +1436,7 @@ function renderVisibleOnly(){
   if(state.tab==="catalog")renderCatalogResults();
   else if(state.tab==="collection")renderCollectionResults();
   else if(state.tab==="album")renderAlbumResults();
-  else if(state.tab==="decks"){
-    $("#deckAccountBtn2")?.addEventListener("click",()=>navigateApp(()=>{state.tab="account"}));
-    $("#findCompetitiveDecks")?.addEventListener("click",()=>{state.deckDiscover=!state.deckDiscover;state.deckDiscoverError="";renderShell()});
-    $("#closeCompetitiveSearch")?.addEventListener("click",()=>{state.deckDiscover=false;renderShell()});
-    $("#runCompetitiveSearch")?.addEventListener("click",searchCompetitiveDecks);
-    $("#competitiveLeader")?.addEventListener("change",e=>{state.deckDiscoverLeader=e.target.value});
-    $("#competitiveDays")?.addEventListener("change",e=>{state.deckDiscoverDays=Number(e.target.value)||90});
-    $("#competitiveMinPlayers")?.addEventListener("change",e=>{state.deckDiscoverMinPlayers=Number(e.target.value)||32});
-    document.querySelectorAll("[data-import-competitive]").forEach(b=>b.onclick=()=>importCompetitiveDeck(b.dataset.importCompetitive));
-const rows=$("#deckRows");const d=state.decks.find(x=>x.id===state.deckId);if(rows&&d)rows.innerHTML=deckRows(d);renderDeckResults()}
+  else if(state.tab==="decks"){const rows=$("#deckRows");const d=state.decks.find(x=>x.id===state.deckId);if(rows&&d)rows.innerHTML=deckRows(d);renderDeckResults()}
   renderToast();
 }
 function bindResultEvents(root){
@@ -1571,6 +1562,14 @@ function bindShell(){
   }
   if(state.tab==="decks"){
     $("#deckAccountBtn")?.addEventListener("click",()=>navigateApp(()=>{state.tab="account"}));
+    $("#deckAccountBtn2")?.addEventListener("click",()=>navigateApp(()=>{state.tab="account"}));
+    $("#findCompetitiveDecks")?.addEventListener("click",()=>{state.deckDiscover=!state.deckDiscover;state.deckDiscoverError="";renderShell()});
+    $("#closeCompetitiveSearch")?.addEventListener("click",()=>{state.deckDiscover=false;renderShell()});
+    $("#runCompetitiveSearch")?.addEventListener("click",searchCompetitiveDecks);
+    $("#competitiveLeader")?.addEventListener("change",e=>{state.deckDiscoverLeader=e.target.value});
+    $("#competitiveDays")?.addEventListener("change",e=>{state.deckDiscoverDays=Number(e.target.value)||90});
+    $("#competitiveMinPlayers")?.addEventListener("change",e=>{state.deckDiscoverMinPlayers=Number(e.target.value)||32});
+    document.querySelectorAll("[data-import-competitive]").forEach(b=>b.onclick=()=>importCompetitiveDeck(b.dataset.importCompetitive));
     document.querySelectorAll("[data-open-deck]").forEach(b=>b.onclick=()=>navigateApp(()=>{state.deckId=b.dataset.openDeck;state.deckLibrary=false;state.deckChoosingLeader=false;state.deckDiscover=false}));
     $("#backDecks")?.addEventListener("click",()=>navigateApp(()=>{state.deckLibrary=true;state.deckId=null;state.deckChoosingLeader=false}));
     $("#importDeckBtn")?.addEventListener("click",openDeckImportDialog);
