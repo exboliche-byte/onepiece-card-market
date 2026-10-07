@@ -4,6 +4,9 @@ const PRODUCT_URL = "https://downloads.s3.cardmarket.com/productCatalog/productL
 const PRICE_URL = "https://downloads.s3.cardmarket.com/productCatalog/priceGuide/price_guide_18.json";
 const REQUEST_TIMEOUT = 120000;
 const MIN_COVERAGE = 0.90;
+const REMOTE_CARDS_URL = "https://raw.githubusercontent.com/michalkiral/optcg-data/main/data/index/cards_by_id.json";
+const REMOTE_PACKS_URL = "https://raw.githubusercontent.com/michalkiral/optcg-data/main/data/packs.json";
+const REMOTE_OP17_URL = "https://raw.githubusercontent.com/hugoprudente/optcgjson/main/output/OP17.json";
 
 const CARDMARKET_SET_NAMES = {
   "OP-01": ["Romance Dawn"],
@@ -93,6 +96,19 @@ function localVersion(id) {
 function productVersion(name) {
   const m = String(name || "").match(/\(\s*V\.?\s*(\d+)\s*\)/i);
   return m ? Number(m[1]) : null;
+}
+
+function isJapaneseExpansion(value) {
+  const s = String(value ?? "").toUpperCase();
+  return /(?:^|[-_ ])JP(?:$|[-_ ])/.test(s) || /\bJAPANESE\b|NON-ENGLISH|ASIA REGION LEGAL/.test(s);
+}
+
+function isJapaneseCard(card) {
+  return isJapaneseExpansion(card?.id) || isJapaneseExpansion(card?.set) || isJapaneseExpansion(card?.set_name);
+}
+
+function isEnglishProduct(product) {
+  return !isJapaneseExpansion(product?.expansionName) && !isJapaneseExpansion(product?.name);
 }
 
 function sourceSetCode(card) {
@@ -281,7 +297,7 @@ function allProductsForCard(card, products, primaryExpansionBySet) {
   const primaryExpansionId = primaryExpansionBySet.get(sourceSet);
 
   for (const product of products) {
-    if (!product?.idProduct) continue;
+    if (!product?.idProduct || !isEnglishProduct(product)) continue;
     const pCode = extractCardCode(product.name);
     if (pCode && code) {
       if (pCode !== code) continue;
@@ -305,7 +321,7 @@ function normalizeCardCatalog(parsed) {
     ...card,
     id: String(card?.id || "").trim(),
     set: String(card?.set || "").trim().toUpperCase()
-  })).filter(card => card.id && card.set);
+  })).filter(card => card.id && card.set && !isJapaneseCard(card));
 }
 
 function priceGuideIndex(rows) {
@@ -362,23 +378,28 @@ function primaryExpansionMap(products) {
 }
 
 async function main() {
-  const [localRaw, packsRaw, productsRaw, pricesRaw, previous] = await Promise.all([
-    fs.readFile(new URL("../data/cards.json", import.meta.url), "utf8").then(JSON.parse),
-    fs.readFile(new URL("../data/packs.json", import.meta.url), "utf8").then(JSON.parse),
+  const [remoteCardsRaw, remotePacksRaw, op17Raw, productsRaw, pricesRaw, previous] = await Promise.all([
+    fetchJson(REMOTE_CARDS_URL),
+    fetchJson(REMOTE_PACKS_URL),
+    fetchJson(REMOTE_OP17_URL),
     fetchJson(PRODUCT_URL),
     fetchJson(PRICE_URL),
     readPreviousDataset()
   ]);
 
-  const packs = Array.isArray(packsRaw) ? packsRaw : Object.values(packsRaw || {});
+  const packs = Array.isArray(remotePacksRaw) ? remotePacksRaw : Object.values(remotePacksRaw || {});
   const dynamicSetNames = new Map(
     packs.map(p => [String(p?.code || "").trim().toUpperCase(), String(p?.name || "").trim()])
   );
-  const cards = normalizeCardCatalog(localRaw).map(card => ({
+  let cards = normalizeCardCatalog(remoteCardsRaw).map(card => ({
     ...card,
     set_name: String(card.set_name || dynamicSetNames.get(card.set) || "")
   }));
-  const products = readProducts(productsRaw);
+  const o17 = op17Raw?.data?.cards || [];
+  const normalized17 = o17.map(card => ({...card, set:"OP-17"}));
+  const ids = new Set(normalized17.map(card => card.id));
+  cards = cards.filter(card => !ids.has(card.id)).concat(normalized17).filter(card => !isJapaneseCard(card));
+  const products = readProducts(productsRaw).filter(isEnglishProduct);
   const prices = priceGuideIndex(readPrices(pricesRaw));
   if (!cards.length) throw new Error("Local card catalog is empty");
   if (!products.length) throw new Error("Cardmarket product catalog is empty");
@@ -449,18 +470,18 @@ async function main() {
       url: "https://www.cardmarket.com/es/OnePiece/Products?idProduct=" + encodeURIComponent(String(product.idProduct)),
       launchPrice,
       launchPriceDate,
-      source: "Cardmarket public product catalog + daily price guide",
+      source: "Cardmarket public English product catalog + daily price guide",
       sourceUrl: "https://www.cardmarket.com/es/OnePiece/Data"
     };
   }
 
   const coverage = mapped / Math.max(1, cards.length);
-  const linkCoverage = Object.keys(outputCards).length / Math.max(1, cards.length);
+
   const createdAt = pricesRaw?.createdAt || new Date().toISOString();
   const payload = {
     schemaVersion: 7,
     updatedAt: createdAt,
-    source: "Cardmarket public One Piece product catalog + daily price guide",
+    source: "Cardmarket public English One Piece product catalog + daily price guide",
     sourcePage: "https://www.cardmarket.com/es/OnePiece/Data",
     launchPricePolicy: previous?.launchPricePolicy || "Precio de salida = primera cotización diaria registrada por MiAlbumOnePiece para esa impresión.",
     cards: outputCards,
@@ -473,6 +494,7 @@ async function main() {
       priceCards: Object.keys(outputCards).length,
       coverage: Number(coverage.toFixed(4)),
       priceCoverage: Number((priced / Math.max(1, cards.length)).toFixed(4)),
+      englishOnly: true,
       unmatched: unmatched.length
     }
   };
