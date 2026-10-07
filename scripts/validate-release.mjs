@@ -21,10 +21,15 @@ assert(cardImgStart>=0&&cardImgEnd>cardImgStart,"cardImg function not found");
 const cardImg=html.slice(cardImgStart,cardImgEnd);
 assert(cardImg.includes('const loading="eager"'),"Rendered card images are not forced to eager loading");
 assert(!cardImg.includes('"lazy"'),"cardImg still contains lazy loading");
+assert(html.includes("function limitlessImageUrl(c)"),"Limitless exact-print image source missing");
+assert(cardImg.includes("limitlessImageUrl(c)"),"cardImg does not use the exact-print Limitless image source");
+assert(html.includes("function cardImageFallback(el)"),"Multi-source image fallback missing");
 
 assert(html.includes("scanner:{active:false,busy:false,locked:false"),"Scanner lock state missing");
 assert(/function scheduleScanner[\s\S]*?state\.scanner\.locked/.test(html),"Scanner scheduler does not respect lock state");
 assert(/async function scanScannerFrame[\s\S]*?state\.scanner\.locked=true/.test(html),"Scanner does not lock after detection");
+assert(html.includes("function scannerConfirmCandidate("),"Scanner consensus guard missing");
+assert(/async function scanScannerFrame[\s\S]*?código suave[\s\S]*?código contraste/.test(html),"Scanner multi-pass code recognition missing");
 assert(/function scannerUnlock[\s\S]*?state\.scanner\.locked=false/.test(html),"Scanner unlock flow missing");
 assert(html.includes("data-scanner-discard"),"Scanner discard action missing");
 assert(/function scannerAdd[\s\S]*?scannerUnlock\(/.test(html),"Scanner add does not resume scanning");
