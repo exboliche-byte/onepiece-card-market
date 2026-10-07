@@ -4,9 +4,7 @@ const PRODUCT_URL = "https://downloads.s3.cardmarket.com/productCatalog/productL
 const PRICE_URL = "https://downloads.s3.cardmarket.com/productCatalog/priceGuide/price_guide_18.json";
 const REQUEST_TIMEOUT = 120000;
 const MIN_COVERAGE = 0.90;
-const REMOTE_CARDS_URL = "https://raw.githubusercontent.com/michalkiral/optcg-data/main/data/index/cards_by_id.json";
-const REMOTE_PACKS_URL = "https://raw.githubusercontent.com/michalkiral/optcg-data/main/data/packs.json";
-const REMOTE_OP17_URL = "https://raw.githubusercontent.com/hugoprudente/optcgjson/main/output/OP17.json";
+const REMOTE_ALLSETS_URL = "https://raw.githubusercontent.com/hugoprudente/optcgjson/main/output/AllSets.json";
 const OPASSETS_HISTORY_DIR_URL = "https://api.github.com/repos/ryscode/OPASSETS/contents/CM-Data/Final/PriceHistory?ref=main";
 
 const CARDMARKET_SET_NAMES = {
@@ -430,6 +428,48 @@ function allProductsForCard(card, products, englishExpansionIdsBySet) {
   return preferredExpansionIds?.size && preferred.length ? preferred : fallback;
 }
 
+function normalizeOptcgSetCode(raw) {
+  const value = String(raw || "").trim().toUpperCase();
+  if (value === "OP14") return "OP14-EB04";
+  if (value === "OP15") return "OP15-EB04";
+  const m = value.match(/^(OP|EB|ST|PRB)-?(\d{2})$/i);
+  return m ? m[1].toUpperCase() + "-" + m[2] : value;
+}
+
+function normalizeOptcgCatalog(parsed) {
+  const entries = Object.entries(parsed || {});
+  const cards = [];
+  const packs = [];
+  const seen = new Set();
+  for (const [key, payload] of entries) {
+    if (!payload?.data) continue;
+    const data = payload.data;
+    const setCode = normalizeOptcgSetCode(data.code || key);
+    const setName = String(data.name || "").trim();
+    const setCards = Array.isArray(data.cards) ? data.cards : [];
+    packs.push({code: setCode, name: setName, cardCount: setCards.length});
+    for (const raw of setCards) {
+      const id = String(raw?.id || "").trim();
+      if (!id || seen.has(id)) continue;
+      if (Array.isArray(raw?.languages) && raw.languages.length && !raw.languages.some(x => /^English$/i.test(String(x)))) continue;
+      seen.add(id);
+      const idPrefix = id.toUpperCase().match(/^(OP|EB|ST|PRB)(\d{2})-/i);
+      const cardSet = idPrefix ? normalizeOptcgSetCode(idPrefix[1] + idPrefix[2]) : setCode;
+      cards.push({
+        id, set: cardSet, set_name: setName, name: String(raw?.name || "").trim(),
+        rarity: raw?.rarity === "L" ? "Leader" : String(raw?.rarity || "").trim(),
+        category: raw?.cardClass === "LEADER" ? "Leader" : raw?.cardClass === "EVENT" ? "Event" : raw?.cardClass === "STAGE" ? "Stage" : raw?.cardClass === "DON" ? "Don" : "Character",
+        colors: Array.isArray(raw?.color) ? raw.color : [], cost: raw?.cost == null ? null : Number(raw.cost),
+        power: raw?.power == null ? null : Number(raw.power), counter: raw?.counter == null ? null : Number(raw.counter),
+        block: raw?.blockIcon == null ? null : Number(raw.blockIcon) || raw.blockIcon,
+        attributes: Array.isArray(raw?.attribute) ? raw.attribute : [], types: Array.isArray(raw?.feature) ? raw.feature : [],
+        effect: raw?.effect || "", trigger: raw?.trigger || null, image: raw?.imageUrl || "", isParallel: !!raw?.isParallel
+      });
+    }
+  }
+  return {cards, packs};
+}
+
 function normalizeCardCatalog(parsed) {
   const values = Array.isArray(parsed) ? parsed : Object.values(parsed || {});
   return values.map(card => ({
@@ -493,28 +533,20 @@ function primaryExpansionMap(products) {
 }
 
 async function main() {
-  const [remoteCardsRaw, remotePacksRaw, op17Raw, productsRaw, pricesRaw, previous, languageMap] = await Promise.all([
-    fetchJson(REMOTE_CARDS_URL),
-    fetchJson(REMOTE_PACKS_URL),
-    fetchJson(REMOTE_OP17_URL),
+  const [remoteAllSetsRaw, productsRaw, pricesRaw, previous, languageMap] = await Promise.all([
+    fetchJson(REMOTE_ALLSETS_URL),
     fetchJson(PRODUCT_URL),
     fetchJson(PRICE_URL),
     readPreviousDataset(),
     loadCardmarketExpansionLanguageMap()
   ]);
+  const catalog = normalizeOptcgCatalog(remoteAllSetsRaw);
+  const packs = catalog.packs;
+  const dynamicSetNames = new Map(packs.map(p => [String(p?.code || "").trim().toUpperCase(), String(p?.name || "").trim()]));
+  const cards = catalog.cards.map(card => ({
+    ...card, set_name: String(card.set_name || dynamicSetNames.get(card.set) || "")
+  })).filter(card => !isJapaneseCard(card));
 
-  const packs = Array.isArray(remotePacksRaw) ? remotePacksRaw : Object.values(remotePacksRaw || {});
-  const dynamicSetNames = new Map(
-    packs.map(p => [String(p?.code || "").trim().toUpperCase(), String(p?.name || "").trim()])
-  );
-  let cards = normalizeCardCatalog(remoteCardsRaw).map(card => ({
-    ...card,
-    set_name: String(card.set_name || dynamicSetNames.get(card.set) || "")
-  }));
-  const o17 = op17Raw?.data?.cards || [];
-  const normalized17 = o17.map(card => ({...card, set:"OP-17"}));
-  const ids = new Set(normalized17.map(card => card.id));
-  cards = cards.filter(card => !ids.has(card.id)).concat(normalized17).filter(card => !isJapaneseCard(card));
   const allProducts = readProducts(productsRaw);
   const products = allProducts.filter(product => isEnglishProduct(product, languageMap.japaneseExpansionIds));
   const productVersions = buildProductVersionIndex(products);
