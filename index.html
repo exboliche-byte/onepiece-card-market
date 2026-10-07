@@ -1433,7 +1433,7 @@ function bindShell(){
   if(state.tab==="decks"){
     $("#deckAccountBtn")?.addEventListener("click",()=>navigateApp(()=>{state.tab="account"}));
     document.querySelectorAll("[data-open-deck]").forEach(b=>b.onclick=()=>navigateApp(()=>{state.deckId=b.dataset.openDeck;state.deckLibrary=false;state.deckChoosingLeader=false}));
-    $("#backDecks")?.addEventListener("click",()=>{if(history.state?.mialbumView)history.back();else{state.deckLibrary=true;state.deckChoosingLeader=false;renderShell()}});
+    $("#backDecks")?.addEventListener("click",()=>navigateApp(()=>{state.deckLibrary=true;state.deckId=null;state.deckChoosingLeader=false}));
     $("#importDeckBtn")?.addEventListener("click",openDeckImportDialog);
     $("#exportDeck")?.addEventListener("click",exportDeckFile);
     $("#newDeck")?.addEventListener("click",()=>{state.newDeck=true;renderShell()});
