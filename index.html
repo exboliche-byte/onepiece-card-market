@@ -1016,7 +1016,7 @@ function exportCollectionCSV(){
     const q=qty(c.id);if(q<=0)continue;
     const variant=csvVariant(c),price=priceOf(c),unit=price===null?"":Number(price.toFixed(2));
     rows.push([
-      c.id,c.name,c.set,c.set_name||setName(c.set),csvRarity(c),variant.variant_id,variant.variant_kind,variant.print_set,
+      baseId(c.id),c.name,c.set,c.set_name||setName(c.set),csvRarity(c),variant.variant_id,variant.variant_kind,variant.print_set,
       "NM","EN",q,unit,unit===""?"":Number((unit*q).toFixed(2)),"EUR","Cardmarket"
     ]);
   }
@@ -1047,26 +1047,47 @@ function previewImport(text){
     const rows=parseCSV(text);
     if(rows.length<2)throw Error("CSV vacío: no se encontraron filas de datos.");
     const h=rows[0].map(x=>norm(String(x).replace(/^\uFEFF/,"")).replace(/\s+/g,"_"));
-    const aliases={card_id:["card_id","id","numero","number"],quantity:["quantity","cantidad","qty","copias"]};
+    const aliases={
+      card_id:["card_id","id","numero","number"],
+      variant_id:["variant_id","version_id","variant","version"],
+      quantity:["quantity","cantidad","qty","copias"]
+    };
     const findIndex=names=>names.map(n=>h.indexOf(n)).find(i=>i>=0);
-    const idI=findIndex(aliases.card_id),qI=findIndex(aliases.quantity);
+    const idI=findIndex(aliases.card_id),variantI=findIndex(aliases.variant_id),qI=findIndex(aliases.quantity);
     if(idI===undefined||qI===undefined)throw Error("El CSV debe contener las columnas card_id y quantity.");
-    const imported=new Map(),unknown=[];
+
+    const imported=new Map(),unknown=[],variantFallbacks=[];
     for(const r of rows.slice(1)){
-      const id=String(r[idI]||"").trim().toUpperCase();
-      if(!id)continue;
+      const logicalId=String(r[idI]||"").trim().toUpperCase();
+      if(!logicalId)continue;
+      const rawVariant=variantI===undefined?"":String(r[variantI]||"").trim();
       const raw=String(r[qI]??"").trim().replace(",",".");
       const n=Number(raw);
       const q=Number.isFinite(n)?Math.max(0,Math.min(99,Math.round(n))):NaN;
-      if(!Number.isFinite(q)){unknown.push(id+" (cantidad no válida)");continue}
-      const match=card(id);
-      if(match)imported.set(id,(imported.get(id)||0)+q);
-      else unknown.push(id);
+      if(!Number.isFinite(q)){unknown.push(logicalId+" (cantidad no válida)");continue}
+
+      // variant_id is authoritative when present. _base maps to the base card ID.
+      let wanted=rawVariant;
+      if(/_base$/i.test(wanted))wanted=wanted.replace(/_base$/i,"");
+      const exact=wanted?state.cards.find(c=>norm(c.id)===norm(wanted)):null;
+      const base=state.cards.find(c=>norm(c.id)===norm(logicalId));
+      const match=exact||base;
+      if(!match){unknown.push(rawVariant?logicalId+" ["+rawVariant+"]":logicalId);continue}
+      if(rawVariant&&!exact&&norm(rawVariant)!==norm(logicalId+"_base")&&norm(rawVariant)!==norm(logicalId)){
+        variantFallbacks.push(logicalId+" ["+rawVariant+"]");
+      }
+      imported.set(match.id,(imported.get(match.id)||0)+q);
     }
+
     const sum=[...imported.values()].reduce((a,x)=>a+x,0);
-    const msg="Filas: "+(rows.length-1)+" · reconocidas: "+imported.size+" cartas · "+sum+" copias"+
+    const logicalCount=new Set([...imported.keys()].map(baseId)).size;
+    const msg="Filas: "+(rows.length-1)+
+      " · versiones reconocidas: "+imported.size+
+      " · cartas: "+logicalCount+
+      " · "+sum+" copias"+
       (unknown.length?"\nNo reconocidas: "+unknown.slice(0,15).join(", ")+(unknown.length>15?" …":""):"")+
-      "\n\nLa importación sustituirá las cantidades actuales por las del CSV.";
+      (variantFallbacks.length?"\nVersiones no encontradas (se usaría la base): "+variantFallbacks.slice(0,10).join(", ")+(variantFallbacks.length>10?" …":""):"")+
+      "\n\nCada cantidad se importará en su versión/arte concreto. La importación sustituirá las cantidades actuales por las del CSV.";
     if(confirm(msg+"\n\nAceptar = importar. Cancelar = no cambiar nada.")){
       state.owned={};
       for(const [id,q] of imported)if(q>0)state.owned[id]=q;
@@ -1074,7 +1095,7 @@ function previewImport(text){
       if(state.user)syncCloud();
       state.collection.page=1;
       renderShell();
-      notify("Colección importada: "+sum+" copias");
+      notify("Colección importada: "+sum+" copias en "+imported.size+" versiones");
     }
   }catch(e){alert(e.message||"CSV no válido")}
 }
