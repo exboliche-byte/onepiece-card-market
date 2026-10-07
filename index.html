@@ -28,7 +28,7 @@ const state={
   catalog:{set:"Todas",category:"Todos",color:"Todos",rarity:"Todos",type:"Todos",attribute:"Todos",ownership:"Todas",sort:"id",dir:"asc",page:1,grouped:true,minCost:"",maxCost:"",minPower:"",maxPower:"",minPrice:"",maxPrice:"",query:"",filtersOpen:false},
   owned:{},collection:{query:"",set:"Todas",category:"Todos",color:"Todos",rarity:"Todos",type:"Todos",attribute:"Todos",quantity:"Todas",playset:"Todas",sort:"id",dir:"asc",page:1,filtersOpen:false},
   album:{set:"",query:"",ownership:"Todas",sort:"id",dir:"asc",page:1},expansions:{query:"",type:"Todos",sort:"set",dir:"asc"},
-  deckQuery:"",deckPage:1,deckLibrary:true,deckFilters:{category:"Todos",color:"Todos",rarity:"Todos",filtersOpen:false},auth:false,toast:"",loading:true
+  deckQuery:"",deckPage:1,deckLibrary:true,deckFilters:{set:"Todas",category:"Todos",color:"Todos",rarity:"Todos",type:"Todos",attribute:"Todos",ownership:"Todas",filtersOpen:false},auth:false,toast:"",loading:true
 };
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??"").replace(/[&<>'"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[c]));
@@ -569,7 +569,7 @@ function cardTile(c,extra=""){
     '<div class="cardbody"><div class="name">'+esc(c.name)+'</div><div class="small">'+esc(c.id)+' · '+esc(c.set)+' · '+esc(c.rarity||"—")+'</div>'+
     '<div class="chips">'+(c.colors||[]).map(x=>'<span class="chip">'+esc(x)+'</span>').join("")+'</div>'+
     '<div class="row"><span>'+ (p!==null?money(p):"Precio —")+'</span><span class="small">'+q+'/'+playsetTarget(c)+'</span></div>'+
-    '<div class="quick"><button class="secondary" data-qty="'+esc(c.id)+'" data-d="-1">−</button><div class="qty">'+q+'</div><button class="primary" data-qty="'+esc(c.id)+'" data-d="1">+</button></div>'+
+    '<div class="quick"><button class="secondary" data-qty="'+esc(c.id)+'" data-d="-1">−</button><div class="qty">'+q+'</div><button class="primary" data-qty="'+esc(c.id)+'" data-d="1">+</button></div>'+(deckMode?'<button class="primary btn" style="width:100%;margin-top:8px" data-adddeck="'+esc(c.id)+'">Añadir esta versión al mazo</button>':'')+
     extra+'</div></article>';
 }
 function groupedTile(g){
@@ -593,6 +593,7 @@ function pagination(total,page,key){
 }
 function catalogActiveFilterCount(){
   const f=state.catalog;let n=0;
+  if(f.set!=="Todas")n++;
   if(f.set!=="Todas")n++;
   if(f.category!=="Todos")n++;
   if(f.color!=="Todos")n++;
@@ -793,9 +794,9 @@ function deckFilterPanel(){
   return '<div class="filter-panel" id="deckFilterPanel">'+
     '<div class="filter-heading"><h3>Filtros del catálogo del mazo</h3><button class="secondary btn" id="clearDeckFilters" type="button">Limpiar filtros</button></div>'+
     '<div class="filter-grid">'+
-      filterLabel("Categoría",'<select id="deckCat" class="field"><option value="Todos" '+(f.category==="Todos"?"selected":"")+'>Todas</option>'+option(values("category"),f.category)+'</select>')+
+      filterLabel("Expansión",'<select id="deckSet" class="field"><option value="Todas" '+(f.set==="Todas"?"selected":"")+' >Todas</option>'+state.packs.map(p=>'<option value="'+esc(p.code)+'" '+(p.code===f.set?"selected":"")+'>'+esc(packLabel(p))+'</option>').join("")+'</select>')+filterLabel("Categoría",'<select id="deckCat" class="field"><option value="Todos" '+(f.category==="Todos"?"selected":"")+'>Todas</option>'+option(values("category"),f.category)+'</select>')+
       filterLabel("Color",'<select id="deckColor" class="field"><option value="Todos" '+(f.color==="Todos"?"selected":"")+'>Todos</option>'+option(values("colors"),f.color)+'</select>')+
-      filterLabel("Rareza",'<select id="deckRarity" class="field"><option value="Todos" '+(f.rarity==="Todos"?"selected":"")+'>Todas</option>'+option(values("rarity"),f.rarity)+'</select>')+
+      filterLabel("Rareza",'<select id="deckRarity" class="field"><option value="Todos" '+(f.rarity==="Todos"?"selected":"")+'>Todas</option>'+option(values("rarity"),f.rarity)+'</select>')+filterLabel("Tipo",'<select id="deckType" class="field"><option value="Todos" '+(f.type==="Todos"?"selected":"")+'>Todos</option>'+option(values("types"),f.type)+'</select>')+filterLabel("Atributo",'<select id="deckAttribute" class="field"><option value="Todos" '+(f.attribute==="Todos"?"selected":"")+'>Todos</option>'+option(values("attributes"),f.attribute)+'</select>')+filterLabel("Colección",'<select id="deckOwnership" class="field"><option value="Todas" '+(f.ownership==="Todas"?"selected":"")+'>Todas</option><option value="Tengo" '+(f.ownership==="Tengo"?"selected":"")+'>En mi colección</option><option value="No tengo" '+(f.ownership==="No tengo"?"selected":"")+'>No tengo</option></select>')+
     '</div>'+
     '<div class="filter-actions"><span class="active-filters-note">'+deckActiveFilterCount().toLocaleString("es-ES")+' filtro(s) activo(s)</span><button class="secondary btn" id="closeDeckFilters" type="button">Cerrar filtros</button></div>'+
   '</div>';
@@ -820,17 +821,24 @@ function deckValidate(d){
   return {total,illegal,valid:!!leader&&total===50&&illegal===0,messages};
 }
 function deckMissingCost(d){let x=0;for(const [id,n] of Object.entries(d.cards||{}))x+=Math.max(0,Number(n)-qty(id))*Number(state.prices[id]||0);return x}
+function deckGroupedTile(g){
+  const c=g.card,q=logicalQty(c),d=state.decks.find(x=>x.id===state.deckId),inDeck=g.versions.reduce((s,v)=>s+Number(d?.cards?.[v.id]||0),0),ps=groupPriceStats(g);
+  return '<article class="card">'+(q?'<span class="tag">×'+q+' total</span>':'<span class="tag missing">Falta</span>')+
+    '<button class="linkbtn" data-detail="'+esc(c.id)+'" style="display:block;width:100%;padding:0">'+cardImg(c,"cardimg catalogthumb")+'</button>'+
+    '<div class="cardbody"><div class="name">'+esc(c.name)+'</div><div class="small">'+esc(c.id)+'</div><div class="small">'+esc(c.category||"")+' · '+g.versions.length+' versión(es)</div>'+
+    '<div class="chips">'+g.sets.slice(0,5).map(x=>'<span class="chip">'+esc(x)+'</span>').join("")+'</div>'+
+    '<div class="row"><span>'+(ps.min===null?"Precio —":ps.max!==ps.min?"Desde "+money(ps.min):money(ps.min))+'</span><span class="small">Mazo '+inDeck+'</span></div>'+
+    '<button class="primary btn" style="width:100%;margin-top:8px" data-deckgroup="'+esc(c.id)+'">Elegir versión / añadir</button></div></article>';
+}
 function renderDeckResults(){
   const host=$("#deckResults");if(!host)return;
   const q=norm(state.deckQuery),f=state.deckFilters;
-  let list=state.cards.filter(c=>(!q||c.search.includes(q))&&(f.category==="Todos"||c.category===f.category)&&(f.color==="Todos"||(c.colors||[]).includes(f.color))&&(f.rarity==="Todos"||c.rarity===f.rarity));
-  const page=Math.max(1,state.deckPage),start=(page-1)*30,vis=list.slice(start,start+30);
-  host.innerHTML='<div class="notice">'+list.length.toLocaleString("es-ES")+' resultados. Pulsa + en la carta que quieras añadir.</div><div class="grid">'+vis.map(c=>{
-    const qd=Number(state.decks.find(d=>d.id===state.deckId)?.cards?.[c.id]||0);
-    return '<article class="card">'+cardImg(c)+'<div class="cardbody"><div class="name">'+esc(c.name)+'</div><div class="small">'+esc(c.id)+' · tienes '+qty(c.id)+' · mazo '+qd+'</div><div class="chips">'+(c.colors||[]).map(x=>'<span class="chip">'+esc(x)+'</span>').join("")+'</div><div class="row"><span class="small">Coste '+esc(c.cost??"—")+' · '+esc(c.power??"—")+'</span><button class="primary btn" data-adddeck="'+esc(c.id)+'">+</button></div></div></article>';
-  }).join("")+'</div>'+pagination(list.length,page,"deck");
-  bindResultEvents(host);vis.forEach(c=>{if(priceOf(c)===null)ensurePrices([c.id])});
+  let list=state.cards.filter(c=>(!q||c.search.includes(q))&&(f.set==="Todas"||cardMatchesExpansion(c,f.set))&&(f.category==="Todos"||c.category===f.category)&&(f.color==="Todos"||(c.colors||[]).includes(f.color))&&(f.rarity==="Todos"||c.rarity===f.rarity)&&(f.type==="Todos"||(c.types||[]).includes(f.type))&&(f.attribute==="Todos"||(c.attributes||[]).includes(f.attribute))&&(f.ownership==="Todas"||(f.ownership==="Tengo"?qty(c.id)>0:qty(c.id)===0)));
+  const groups=groupCardList(list),page=Math.max(1,state.deckPage),start=(page-1)*PAGE,vis=groups.slice(start,start+PAGE);
+  host.innerHTML='<div class="notice">'+groups.length.toLocaleString("es-ES")+' cartas. Elige una carta y después su impresión exacta.</div><div class="grid">'+vis.map(deckGroupedTile).join("")+'</div>'+pagination(groups.length,page,"deck");
+  bindResultEvents(host);ensurePrices(vis.flatMap(g=>g.versions).map(c=>c.id)).catch(()=>{});
 }
+
 function createDeck(){
   const name=prompt("Nombre del mazo","Nuevo mazo");if(!name)return;
   const d={id:crypto.randomUUID(),name:name.trim(),leader:"",cards:{},description:"",colors:[]};state.decks.unshift(d);state.deckId=d.id;saveLocal();syncDeck(d);renderShell();
@@ -925,6 +933,7 @@ function renderCardmarketCollections(c){
   return '<h3 style="margin-top:18px">Colecciones</h3><p class="muted">Esta carta aparece en '+collections.length+' edición(es) de Cardmarket. Cada una conserva su precio y enlace independiente.</p><div class="collection-list">'+rows+'</div>';
 }
 function detailView(c){
+  const deckMode=state.tab==="decks"&&!state.deckLibrary;
   const group=state.groups.find(g=>g.ids.includes(c.id));
   const versions=(group?.versions||[c]).filter(Boolean);
   const q=qty(c.id);
@@ -977,6 +986,7 @@ function bindResultEvents(root){
   root.querySelectorAll("[data-qty]").forEach(b=>b.onclick=e=>{e.preventDefault();changeQty(b.dataset.qty,Number(b.dataset.d))});
   root.querySelectorAll("[data-page]").forEach(b=>b.onclick=()=>{const k=b.dataset.page;state[k].page=Math.max(1,state[k].page+Number(b.dataset.p));renderVisibleOnly()});
   root.querySelectorAll("[data-group]").forEach(b=>b.onclick=()=>openCardDetail(b.dataset.group));
+  root.querySelectorAll("[data-deckgroup]").forEach(b=>b.onclick=()=>openCardDetail(b.dataset.deckgroup));
   root.querySelectorAll("[data-adddeck]").forEach(b=>b.onclick=()=>addToDeck(b.dataset.adddeck));
   root.querySelectorAll("[data-deckqty]").forEach(b=>b.onclick=()=>changeDeckQty(b.dataset.deckqty,Number(b.dataset.d)));
 }
@@ -1072,11 +1082,11 @@ function bindShell(){
     $("#deleteDeck")?.addEventListener("click",()=>{if(confirm("¿Eliminar este mazo?")){const id=state.deckId;state.decks=state.decks.filter(x=>x.id!==id);state.deckId=state.decks[0]?.id||null;saveLocal();syncDeckDelete(id);renderShell()}});
     $("#shareDeck")?.addEventListener("click",()=>shareDeck());
     bindSearch("#deckSearch",v=>{state.deckQuery=v;state.deckPage=1;renderDeckResults()});
-    const map={deckCat:"category",deckColor:"color",deckRarity:"rarity"};
+    const map={deckSet:"set",deckCat:"category",deckColor:"color",deckRarity:"rarity",deckType:"type",deckAttribute:"attribute",deckOwnership:"ownership"};
     Object.entries(map).forEach(([id,k])=>$(id)?.addEventListener("change",()=>{state.deckFilters[k]=$(id).value;state.deckPage=1;renderDeckResults()}));
     $("#deckFilterToggle")?.addEventListener("click",()=>{state.deckFilters.filtersOpen=!state.deckFilters.filtersOpen;renderShell()});
     $("#closeDeckFilters")?.addEventListener("click",()=>{state.deckFilters.filtersOpen=false;renderShell()});
-    $("#clearDeckFilters")?.addEventListener("click",()=>{Object.assign(state.deckFilters,{category:"Todos",color:"Todos",rarity:"Todos"});state.deckPage=1;renderShell()});
+    $("#clearDeckFilters")?.addEventListener("click",()=>{Object.assign(state.deckFilters,{set:"Todas",category:"Todos",color:"Todos",rarity:"Todos",type:"Todos",attribute:"Todos",ownership:"Todas"});state.deckPage=1;renderShell()});
   }
   if(state.tab==="account"){bindAccount()}
   if(state.detail&&!state.detail.shareUrl){
