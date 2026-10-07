@@ -260,13 +260,27 @@ function extractCardCode(text) {
 
 
 function expansionMatches(setCode, expansionName, localSetName = "") {
-  const wanted = [...(CARDMARKET_SET_NAMES[setCode] || []), localSetName];
   const target = norm(expansionName);
   if (!target) return false;
-  return wanted.some(name => {
-    const candidate = norm(name);
-    return candidate && (candidate === target || candidate.includes(target) || target.includes(candidate));
-  });
+  const wanted = [...(CARDMARKET_SET_NAMES[setCode] || []), localSetName]
+    .map(norm)
+    .filter(Boolean);
+  if (wanted.includes(target)) return true;
+  if (setCode === "P") {
+    return target.startsWith("promos: ")
+      || target === "promos"
+      || target === "special tournaments promos"
+      || target === "premium bandai products";
+  }
+  return false;
+}
+
+function productBelongsToCardExpansion(card, product, expansionNamesById = null) {
+  const sourceSet = sourceSetCode(card);
+  const expansion = expansionNamesById?.get(Number(product?.idExpansion))
+    || product?.expansionName
+    || "";
+  return expansionMatches(sourceSet, expansion, card?.set_name);
 }
 
 function readProducts(data) {
@@ -693,12 +707,7 @@ function allProductsForCard(card, products, englishExpansionIdsBySet) {
 
     const expansionId = Number(product.idExpansion);
     const matchesConfiguredExpansion = preferredExpansionIds?.has(expansionId) || false;
-    if (sourceSet === "P") {
-      matches.push(product);
-      continue;
-    }
-
-    const matchesExpansionName = expansionMatches(sourceSet, product?.expansionName, card?.set_name);
+    const matchesExpansionName = productBelongsToCardExpansion(card, product);
     if (matchesConfiguredExpansion || matchesExpansionName) matches.push(product);
   }
 
@@ -913,7 +922,7 @@ async function main() {
     const launchPrice = priceNumber(prior.launchPrice) ?? eur;
     const launchPriceDate = prior.launchPriceDate || (launchPrice !== null ? pricesRaw?.createdAt || new Date().toISOString() : null);
 
-    const collectionProducts = allCardmarketProductsForCard(baseCard, products)
+    const collectionProducts = allProductsForCard(baseCard, products, languageMap.englishExpansionIdsBySet)
       .sort((a,b) =>
         String(a?.expansionName||"").localeCompare(String(b?.expansionName||""),"en",{numeric:true}) ||
         String(a?.dateAdded||"").localeCompare(String(b?.dateAdded||"")) ||
