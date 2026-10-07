@@ -50,3 +50,5 @@ jobs:
           fi
 
 # Keep the updater workflow active when its matching script changes.
+
+# Catalog-sync compatible exact-print pricing.
