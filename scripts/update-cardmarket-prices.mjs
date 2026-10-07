@@ -245,6 +245,56 @@ function sourceSetCode(card) {
 }
 
 
+function compactPrintSetCode(value) {
+  const raw = String(value || "").trim().toUpperCase();
+  if (raw === "OP14-EB04") return "OP14";
+  if (raw === "OP15-EB04") return "OP15";
+  const m = raw.match(/^(OP|EB|ST|PRB)-?(\d{2})$/i);
+  return m ? m[1].toUpperCase() + m[2] : raw;
+}
+
+function printSetCode(card) {
+  return compactPrintSetCode(sourceSetCode(card));
+}
+
+function variantKind(card) {
+  const id = String(card?.id || "");
+  if (/_r\d+$/i.test(id)) return "reprint";
+  if (/_(?:p|c)\d+$/i.test(id) || card?.isParallel) return "parallel";
+  return "base";
+}
+
+function cardmarketSetCodeForProduct(product, expansionNamesById, englishExpansionIdsBySet) {
+  const expansionId = Number(product?.idExpansion);
+  if (Number.isFinite(expansionId)) {
+    for (const [setCode, ids] of englishExpansionIdsBySet || []) {
+      if (ids?.has(expansionId)) return compactPrintSetCode(setCode);
+    }
+  }
+  const expansionName = String(
+    expansionNamesById?.get(expansionId) || product?.expansionName || ""
+  ).trim();
+  if (expansionName) {
+    for (const setCode of Object.keys(CARDMARKET_SET_NAMES)) {
+      if (expansionMatches(setCode, expansionName)) return compactPrintSetCode(setCode);
+    }
+  }
+  return "";
+}
+
+function oraclePrintSet(url) {
+  const slug = externalExpansionSlug(url);
+  if (!slug) return "";
+  for (const setCode of Object.keys(CARDMARKET_SET_NAMES)) {
+    const aliases = CARDMARKET_SET_NAMES[setCode] || [];
+    if (aliases.some(name => {
+      const target = norm(name);
+      return target === slug || target.includes(slug) || slug.includes(target);
+    })) return compactPrintSetCode(setCode);
+  }
+  return "";
+}
+
 function cardmarketCardUrl(card) {
   const code = extractCardCode(baseId(card?.id));
   const slug = norm(card?.name || "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
@@ -680,13 +730,16 @@ function allCardmarketProductsForCard(card, products) {
       if (!number) continue;
       const pNumber = String(product.number ?? "").trim().replace(/^0+/, "");
       if (pNumber !== number.replace(/^0+/, "")) continue;
+      // Number-only matching can mix unrelated cards from different sets.
+      // Require the name too whenever Cardmarket does not expose the card code.
+      if (cardNameMatches(card, product) <= 0) continue;
     }
     matches.push(product);
   }
   return matches;
 }
 
-function allProductsForCard(card, products, englishExpansionIdsBySet) {
+function allProductsForCard(card, products, englishExpansionIdsBySet, expansionNamesById = null) {
   const matches = [];
   const base = baseId(card.id).toUpperCase();
   const code = extractCardCode(base);
@@ -703,11 +756,12 @@ function allProductsForCard(card, products, englishExpansionIdsBySet) {
       if (!number) continue;
       const pNumber = String(product.number ?? "").trim().replace(/^0+/, "");
       if (pNumber !== number.replace(/^0+/, "")) continue;
+      if (cardNameMatches(card, product) <= 0) continue;
     }
 
     const expansionId = Number(product.idExpansion);
     const matchesConfiguredExpansion = preferredExpansionIds?.has(expansionId) || false;
-    const matchesExpansionName = productBelongsToCardExpansion(card, product);
+    const matchesExpansionName = productBelongsToCardExpansion(card, product, expansionNamesById);
     if (matchesConfiguredExpansion || matchesExpansionName) matches.push(product);
   }
 
@@ -859,9 +913,11 @@ async function main() {
     if (!existing || (exactBase && !existingIsExactBase)) cardByBaseId.set(key, candidate);
   }
   for (const card of cards) {
-    const isParallelVariant = Boolean(card.isParallel) || /_p\d+$/i.test(String(card.id));
+    const isVariant = String(card.id).toUpperCase() !== baseId(card.id).toUpperCase();
     const baseCard = cardByBaseId.get(baseId(card.id).toUpperCase()) || card;
-    const exactCandidates = allProductsForCard(card, products, languageMap.englishExpansionIdsBySet);
+    const currentPrintSet = printSetCode(card);
+    const currentVariantKind = variantKind(card);
+    const exactCandidates = allProductsForCard(card, products, languageMap.englishExpansionIdsBySet, languageMap.expansionNamesById);
     // Never fall back to the whole Cardmarket catalog here: a matching
     // card number can exist in several expansions/reprints. The primary
     // product must belong to this card's own expansion.
@@ -879,11 +935,17 @@ async function main() {
     );
     const limitlessPrint = limitlessPrintMappings.get(String(card.id).toUpperCase());
 
+    const prior = oldCards[card.id] || {};
+    const oracleEur = priceNumber(exactPrintOracle?.priceByPrint?.get(String(card.id)));
+    const oracleUrl = exactPrintOracle?.urlsByPrint?.get(String(card.id))?.[0] || null;
+
     if (!product && !limitlessPrint) {
       unmatched.push(card.id);
-      const prior = oldCards[card.id] || {};
+      const previousEur = priceNumber(prior.eur);
+      const fallbackEur = oracleEur ?? previousEur;
+      if (fallbackEur !== null) priced++;
       outputCards[card.id] = {
-        eur: null,
+        eur: fallbackEur,
         trend: null,
         low: null,
         avg: null,
@@ -893,12 +955,21 @@ async function main() {
         cardmarketId: null,
         expansionId: null,
         expansion: String(CARDMARKET_SET_NAMES[sourceSetCode(card)]?.[0] || card.set_name || sourceSetCode(card)),
+        printSet: currentPrintSet,
+        variantKind: currentVariantKind,
         version: desiredMarketVersion,
-        url: cardmarketCardUrl(baseCard),
-        variantOf: isParallelVariant && baseCard.id !== card.id ? baseCard.id : null,
-        launchPrice: priceNumber(prior.launchPrice),
-        launchPriceDate: prior.launchPriceDate || null,
-        source: "Cardmarket public product catalog; fallback to card page when no exact product is published",
+        url: oracleUrl
+          ? oracleUrl.replace("/en/OnePiece/", "/es/OnePiece/")
+          : String(prior.url || cardmarketCardUrl(baseCard)),
+        variantOf: isVariant && baseCard.id !== card.id ? baseCard.id : null,
+        launchPrice: priceNumber(prior.launchPrice) ?? fallbackEur,
+        launchPriceDate: prior.launchPriceDate || (fallbackEur !== null ? new Date().toISOString() : null),
+        stalePrice: oracleEur === null && previousEur !== null,
+        source: oracleEur !== null
+          ? "Automatic exact-print market summary fallback"
+          : previousEur !== null
+            ? "Previous successful daily Cardmarket price retained"
+            : "Cardmarket public product catalog; fallback to card page when no exact product is published",
         sourceUrl: "https://www.cardmarket.com/es/OnePiece/Data"
       };
       continue;
@@ -914,15 +985,15 @@ async function main() {
       guide.sell,
       guide.SELL
     ) : null;
-    const eur = limitlessPrint?.eur ?? cardmarketEur;
+    const previousEur = priceNumber(prior.eur);
+    const eur = limitlessPrint?.eur ?? cardmarketEur ?? oracleEur ?? previousEur;
 
     mapped++;
     if (eur !== null) priced++;
-    const prior = oldCards[card.id] || {};
     const launchPrice = priceNumber(prior.launchPrice) ?? eur;
     const launchPriceDate = prior.launchPriceDate || (launchPrice !== null ? pricesRaw?.createdAt || new Date().toISOString() : null);
 
-    const collectionProducts = allProductsForCard(baseCard, products, languageMap.englishExpansionIdsBySet)
+    const collectionProducts = allCardmarketProductsForCard(baseCard, products)
       .sort((a,b) =>
         String(a?.expansionName||"").localeCompare(String(b?.expansionName||""),"en",{numeric:true}) ||
         String(a?.dateAdded||"").localeCompare(String(b?.dateAdded||"")) ||
@@ -942,6 +1013,7 @@ async function main() {
       return {
         expansion: String(collectionProduct.expansionName || languageMap.expansionNamesById?.get(Number(collectionProduct.idExpansion)) || "").trim(),
         expansionId: Number(collectionProduct.idExpansion),
+        setCode: cardmarketSetCodeForProduct(collectionProduct, languageMap.expansionNamesById, languageMap.englishExpansionIdsBySet),
         cardmarketId: Number(collectionProduct.idProduct),
         version: productVersions?.get(String(collectionProduct.idProduct)) ?? productVersion(collectionProduct.name) ?? 1,
         eur: collectionEur,
@@ -960,6 +1032,8 @@ async function main() {
       cardmarketId: product ? Number(product.idProduct) : null,
       expansionId: product ? Number(product.idExpansion) : null,
       expansion: limitlessPrint?.expansion || String(languageMap.expansionNamesById?.get(Number(product?.idExpansion)) || CARDMARKET_SET_NAMES[sourceSetCode(card)]?.[0] || sourceSetCode(card)),
+      printSet: currentPrintSet,
+      variantKind: currentVariantKind,
       version: limitlessPrint?.limitlessVersion ?? (product ? productVersion(product.name) ?? null : null),
       url: limitlessPrint?.url || (exactPrintOracle?.urlsByPrint?.get(String(card.id))?.[0]
         ? exactPrintOracle.urlsByPrint.get(String(card.id))[0].replace("/en/OnePiece/", "/es/OnePiece/")
@@ -967,17 +1041,49 @@ async function main() {
       collections,
       launchPrice,
       launchPriceDate,
-      variantOf: isParallelVariant && baseCard.id !== card.id ? baseCard.id : null,
-      source: "Cardmarket public English product catalog + daily price guide",
+      variantOf: isVariant && baseCard.id !== card.id ? baseCard.id : null,
+      stalePrice: limitlessPrint?.eur == null && cardmarketEur === null && oracleEur === null && previousEur !== null,
+      source: limitlessPrint?.eur != null || cardmarketEur !== null
+        ? "Cardmarket public English product catalog + daily price guide"
+        : oracleEur !== null
+          ? "Automatic exact-print market summary fallback"
+          : "Previous successful daily Cardmarket price retained",
       sourceUrl: "https://www.cardmarket.com/es/OnePiece/Data"
     };
+  }
+
+  let oracleOnly = 0;
+  for (const [id, eurRaw] of exactPrintOracle.priceByPrint.entries()) {
+    if (outputCards[id]) continue;
+    const eur = priceNumber(eurRaw);
+    if (eur === null) continue;
+    const urls = exactPrintOracle.urlsByPrint.get(id) || [];
+    const url = urls[0] ? String(urls[0]).replace("/en/OnePiece/", "/es/OnePiece/") : "";
+    outputCards[id] = {
+      eur,
+      trend:null, low:null, avg:null, avg1:null, avg7:null, avg30:null,
+      cardmarketId:null, expansionId:null,
+      expansion:"",
+      printSet:oraclePrintSet(url),
+      variantKind:variantKind({id}),
+      version:localVersion(id),
+      url,
+      collections:[],
+      launchPrice:eur,
+      launchPriceDate:pricesRaw?.createdAt || new Date().toISOString(),
+      variantOf:baseId(id)!==id?baseId(id):null,
+      stalePrice:false,
+      source:"Automatic exact-print market summary fallback",
+      sourceUrl:"https://www.cardmarket.com/es/OnePiece/Data"
+    };
+    oracleOnly++;
   }
 
   const coverage = mapped / Math.max(1, cards.length);
 
   const createdAt = pricesRaw?.createdAt || new Date().toISOString();
   const payload = {
-    schemaVersion: 8,
+    schemaVersion: 9,
     updatedAt: createdAt,
     source: "Cardmarket public English One Piece product catalog + daily price guide",
     sourcePage: "https://www.cardmarket.com/es/OnePiece/Data",
@@ -990,6 +1096,7 @@ async function main() {
       mappedCards: mapped,
       pricedCards: priced,
       priceCards: Object.keys(outputCards).length,
+      oracleOnly,
       coverage: Number(coverage.toFixed(4)),
       priceCoverage: Number((priced / Math.max(1, cards.length)).toFixed(4)),
       englishOnly: true,
@@ -997,8 +1104,22 @@ async function main() {
     }
   };
 
+  const priceCoverage = priced / Math.max(1, cards.length);
   if (coverage < MIN_COVERAGE) {
     throw new Error("Safety check failed: only " + mapped + "/" + cards.length + " cards matched to an exact Cardmarket product (" + (coverage * 100).toFixed(1) + "%)");
+  }
+  if (previous?.cards) {
+    const lostPreviouslyPriced = cards.filter(card => {
+      const before = priceNumber(previous.cards?.[card.id]?.eur);
+      const after = priceNumber(outputCards?.[card.id]?.eur);
+      return before !== null && after === null;
+    });
+    if (lostPreviouslyPriced.length) {
+      throw new Error("Safety check failed: daily update would remove " + lostPreviouslyPriced.length + " previously known prices");
+    }
+  }
+  if (priceCoverage < MIN_COVERAGE) {
+    throw new Error("Safety check failed: only " + priced + "/" + cards.length + " catalog cards have a usable EUR price (" + (priceCoverage * 100).toFixed(1) + "%)");
   }
 
   const previousUpdated = String(previous?.updatedAt || "");
