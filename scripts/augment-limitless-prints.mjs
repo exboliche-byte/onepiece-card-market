@@ -53,7 +53,9 @@ async function main(){
   const links=productLinks(indexHtml);
   if(!links.length){
     const title=titleOf(indexHtml,"");
-    console.warn("Limitless promo index returned no product links; title=",title,"length=",indexHtml.length);
+    const probe=indexHtml.toLowerCase().indexOf("welcome pack 2026 vol.1");
+    const sample=probe>=0?indexHtml.slice(Math.max(0,probe-350),probe+550).replace(/\s+/g," "):indexHtml.slice(0,900).replace(/\s+/g," ");
+    console.warn("Limitless promo index returned no product links; title=",title,"length=",indexHtml.length,"sample=",sample);
     return;
   }
 
