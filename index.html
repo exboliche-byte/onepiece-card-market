@@ -22,7 +22,7 @@ const PLAYSET=4;
 const LEADER_PLAYSET=1;
 const PAGE=60;
 const state={
-  cards:[],packs:[],groups:[],groupByKey:new Map(),prices:{},priceDate:null,
+  cards:[],packs:[],groups:[],groupByKey:new Map(),prices:{},priceDate:null,importedCards:{},
   collection:{},decks:[],wishlist:{},user:null,sb:null,
   tab:"catalog",set:"",query:"",detail:null,deckId:null,
   catalog:{set:"Todas",category:"Todos",color:"Todos",rarity:"Todos",type:"Todos",attribute:"Todos",ownership:"Todas",sort:"id",dir:"asc",page:1,grouped:true,minCost:"",maxCost:"",minPower:"",maxPower:"",minPrice:"",maxPrice:"",query:"",filtersOpen:false},
@@ -56,6 +56,23 @@ function isJapaneseCatalogCard(c){
 }
 function card(id){return state.cards.find(c=>c.id===id)}
 function baseId(id){return safeId(id).replace(/_(?:p\d+|r\d+|c\d+|jp\d+)$/i,"")}
+function normalizePrintSet(value){
+  const raw=String(value||"").trim().toUpperCase().replace(/[\s_-]+/g,"");
+  if(raw==="OP14EB04")return "OP14";
+  if(raw==="OP15EB04")return "OP15";
+  return raw;
+}
+function variantKindOf(c){
+  const explicit=String(c?.importVariantKind||priceMeta(c)?.variantKind||"").toLowerCase();
+  if(explicit)return explicit;
+  const id=String(c?.id||"");
+  if(/_r\d+$/i.test(id))return "reprint";
+  if(/_(?:p|c)\d+$/i.test(id))return "parallel";
+  return "base";
+}
+function printSetOf(c){
+  return String(c?.importPrintSet||priceMeta(c)?.printSet||"").trim();
+}
 function groupKey(c){
   return norm(baseId(c?.id));
 }
@@ -150,7 +167,13 @@ function expansionList(){
 }
 function prepareCatalog(raw,packs){
   state.packs=(Array.isArray(packs)?packs:Object.values(packs)).slice().sort(comparePacks);
-  state.cards=(Array.isArray(raw)?raw:Object.values(raw)).map(c=>({...c,id:String(c.id||"").trim(),set:String(c.set||"").trim(),set_name:c.set_name||setName(c.set||"")})).filter(c=>c.id&&!isJapaneseCatalogCard(c));
+  const catalogCards=(Array.isArray(raw)?raw:Object.values(raw)).map(c=>({...c,id:String(c.id||"").trim(),set:String(c.set||"").trim(),set_name:c.set_name||setName(c.set||"")})).filter(c=>c.id&&!isJapaneseCatalogCard(c));
+  const byId=new Map(catalogCards.map(c=>[c.id,c]));
+  for(const imported of Object.values(state.importedCards||{})){
+    if(!imported?.id||byId.has(imported.id))continue;
+    byId.set(imported.id,{...imported,syntheticImport:true});
+  }
+  state.cards=[...byId.values()];
   const map=new Map();
   for(const c of state.cards){c.search=norm([c.id,c.name,c.set,c.set_name,c.category,c.rarity,...(c.colors||[]),...(c.types||[]),...(c.attributes||[]),c.effect,c.trigger].join(" "));const k=groupKey(c);if(!map.has(k))map.set(k,{key:k,card:c,ids:[],sets:new Set()});const g=map.get(k);g.ids.push(c.id);g.sets.add(c.set)}
   state.groups=[...map.values()].map(g=>({...g,sets:[...g.sets].sort(),versions:g.ids.map(id=>card(id))}));
@@ -161,8 +184,8 @@ async function fetchJson(url,timeout=15000){
   const ac=new AbortController(),t=setTimeout(()=>ac.abort(),timeout);
   try{const r=await fetch(url,{cache:"no-store",signal:ac.signal});if(!r.ok)throw Error("HTTP "+r.status);return await r.json()}finally{clearTimeout(t)}
 }
-function saveLocal(){localStorage.setItem("mialbumonepiece_collection",JSON.stringify(state.owned));localStorage.setItem("mialbumonepiece_decks",JSON.stringify(state.decks));localStorage.setItem("mialbumonepiece_wishlist",JSON.stringify(state.wishlist))}
-function loadLocal(){try{state.owned=JSON.parse(localStorage.getItem("mialbumonepiece_collection")||"{}")}catch{}try{state.decks=JSON.parse(localStorage.getItem("mialbumonepiece_decks")||"[]")}catch{}try{state.wishlist=JSON.parse(localStorage.getItem("mialbumonepiece_wishlist")||"{}")}catch{}}
+function saveLocal(){localStorage.setItem("mialbumonepiece_collection",JSON.stringify(state.owned));localStorage.setItem("mialbumonepiece_decks",JSON.stringify(state.decks));localStorage.setItem("mialbumonepiece_wishlist",JSON.stringify(state.wishlist));localStorage.setItem("mialbumonepiece_imported_cards",JSON.stringify(state.importedCards||{}))}
+function loadLocal(){try{state.owned=JSON.parse(localStorage.getItem("mialbumonepiece_collection")||"{}")}catch{}try{state.decks=JSON.parse(localStorage.getItem("mialbumonepiece_decks")||"[]")}catch{}try{state.wishlist=JSON.parse(localStorage.getItem("mialbumonepiece_wishlist")||"{}")}catch{}try{state.importedCards=JSON.parse(localStorage.getItem("mialbumonepiece_imported_cards")||"{}")}catch{state.importedCards={}}}
 function notify(msg){state.toast=msg;renderToast();setTimeout(()=>{if(state.toast===msg){state.toast="";renderToast()}},1800)}
 function renderToast(){const old=$(".toast");if(old)old.remove();if(state.toast){const d=document.createElement("div");d.className="toast";d.textContent=state.toast;document.body.appendChild(d)}}
 function collectionPriceOf(c){return priceOf(c)}
@@ -319,6 +342,13 @@ function priceOf(c){
     const n=Number(raw);
     if(Number.isFinite(n)&&n>0)return n;
   }
+  const wantedSet=normalizePrintSet(c?.importPrintSet);
+  if(wantedSet){
+    const base=state.marketMeta?.[baseId(key)]||state.marketMeta?.[norm(baseId(key))]||{};
+    const match=(base.collections||[]).find(x=>normalizePrintSet(x?.setCode)===wantedSet);
+    const n=Number(match?.eur);
+    if(Number.isFinite(n)&&n>0)return n;
+  }
   return null;
 }
 function selectPrimaryMarketEntry(id,entry){
@@ -337,6 +367,9 @@ function mergePriceDataset(d){
       url:String(entry?.url||""),
       cardmarketId:entry?.cardmarketId||null,
       version:Number(entry?.version||1),
+      printSet:String(entry?.printSet||""),
+      variantKind:String(entry?.variantKind||""),
+      stalePrice:!!entry?.stalePrice,
       launchPrice:Number.isFinite(Number(entry?.launchPrice))?Number(entry.launchPrice):null,
       launchPriceDate:entry?.launchPriceDate||null,
       trend:Number.isFinite(Number(entry?.trend))?Number(entry.trend):null,
@@ -402,6 +435,13 @@ function cardmarketUrl(c){
   const meta=priceMeta(c);
   const direct=String(meta?.url||"").trim();
   if(/^https?:\/\//i.test(direct))return direct;
+  const importedSet=normalizePrintSet(c?.importPrintSet);
+  if(importedSet){
+    const baseMeta=state.marketMeta?.[baseId(c?.id)]||state.marketMeta?.[norm(baseId(c?.id))]||{};
+    const edition=(baseMeta.collections||[]).find(x=>normalizePrintSet(x?.setCode)===importedSet);
+    const editionUrl=String(edition?.url||"").trim();
+    if(/^https?:\/\//i.test(editionUrl))return editionUrl;
+  }
   const base=card(baseId(c?.id));
   if(base&&base.id!==c.id){
     const baseMeta=priceMeta(base);
@@ -1005,9 +1045,10 @@ function csvRarity(c){
 }
 function csvVariant(c){
   const id=String(c?.id||"");
-  const m=id.match(/_(p\d+|r\d+|c\d+)$/i);
-  if(m)return {variant_id:id,variant_kind:m[1].toLowerCase().startsWith("p")?"parallel":m[1].toLowerCase().startsWith("r")?"reprint":"parallel",print_set:""};
-  return {variant_id:id+"_base",variant_kind:"base",print_set:""};
+  const kind=variantKindOf(c);
+  const printSet=printSetOf(c);
+  if(kind==="base")return {variant_id:id+"_base",variant_kind:"base",print_set:printSet};
+  return {variant_id:id,variant_kind:kind,print_set:printSet};
 }
 function exportCollectionCSV(){
   const headers=["card_id","name","set_code","set_name","rarity","variant_id","variant_kind","print_set","condition","language","quantity","unit_price","total_price","currency","price_source"];
@@ -1042,6 +1083,59 @@ function parseCSV(text){
   if(cell.length||row.length){row.push(cell);rows.push(row)}
   return rows.filter(r=>r.some(x=>String(x).trim()!==""));
 }
+function csvRarityToApp(value){
+  const r=String(value||"").trim().toUpperCase();
+  return r==="L"?"Leader":r==="C"?"Common":r==="UC"?"Uncommon":r==="R"?"Rare":r==="SR"?"Super Rare":r==="SEC"?"Secret Rare":r==="SP"?"Special":String(value||"");
+}
+function internalSetCode(value){
+  const raw=String(value||"").trim().toUpperCase().replace(/[\s_-]+/g,"");
+  const m=raw.match(/^(OP|EB|ST|PRB)(\d{2})$/);
+  return m?m[1]+"-"+m[2]:raw||"P";
+}
+function resolveCSVPrint(logicalId,rawVariant,kind,printSet){
+  const logical=String(logicalId||"").trim().toUpperCase();
+  const wantedKind=String(kind||"").trim().toLowerCase()||"base";
+  const wantedSet=normalizePrintSet(printSet);
+  const normalizedVariant=String(rawVariant||"").trim().replace(/_base$/i,"");
+  const candidates=state.cards.filter(c=>norm(baseId(c.id))===norm(logical));
+  const compatible=candidates.filter(c=>variantKindOf(c)===wantedKind);
+  if(wantedSet){
+    const bySet=compatible.filter(c=>normalizePrintSet(printSetOf(c))===wantedSet);
+    const exactSet=bySet.find(c=>norm(c.id)===norm(normalizedVariant));
+    if(exactSet)return exactSet;
+    if(bySet.length===1)return bySet[0];
+  }
+  const exact=compatible.find(c=>norm(c.id)===norm(normalizedVariant));
+  if(exact)return exact;
+  if(wantedKind==="base")return candidates.find(c=>norm(c.id)===norm(logical))||null;
+  return null;
+}
+function syntheticCSVCard(row,logicalId,variantId,kind,printSet){
+  const logical=String(logicalId||"").trim().toUpperCase();
+  let id=String(variantId||"").trim();
+  if(/_base$/i.test(id))id=logical;
+  if(!id)id=logical;
+  const base=state.cards.find(c=>norm(c.id)===norm(logical))||state.cards.find(c=>norm(baseId(c.id))===norm(logical))||null;
+  const setCode=printSet?internalSetCode(printSet):String(base?.set||internalSetCode(row.set_code||logical.split("-")[0]));
+  return {
+    ...(base||{}),
+    id,
+    number:logical,
+    name:String(row.name||base?.name||logical),
+    set:setCode,
+    set_name:String(printSet||row.set_name||base?.set_name||setCode),
+    rarity:csvRarityToApp(row.rarity||base?.rarity||""),
+    category:base?.category||"Character",
+    colors:Array.isArray(base?.colors)?base.colors:[],
+    attributes:Array.isArray(base?.attributes)?base.attributes:[],
+    types:Array.isArray(base?.types)?base.types:[],
+    image:"https://asia-en.onepiece-cardgame.com/images/cardlist/card/"+encodeURIComponent(id)+".png",
+    isParallel:kind==="parallel",
+    syntheticImport:true,
+    importPrintSet:String(printSet||""),
+    importVariantKind:String(kind||"base")
+  };
+}
 function previewImport(text){
   try{
     const rows=parseCSV(text);
@@ -1050,48 +1144,58 @@ function previewImport(text){
     const aliases={
       card_id:["card_id","id","numero","number"],
       variant_id:["variant_id","version_id","variant","version"],
+      variant_kind:["variant_kind","version_kind","kind"],
+      print_set:["print_set","printing_set","reprint_set"],
+      name:["name","nombre"],
+      set_code:["set_code","set"],
+      set_name:["set_name","expansion"],
+      rarity:["rarity","rareza"],
       quantity:["quantity","cantidad","qty","copias"]
     };
     const findIndex=names=>names.map(n=>h.indexOf(n)).find(i=>i>=0);
-    const idI=findIndex(aliases.card_id),variantI=findIndex(aliases.variant_id),qI=findIndex(aliases.quantity);
-    if(idI===undefined||qI===undefined)throw Error("El CSV debe contener las columnas card_id y quantity.");
+    const idx={};for(const [k,names] of Object.entries(aliases))idx[k]=findIndex(names);
+    if(idx.card_id===undefined||idx.quantity===undefined)throw Error("El CSV debe contener las columnas card_id y quantity.");
 
-    const imported=new Map(),unknown=[],variantFallbacks=[];
+    const imported=new Map(),unknown=[],created={},resolvedByPrintSet=[];
     for(const r of rows.slice(1)){
-      const logicalId=String(r[idI]||"").trim().toUpperCase();
+      const get=k=>idx[k]===undefined?"":String(r[idx[k]]??"").trim();
+      const logicalId=get("card_id").toUpperCase();
       if(!logicalId)continue;
-      const rawVariant=variantI===undefined?"":String(r[variantI]||"").trim();
-      const raw=String(r[qI]??"").trim().replace(",",".");
-      const n=Number(raw);
+      const rawVariant=get("variant_id")||logicalId+"_base";
+      const kind=(get("variant_kind")||(/_r\d+$/i.test(rawVariant)?"reprint":/_(?:p|c)\d+$/i.test(rawVariant)?"parallel":"base")).toLowerCase();
+      const printSet=get("print_set");
+      const rawQty=get("quantity").replace(",",".");
+      const n=Number(rawQty);
       const q=Number.isFinite(n)?Math.max(0,Math.min(99,Math.round(n))):NaN;
       if(!Number.isFinite(q)){unknown.push(logicalId+" (cantidad no válida)");continue}
 
-      // variant_id is authoritative when present. _base maps to the base card ID.
-      let wanted=rawVariant;
-      if(/_base$/i.test(wanted))wanted=wanted.replace(/_base$/i,"");
-      const exact=wanted?state.cards.find(c=>norm(c.id)===norm(wanted)):null;
-      const base=state.cards.find(c=>norm(c.id)===norm(logicalId));
-      const match=exact||base;
-      if(!match){unknown.push(rawVariant?logicalId+" ["+rawVariant+"]":logicalId);continue}
-      if(rawVariant&&!exact&&norm(rawVariant)!==norm(logicalId+"_base")&&norm(rawVariant)!==norm(logicalId)){
-        variantFallbacks.push(logicalId+" ["+rawVariant+"]");
+      let match=resolveCSVPrint(logicalId,rawVariant,kind,printSet);
+      if(match&&printSet&&norm(match.id)!==norm(rawVariant.replace(/_base$/i,"")))resolvedByPrintSet.push(logicalId+" → "+match.id);
+      if(!match){
+        const row={name:get("name"),set_code:get("set_code"),set_name:get("set_name"),rarity:get("rarity")};
+        match=syntheticCSVCard(row,logicalId,rawVariant,kind,printSet);
+        created[match.id]=match;
       }
       imported.set(match.id,(imported.get(match.id)||0)+q);
     }
 
     const sum=[...imported.values()].reduce((a,x)=>a+x,0);
     const logicalCount=new Set([...imported.keys()].map(baseId)).size;
+    const createdCount=Object.keys(created).length;
     const msg="Filas: "+(rows.length-1)+
-      " · versiones reconocidas: "+imported.size+
+      " · versiones: "+imported.size+
       " · cartas: "+logicalCount+
       " · "+sum+" copias"+
-      (unknown.length?"\nNo reconocidas: "+unknown.slice(0,15).join(", ")+(unknown.length>15?" …":""):"")+
-      (variantFallbacks.length?"\nVersiones no encontradas (se usaría la base): "+variantFallbacks.slice(0,10).join(", ")+(variantFallbacks.length>10?" …":""):"")+
-      "\n\nCada cantidad se importará en su versión/arte concreto. La importación sustituirá las cantidades actuales por las del CSV.";
+      (createdCount?"\nVersiones añadidas desde el CSV: "+createdCount:"")+
+      (resolvedByPrintSet.length?"\nVersiones resueltas por expansión de impresión: "+resolvedByPrintSet.length:"")+
+      (unknown.length?"\nNo importables: "+unknown.slice(0,15).join(", ")+(unknown.length>15?" …":""):"")+
+      "\n\nCada cantidad se guardará en su impresión exacta. No se sustituirá una reimpresión/paralela por la carta base.";
     if(confirm(msg+"\n\nAceptar = importar. Cancelar = no cambiar nada.")){
       state.owned={};
+      state.importedCards={...state.importedCards,...created};
       for(const [id,q] of imported)if(q>0)state.owned[id]=q;
       saveLocal();
+      prepareCatalog(state.cards.filter(c=>!c.syntheticImport),state.packs);
       if(state.user)syncCloud();
       state.collection.page=1;
       renderShell();
