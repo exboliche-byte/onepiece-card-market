@@ -328,26 +328,37 @@ function groupFiltered(){
     const values=g.versions.map(c=>numericCardValue(c?.[key])).filter(v=>v!==null);
     return values.length?Math.min(...values):null;
   };
-  if(state.catalog.sort==="price"){
-    groups.sort((a,b)=>{
-      const av=groupPriceStats(a).sort,bv=groupPriceStats(b).sort;
-      const am=av===null,bm=bv===null;
-      if(am||bm){if(am&&bm)return String(a.card?.id||"").localeCompare(String(b.card?.id||""),"es",{numeric:true});return am?1:-1}
-      const d=(av-bv)*dir;
-      return d||String(a.card?.id||"").localeCompare(String(b.card?.id||""),"es",{numeric:true})*dir;
-    });
-  }else if(state.catalog.sort==="cost"||state.catalog.sort==="power"){
-    // The UI shows logical cards grouped across variants. Sort the groups by
-    // the same numeric value instead of inheriting the pre-group variant order.
-    const key=state.catalog.sort;
-    groups.sort((a,b)=>{
-      const av=groupNumber(a,key),bv=groupNumber(b,key);
-      const am=av===null,bm=bv===null;
-      if(am||bm){if(am&&bm)return 0;return am?1:-1}
-      const d=(av-bv)*dir;
-      return d||String(a.card?.id||"").localeCompare(String(b.card?.id||""),"es",{numeric:true})*dir;
-    });
-  }
+  const compareNullable=(av,bv)=>{
+    const am=av===null||av===undefined||Number.isNaN(av),bm=bv===null||bv===undefined||Number.isNaN(bv);
+    if(am||bm){if(am&&bm)return 0;return am?1:-1}
+    if(typeof av==="number"&&typeof bv==="number")return (av-bv)*dir;
+    return String(av).localeCompare(String(bv),"es",{numeric:true,sensitivity:"base"})*dir;
+  };
+  const groupValue=g=>{
+    switch(state.catalog.sort){
+      case"name":return norm(g.card?.name);
+      case"rarity":return norm(g.card?.rarity);
+      case"quantity":return logicalQty(g.card);
+      case"price":return groupPriceStats(g).sort;
+      case"cost":return groupNumber(g,"cost");
+      case"power":return groupNumber(g,"power");
+      case"set":return packSortKey(g.card?.set);
+      default:return g.card?.id;
+    }
+  };
+  groups.sort((a,b)=>{
+    const av=groupValue(a),bv=groupValue(b);
+    if(state.catalog.sort==="set"){
+      for(let i=0;i<Math.max(av.length,bv.length);i++){
+        const d=compareNullable(av[i],bv[i]);
+        if(d)return d;
+      }
+    }else{
+      const d=compareNullable(av,bv);
+      if(d)return d;
+    }
+    return String(a.card?.id||"").localeCompare(String(b.card?.id||""),"es",{numeric:true})*dir;
+  });
   return groups;
 }
 function cmpPrice(a,b){
@@ -612,7 +623,7 @@ async function renderCatalogResults(){
   const host=$("#catalogResults");if(!host)return;
   if(state.loading&&!state.cards.length){host.innerHTML='<div class="notice">Cargando catálogo de cartas…</div>';return}
   const needsPrices=state.catalog.sort==="price"||state.catalog.minPrice!==""||state.catalog.maxPrice!=="";
-  if(needsPrices)await ensurePrices();
+  if(needsPrices){try{await ensurePrices();}catch(e){console.warn("catalog prices",e)}}
   const data=groupFiltered(),pages=Math.max(1,Math.ceil(data.length/PAGE));state.catalog.page=Math.min(state.catalog.page,pages);
   const start=(state.catalog.page-1)*PAGE,visible=data.slice(start,start+PAGE);
   visible.slice(0,12).forEach(g=>preloadCardImage(g.card));
