@@ -515,6 +515,9 @@ function showCameraOptions(activeId){
   const wrap=$("#scanCameraWrap"),select=$("#scanCameraSelect");
   if(!wrap||!select)return;
   select.replaceChildren();
+  const automatic=document.createElement("option");
+  automatic.value="";automatic.textContent="Automática";
+  select.appendChild(automatic);
   availableCameras.forEach((device,i)=>{
     const option=document.createElement("option");
     option.value=device.deviceId;
@@ -553,29 +556,26 @@ async function startCamera(turn){
       }else throw e;
     }
     if(turn!==session||!running){media.getTracks().forEach(t=>t.stop());return}
-    try{
-      const devices=await navigator.mediaDevices.enumerateDevices();
-      if(turn!==session||!running){media.getTracks().forEach(t=>t.stop());return}
-      availableCameras=camerasForFacing(devices);
-      // Only auto-switch to an explicitly identified wide-angle camera.
-      const wide=availableCameras.slice().sort((a,b)=>cameraPriority(b)-cameraPriority(a))[0];
-      const activeId=media.getVideoTracks()[0]?.getSettings?.().deviceId;
-      const targetId=preferredCameraId||(facing==="environment"&&wide&&cameraPriority(wide)>=90?wide.deviceId:"");
-      if(targetId&&targetId!==activeId){
-        media.getTracks().forEach(t=>t.stop());
-        try{
-          media=await navigator.mediaDevices.getUserMedia({audio:false,video:{...videoSettings,deviceId:{exact:targetId}}});
-        }catch(error){
-          console.warn("No se pudo seleccionar la cámara gran angular",error);
-          preferredCameraId="";
-          media=await navigator.mediaDevices.getUserMedia({audio:false,video:{...videoSettings,facingMode:{ideal:facing}}})
-            .catch(()=>navigator.mediaDevices.getUserMedia({audio:false,video:true}));
-        }
+    let devices=[];
+    try{devices=await navigator.mediaDevices.enumerateDevices()}
+    catch(error){console.warn("No se pudieron enumerar las cámaras",error)}
+    if(turn!==session||!running){media.getTracks().forEach(t=>t.stop());return}
+    availableCameras=camerasForFacing(devices);
+    // Only auto-switch to an explicitly identified wide-angle camera.
+    const wide=availableCameras.slice().sort((a,b)=>cameraPriority(b)-cameraPriority(a))[0];
+    const activeId=media.getVideoTracks()[0]?.getSettings?.().deviceId;
+    const targetId=preferredCameraId||(facing==="environment"&&wide&&cameraPriority(wide)>=90?wide.deviceId:"");
+    if(targetId&&targetId!==activeId){
+      media.getTracks().forEach(t=>t.stop());
+      try{
+        media=await navigator.mediaDevices.getUserMedia({audio:false,video:{...videoSettings,deviceId:{exact:targetId}}});
+      }catch(error){
+        console.warn("No se pudo seleccionar la cámara gran angular",error);
+        preferredCameraId="";
+        // A failed explicit selection should not leave the scanner with a stopped stream.
+        media=await navigator.mediaDevices.getUserMedia({audio:false,video:{...videoSettings,facingMode:{ideal:facing}}})
+          .catch(()=>navigator.mediaDevices.getUserMedia({audio:false,video:true}));
       }
-    }catch(error){
-      // Some browsers do not expose physical camera enumeration.
-      console.warn("No se pudieron enumerar las cámaras",error);
-      availableCameras=[];
     }
     if(turn!==session||!running){media.getTracks().forEach(t=>t.stop());return}
     stream=media;track=media.getVideoTracks()[0]||null;
@@ -603,7 +603,7 @@ async function switchCamera(){
   await restartCamera(turn);
 }
 async function selectCamera(deviceId){
-  if(!running||!deviceId||deviceId===track?.getSettings?.().deviceId)return;
+  if(!running||deviceId===track?.getSettings?.().deviceId)return;
   preferredCameraId=deviceId;
   await restartCamera(++session);
 }
