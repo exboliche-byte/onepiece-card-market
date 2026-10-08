@@ -80,6 +80,8 @@
 .account-signout{margin:16px 0 5px;padding-top:14px;border-top:1px solid var(--line)}
 .account-signout .btn{width:100%}
 .account-destructive{border-color:#713441}
+.account-inline-status{border-top:1px solid var(--line);margin-top:14px;padding-top:12px}
+.account-inline-status h3{margin:0 0 7px;font-size:14px}
 </style>
 </head>
 <body>
@@ -1867,7 +1869,8 @@ function accountView(){
   }
   const account='<p class="small">Usuario: <b>'+esc(accountDisplayName())+'</b></p>'+
     '<p class="small">Email: <b>'+esc(state.user.email||"Sin configurar")+'</b></p>'+
-    '<p class="small">Tu colección y mazos están sincronizados con esta cuenta.</p>';
+    '<p class="small">Tu colección y mazos están sincronizados con esta cuenta.</p>'+
+    '<div class="account-inline-status"><h3>Estado</h3>'+accountStatusView()+'</div>';
   const backups='<div class="account-backup-sections">'+
     '<div><h3>Colección</h3><p class="small">Importa y exporta cantidades y versiones exactas (CSV). Importar sustituye la colección actual tras confirmación.</p>'+
     '<div class="inline-actions"><button class="secondary btn" id="exportCsv">Exportar colección (CSV)</button>'+
@@ -1895,7 +1898,6 @@ function accountView(){
     accountPanel("profile","Mi cuenta",account)+
     accountPanel("backups","Datos y copias de seguridad",backups)+
     accountPanel("security","Seguridad",security)+
-    accountPanel("status","Estado",accountStatusView())+
     accountPanel("danger","Eliminar cuenta",danger,"account-destructive")+
     '<div class="account-signout"><button class="secondary btn" id="logout" type="button">Cerrar sesión</button></div></div>';
 }
