@@ -124,7 +124,8 @@ function snapshot(){
   const still=document.createElement("canvas");
   still.width=Math.min(780,Math.round(b.r.width*1.5));
   still.height=Math.max(1,Math.round(still.width*b.r.height/b.r.width));
-  still.getContext("2d").drawImage(camera,b.offsetX/b.factor,b.offsetY/b.factor,b.r.width/b.factor,b.r.height/b.factor,0,0,still.width,still.height);
+  const stillX=b.offsetX/b.factor,stillY=b.offsetY/b.factor;
+  still.getContext("2d").drawImage(camera,stillX,stillY,Math.min(b.w-stillX,b.r.width/b.factor),Math.min(b.h-stillY,b.r.height/b.factor),0,0,still.width,still.height);
   return {card:crop,still:still.toDataURL("image/jpeg",.79)};
 }
 function cropForCode(card){
@@ -175,6 +176,7 @@ async function recognizeCard(frame,turn){
   if(found?.confidence==="high")return found;
   // Periodically inspect the entire card for cards whose code is outside the
   // crop, rotated, or poorly focused. This also allows unique-name detection.
+  if(attempts%2!==0)return found;
   const full=await engine.recognize(frame.card);
   if(turn!==session||!running||locked)return null;
   const alternate=lookup(full?.data?.text||"");
