@@ -2093,7 +2093,7 @@ function accountView(){
     '<button class="secondary btn" id="importAllDecks">Importar todos los mazos</button>'+
     '<input id="decksBackupFile" type="file" class="fileinput" accept=".json,application/json">'+
     '<button class="danger btn" id="deleteAllDecks">Borrar todos mis mazos</button></div></div>'+
-    '<div><h3>Mis torneos</h3><p class="small">Los torneos se guardan en este navegador por cuenta. Exporta JSON para conservarlos; importa copias sin sobrescribir torneos existentes.</p>'+
+    '<div><h3>Mis torneos</h3><p class="small">Los torneos se sincronizan con tu cuenta en Supabase. Puedes exportar una copia JSON e importar torneos sin sobrescribir los existentes.</p>'+
     '<div class="inline-actions"><button class="secondary btn" id="exportTournamentsBackup">Exportar torneos (JSON)</button>'+
     '<button class="secondary btn" id="importTournamentsBackup">Importar torneos (JSON)</button>'+
     '<input id="tournamentsBackupFile" type="file" class="fileinput" accept=".json,application/json">'+
@@ -2856,6 +2856,7 @@ async function syncCloudInternal(userId){
   const localDecks=state.decks.slice();
   const loaded=await loadCollectionFromCloud(userId);
   if(!loaded)return false;
+  await window.tournamentsSyncForAccount?.(userId);
   try{
     const ds=await state.sb.from("decks").select("*").eq("user_id",state.user.id);if(ds.error)throw ds.error;
     const remoteIds=(ds.data||[]).map(d=>d.id);
