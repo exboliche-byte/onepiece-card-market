@@ -2220,8 +2220,12 @@ function nav(){
   const tabButton=([id,label],side)=>'<button type="button" class="'+(state.tab===id?"active":"")+'" data-tab="'+id+'" aria-label="'+label+'"'+(state.tab===id?' aria-current="page"':'')+'>'+navIcon(id)+'<span'+(side?' class="side-label"':'')+'>'+label+'</span></button>';
   const scanButton='<button type="button" data-scan-open aria-label="Abrir escáner de cartas">'+navIcon("scanner")+'<span class="side-label">Escáner</span></button>';
   const side='<aside class="desktop-side" aria-label="Menú principal"><div class="side-head"><span class="side-brand">ONE PIECE</span><button type="button" id="sidebarToggle" class="side-toggle" aria-label="Plegar o desplegar menú" aria-expanded="'+(!sidebarCollapsed)+'">'+navIcon("collapse")+'</button></div><nav class="side-items" aria-label="Secciones">'+items.slice(0,7).map(item=>tabButton(item,true)).join("")+scanButton+tabButton(items[7],true)+'</nav></aside>';
-  const moreActive=state.tab==="tournaments"||state.tab==="meta"||state.tab==="proxies"||state.tab==="account";
-  const mobile='<nav class="nav mobile-nav" aria-label="Secciones principales">'+items.slice(0,4).map(item=>tabButton(item,false)).join("")+'<button type="button" id="mobileMoreToggle" class="'+(moreActive?"active":"")+'" aria-label="Más opciones" aria-expanded="false" aria-controls="mobileMorePanel">'+navIcon("more")+'<span>Más</span></button><div id="mobileMorePanel" class="mobile-more" hidden>'+items.slice(4).map(item=>tabButton(item,false)).join("")+'<button type="button" data-scan-open aria-label="Abrir escáner de cartas">'+navIcon("scanner")+'<span>Escáner</span></button></div></nav>';
+  // En móvil, Torneos ocupa el acceso directo que antes tenía Expansiones.
+  // El menú lateral de ordenador conserva su orden original.
+  const mobileMain=["catalog","collection","tournaments","decks"];
+  const mobileMore=items.filter(([id])=>!mobileMain.includes(id));
+  const moreActive=mobileMore.some(([id])=>id===state.tab);
+  const mobile='<nav class="nav mobile-nav" aria-label="Secciones principales">'+items.filter(([id])=>mobileMain.includes(id)).sort((a,b)=>mobileMain.indexOf(a[0])-mobileMain.indexOf(b[0])).map(item=>tabButton(item,false)).join("")+'<button type="button" id="mobileMoreToggle" class="'+(moreActive?"active":"")+'" aria-label="Más opciones" aria-expanded="false" aria-controls="mobileMorePanel">'+navIcon("more")+'<span>Más</span></button><div id="mobileMorePanel" class="mobile-more" hidden>'+mobileMore.map(item=>tabButton(item,false)).join("")+'<button type="button" data-scan-open aria-label="Abrir escáner de cartas">'+navIcon("scanner")+'<span>Escáner</span></button></div></nav>';
   return side+mobile;
 }
 function renderShell(){
