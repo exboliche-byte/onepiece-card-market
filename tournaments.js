@@ -174,7 +174,7 @@
     }catch(e){notify("No se pudo conservar la modificación local");return false}
   }
   function load(){
-    state.tournaments=[];state.tournamentId=null;state.tournamentDraft=null;state.tournamentRoundDraft=null;state.tournamentFinishDraft=null;state.tournamentStats=null;
+    state.tournaments=[];state.tournamentId=null;state.tournamentDraft=null;state.tournamentRoundDraft=null;state.tournamentFinishDraft=null;state.tournamentStats=null;state.tournamentDeckOpen=false;state.tournamentCloudError="";
     const key=ownerKey();if(!key)return;
     try{
       const data=JSON.parse(localStorage.getItem(key)||"[]");
@@ -241,7 +241,7 @@
   function tournamentList(){
     const arr=(state.tournaments||[]).slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))||String(b.createdAt).localeCompare(String(a.createdAt)));
     return '<div class="tourney-wrap"><div class="tourney-header"><div><h1>🏆 Mis torneos</h1><div class="tourney-muted">Registra tus partidas, resultados y posiciones.</div></div><div class="tourney-actions"><button class="secondary btn" id="tourneyStatsOpen">📊 Estadísticas</button><button class="primary btn" id="tourneyNew">＋ Nuevo</button></div></div>'+
-      '<p class="tourney-hint">Los torneos se guardan solo en este navegador. No se sincronizan entre dispositivos; evita borrar los datos del navegador.</p>'+
+      (state.tournamentCloudError?'<p class="tourney-hint">'+esc(state.tournamentCloudError)+'</p>':'')+
       (arr.length?'<div class="tourney-grid">'+arr.map(t=>{const r=tournamentRecord(t);return '<button type="button" class="tourney-tile" data-tourney-open="'+esc(t.id)+'">'+
         (portrait(t.leaderId)?'<img class="tourney-portrait" src="'+esc(portrait(t.leaderId))+'" alt="">':'<div class="tourney-portrait"></div>')+
         '<div class="tourney-tile-info"><strong>'+esc(t.title)+'</strong><div class="tourney-sub">'+esc(dateLabel(t.date))+'</div><div class="tourney-pills"><span class="tourney-pill">'+esc(t.set||"Libre")+'</span><span class="tourney-pill green">'+esc(t.type||"Local Store")+'</span></div></div>'+
@@ -325,7 +325,7 @@
     const all=only?[only]:state.tournaments||[];
     const s=tournamentStatistics(all);
     return '<div class="tourney-wrap"><div class="tourney-header"><div><h1>📊 Estadísticas</h1><p class="tourney-muted">'+esc(only?only.title:"Historial de todos tus torneos")+'</p></div><button class="secondary btn" id="tourneyStatsBack">← Volver</button></div>'+
-      '<p class="tourney-hint">El W/R se calcula sobre partidas jugadas (victorias / victorias + derrotas). Los BYEs y No Shows se muestran aparte y no alteran los porcentajes. Las estadísticas solo incluyen los torneos registrados en este dispositivo.</p>'+
+      '<p class="tourney-hint">El W/R se calcula sobre partidas jugadas (victorias / victorias + derrotas). Los BYEs y No Shows se muestran aparte y no alteran los porcentajes. Se utilizan los torneos sincronizados con tu cuenta.</p>'+
       '<div class="tourney-stats-grid">'+
       statTile(statsNumber(s.tournaments),"Torneos")+
       statTile(statsNumber(s.completed),"Torneos finalizados")+
@@ -473,7 +473,7 @@
       const t={id:crypto.randomUUID(),title:d.title.trim()||"Un torneo",date:d.date,set:d.set,type:d.type||"Local Store",leaderId,deckId:d.deckId||"",deckSnapshot:snapshotDeck(deck),players:null,placement:null,rounds:[],finished:false,createdAt:new Date().toISOString()};
       state.tournaments.unshift(t);state.tournamentId=t.id;
     }
-    state.tournamentDraft=null;save();rerender();notify("Torneo guardado");
+    state.tournamentDraft=null;save();rerender();notify("Torneo registrado; sincronizando…");
   }
   function confirmFinish(){
     const t=getTournament();
@@ -484,7 +484,7 @@
     if((placeRaw&&(!Number.isSafeInteger(placement)||placement<1))||(playersRaw&&(!Number.isSafeInteger(players)||players<1))){notify("Introduce números enteros válidos");return}
     if(placeRaw&&playersRaw&&placement>players){notify("El puesto no puede superar el número de participantes");return}
     t.placement=placeRaw?placement:null;t.players=playersRaw?players:null;t.finished=true;t.updatedAt=new Date().toISOString();
-    state.tournamentFinishDraft=null;save();rerender();notify("Torneo finalizado");
+    state.tournamentFinishDraft=null;save();rerender();notify("Torneo finalizado; sincronizando…");
   }
   function selectRoundKind(kind){
     if(!roundTypes[kind])return;
@@ -497,7 +497,7 @@
     const round={kind:d.kind,opponentId:d.opponentId||"",dice:d.dice,start:d.start,result:d.kind==="bye"?"W":d.kind==="noshow"?"N":d.result,note:String(d.note||"").slice(0,1025)};
     if(Number.isInteger(d.editIndex)&&d.editIndex>=0&&t.rounds[d.editIndex])t.rounds[d.editIndex]=round;
     else t.rounds.push(round);
-    state.tournamentRoundDraft=null;t.updatedAt=new Date().toISOString();save();rerender();notify("Ronda guardada");
+    state.tournamentRoundDraft=null;t.updatedAt=new Date().toISOString();save();rerender();notify("Ronda registrada; sincronizando…");
   }
   function downloadBlob(blob,name){
     const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),15000);
@@ -623,13 +623,13 @@
     on("#tourneyDeckBackdrop","click",e=>{if(e.target.id==="tourneyDeckBackdrop"){state.tournamentDeckOpen=false;rerender()}});
     on("#tourneyStatsOne","click",()=>{state.tournamentStats=t.id;rerender()});
     on("#tourneyFinish","click",()=>{if(t.finished)return;state.tournamentFinishDraft={placement:t.placement||"",players:t.players||""};rerender()});
-    on("#tourneyReopen","click",()=>{if(!t.finished)return;t.finished=false;t.updatedAt=new Date().toISOString();state.tournamentFinishDraft=null;save();rerender();notify("Torneo reabierto")});
+    on("#tourneyReopen","click",()=>{if(!t.finished)return;t.finished=false;t.updatedAt=new Date().toISOString();state.tournamentFinishDraft=null;save();rerender();notify("Torneo reabierto; sincronizando…")});
     on("#tourneyCancelFinish","click",()=>{state.tournamentFinishDraft=null;rerender()});
     on("#tourneyConfirmFinish","click",confirmFinish);
-    on("#tourneyDelete","click",()=>{if(!confirm("¿Eliminar este torneo y todas sus rondas?"))return;state.tournaments=state.tournaments.filter(x=>x.id!==t.id);state.tournamentId=null;save();rerender();notify("Torneo eliminado")});
+    on("#tourneyDelete","click",()=>{if(!confirm("¿Eliminar este torneo y todas sus rondas?"))return;state.tournaments=state.tournaments.filter(x=>x.id!==t.id);state.tournamentId=null;save([t.id]);rerender();notify("Torneo eliminado")});
     on("#tourneyAddRound","click",()=>{state.tournamentRoundDraft={kind:null,editIndex:null};rerender()});
     document.querySelectorAll("[data-tourney-edit-round]").forEach(b=>b.onclick=()=>{const i=Number(b.dataset.tourneyEditRound);state.tournamentRoundDraft={...t.rounds[i],editIndex:i,search:""};rerender()});
-    document.querySelectorAll("[data-tourney-delete-round]").forEach(b=>b.onclick=()=>{const i=Number(b.dataset.tourneyDeleteRound);if(!confirm("¿Eliminar la ronda "+(i+1)+"?"))return;t.rounds.splice(i,1);save();rerender()});
+    document.querySelectorAll("[data-tourney-delete-round]").forEach(b=>b.onclick=()=>{const i=Number(b.dataset.tourneyDeleteRound);if(!confirm("¿Eliminar la ronda "+(i+1)+"?"))return;t.rounds.splice(i,1);t.updatedAt=new Date().toISOString();save();rerender()});
     if(!state.tournamentRoundDraft)return;
     document.querySelectorAll("[data-tourney-round-kind]").forEach(b=>b.onclick=()=>selectRoundKind(b.dataset.tourneyRoundKind));
     document.querySelectorAll("#tourneyCancelRound").forEach(b=>b.onclick=()=>{state.tournamentRoundDraft=null;rerender()});
@@ -683,8 +683,8 @@
       if(ownerKey()!==key)return;
       const combined=[...current,...fresh];
       // Persist first: storage quota failure must never overwrite in-memory data.
-      localStorage.setItem(key,JSON.stringify(combined));
       state.tournaments=combined;
+      save();
       notify("Importados "+fresh.length+" torneos; ninguno de los anteriores se ha sobrescrito.");
     }catch(error){
       console.warn("Error importando torneos",error);
@@ -695,14 +695,14 @@
     const key=ownerKey();if(!key)return notify("Inicia sesión para borrar tus torneos.");
     const n=state.tournaments?.length||0;
     if(!n)return notify("No hay torneos que borrar.");
-    if(!confirm("¿Eliminar DEFINITIVAMENTE los "+n+" torneos de este navegador y todas sus rondas? Exporta antes un JSON si quieres conservarlos."))return;
+    if(!confirm("¿Eliminar DEFINITIVAMENTE los "+n+" torneos de tu cuenta y todas sus rondas? Exporta antes un JSON si quieres conservarlos."))return;
     if(prompt("Para confirmar el borrado de TODOS tus torneos escribe BORRAR:")!=="BORRAR")return notify("Borrado cancelado");
     if(ownerKey()!==key)return;
+    const ids=state.tournaments.map(t=>t.id);
     try{
-      localStorage.removeItem(key);
       state.tournaments=[];state.tournamentId=null;state.tournamentDraft=null;
       state.tournamentRoundDraft=null;state.tournamentFinishDraft=null;state.tournamentStats=null;
-      notify("Tus torneos locales han sido borrados.");
+      save(ids);notify("Eliminación solicitada para todos los torneos.");
     }catch(error){console.warn("No se pudieron borrar los torneos",error);notify("No se pudo completar el borrado.");}
   }
   window.exportAllTournaments=exportAllTournaments;
