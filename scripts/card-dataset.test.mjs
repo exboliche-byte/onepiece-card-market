@@ -67,3 +67,13 @@ test("every print has an image URI and a supported physical expansion",()=>{
   assert.ok(packsIndex.has(set),c.id+" unknown printing expansion: "+set);
  }
 });
+
+test("Limitless-verified OP13-043 alternate print exists as an independent exact version",()=>{
+ const base=cards.find(c=>c.id==="OP13-043"),parallel=cards.find(c=>c.id==="OP13-043_p2");
+ assert.ok(base,"Base Otama not found");
+ assert.ok(parallel,"Premium Bandai Otama OP13-043_p2 absent");
+ assert.notEqual(String(base.image),String(parallel.image),"Different prints must not share art");
+ assert.match(String(parallel.set_name),/Best Selection Vol\.?6/i);
+ assert.ok(prices["OP13-043_p2"],"Exact print must have independent price metadata");
+ assert.equal(prices["OP13-043_p2"].variantKind,"parallel");
+});
