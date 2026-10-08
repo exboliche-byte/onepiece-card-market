@@ -65,3 +65,34 @@ test("collection sharing is wired with explicit public opt-in, retry, copy and r
   assert.match(sql,/public_collection_snapshot/);
   assert.match(sql,/GRANT EXECUTE ON FUNCTION public\.public_collection_snapshot\(text\) TO anon,authenticated/);
 });
+
+test("automatic scanner add is opt-in, waits five seconds, and has a prominent stop",()=>{
+  assert.match(scanner,/let autoAddEnabled=false/);
+  assert.match(scanner,/id="scanAutoToggle"/);
+  assert.match(scanner,/id="scanAutoStop" hidden/);
+  assert.match(scanner,/PARAR AÑADIDO AUTOMÁTICO/);
+  assert.match(scanner,/Date\\.now\\(\\)\\+5000/);
+  assert.match(scanner,/\\},5000\\)/);
+  assert.match(scanner,/autoAddCandidate!==candidate/);
+  assert.match(scanner,/\\$\\("#scanVariant"\\)\\?\\.value!==candidate\\.printId/);
+  assert.match(scanner,/if\\(hit\\.confidence==="visual"/);
+  assert.match(scanner,/autoWaitForChange===?/);
+  assert.match(scanner,/cancelAutoCountdown\\(\\)/);
+  assert.match(scanner,/const ok=await setQty|ok=await setQty/);
+});
+
+test("scanner buttons show copies of the exact selected printing",()=>{
+  const block=between(scanner,"function ownedCount(id){","function chooseVariant(");
+  const buttons={"#scanAddOne":{textContent:""},"#scanAutoStop":{textContent:""}};
+  const refresh=new Function("qty","$",block+"\\nreturn updateScanCopiesLabel;")(
+    id=>({"OP01-001":3,"OP01-001_p1":1})[id]||0,
+    selector=>buttons[selector]
+  );
+  refresh({id:"OP01-001_p1"});
+  assert.match(buttons["#scanAddOne"].textContent,/Ya tienes 1$/);
+  assert.match(buttons["#scanAutoStop"].textContent,/1 copia\\(s\\) de OP01-001_p1/);
+  refresh({id:"OP01-001"});
+  assert.match(buttons["#scanAddOne"].textContent,/Ya tienes 3$/);
+  refresh(null);
+  assert.equal(buttons["#scanAutoStop"].textContent,"⏹ PARAR AÑADIDO AUTOMÁTICO");
+});
