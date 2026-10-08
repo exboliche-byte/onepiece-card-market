@@ -373,7 +373,7 @@ function nextCollectionMutationToken(){
 function queueCollectionQty(id,quantity){
   if(!state.user)return;
   const n=Math.max(0,Math.min(99,Number(quantity)||0));
-  collectionTouched.set(id,n);
+  collectionTouched.set(state.user.id+'|'+id,n);
   const pending=readCollectionPending();
   pending.changes[id]={quantity:n,token:nextCollectionMutationToken()};
   writeCollectionPending(pending);
@@ -383,7 +383,7 @@ function queueCollectionReplacement(){
   const pending=readCollectionPending();
   pending.replace={token:nextCollectionMutationToken()};
   pending.changes={};
-  collectionTouched.clear();
+  for(const key of collectionTouched.keys())if(key.startsWith(state.user.id+'|'))collectionTouched.delete(key);
   writeCollectionPending(pending);
 }
 function loadCollectionForAccount({migrateLegacy=false}={}){
@@ -1946,7 +1946,9 @@ async function reconcileCollectionCloud(userId){
       else delete remoteOwned[id]; // persistent deletion tombstone
     }
     // Also protect edits already committed during the remote fetch.
-    for(const [id,n] of collectionTouched){
+    for(const [key,n] of collectionTouched){
+      if(!key.startsWith(userId+'|'))continue;
+      const id=key.slice(userId.length+1);
       if(n>0)remoteOwned[id]=n;
       else delete remoteOwned[id];
     }
@@ -1989,6 +1991,7 @@ async function syncCloudInternal(userId){
     const remoteIdsSet=new Set(remote.map(d=>d.id)),unsynced=localDecks.filter(d=>!remoteIdsSet.has(d.id)).map(d=>({...d,owner_id:state.user.id}));
     state.decks=[...remote,...unsynced];saveLocal();
     for(const d of unsynced)await syncDeck(d);
+    if(state.user?.id===userId&&state.authError?.startsWith("Sesión iniciada, pero no se pudo sincronizar"))state.authError="";
     return true;
   }catch(e){
     console.warn("cloud sync",e);
