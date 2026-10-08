@@ -1,5 +1,7 @@
 import fs from "node:fs/promises";
 import expansionAliases from "./expansion-aliases.cjs";
+import ambiguityResolver from "./resolve-ambiguous-prices.cjs";
+const {resolveAmbiguousPrintLinks}=ambiguityResolver;
 const {registerCatalogExpansionNames,registerProductExpansionNames}=expansionAliases;
 
 const PRODUCT_URL = "https://downloads.s3.cardmarket.com/productCatalog/productList/products_singles_18.json";
@@ -233,6 +235,9 @@ function sourceSetCode(card) {
   // Reprints of P-xxx cards can live in PRB/ST products. The source set from
   // the upstream catalog is therefore more specific than the printed P code.
   if (/^OP\d{2}-EB\d{2}$/i.test(rawSet)) return rawSet;
+  // These are physical reprint editions; falling back to the printed code
+  // (ST05, OP12, etc.) silently assigns the original product to a reprint.
+  if (/^(?:FAMILY-?DECK-?SET|LIMITED-?PRODUCT-?CARD|OTHER-?PRODUCT-?CARD)$/i.test(rawSet)) return rawSet;
   if (/^(EB|OP|ST|PRB)-?\d{2}$/i.test(rawSet)) {
     const m = rawSet.match(/^(EB|OP|ST|PRB)-?(\d{2})$/i);
     return m[1].toUpperCase() + "-" + m[2];
@@ -1019,9 +1024,9 @@ async function main() {
     ) : null;
     const previousEur = priceNumber(prior.eur);
     const exactLimitless = !!(limitlessPrint?.url || limitlessPrint?.eur != null);
-    const exactPrintSet = exactLimitless
-      ? (printSetFromExpansionName(limitlessPrint?.expansion) || currentPrintSet)
-      : currentPrintSet;
+    // Source printing from the catalogue is authoritative; the Limitless
+    // expansion title may describe the original card rather than its reprint.
+    const exactPrintSet = currentPrintSet;
     const samePriorExactUrl = !limitlessPrint?.url || String(prior?.url||"").replace("/en/OnePiece/","/es/OnePiece/") === String(limitlessPrint.url).replace("/en/OnePiece/","/es/OnePiece/");
     const eur = exactLimitless
       ? (priceNumber(limitlessPrint?.eur) ?? oracleEur ?? (samePriorExactUrl ? previousEur : null))
@@ -1082,7 +1087,7 @@ async function main() {
           ? "https://www.cardmarket.com/es/OnePiece/Products?idProduct=" + encodeURIComponent(String(product.idProduct))
           : (exactPrintOracle?.urlsByPrint?.get(String(card.id))?.[0]
             ? exactPrintOracle.urlsByPrint.get(String(card.id))[0].replace("/en/OnePiece/", "/es/OnePiece/")
-            : cardmarketCardUrl(baseCard))),
+            : null)),
       collections,
       launchPrice,
       launchPriceDate,
@@ -1141,6 +1146,9 @@ async function main() {
     oracleOnly++;
   }
 
+  const ambiguityStats=resolveAmbiguousPrintLinks(outputCards,cards,exactPrintOracle);
+  priced=Object.values(outputCards).filter(entry=>priceNumber(entry?.eur)!==null).length;
+  console.log("Exact-print collision protection:",JSON.stringify(ambiguityStats));
   const coverage = mapped / Math.max(1, cards.length);
 
   const createdAt = pricesRaw?.createdAt || new Date().toISOString();
@@ -1159,6 +1167,7 @@ async function main() {
       pricedCards: priced,
       priceCards: Object.keys(outputCards).length,
       oracleOnly,
+      ...ambiguityStats,
       coverage: Number(coverage.toFixed(4)),
       priceCoverage: Number((priced / Math.max(1, cards.length)).toFixed(4)),
       englishOnly: true,
