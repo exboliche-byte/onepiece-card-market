@@ -40,7 +40,9 @@ await step("Open a card detail with versions",async()=>{
  await page.waitForTimeout(800);
  const body=await page.locator("body").innerText();
  if(!/Otama|OP13-043/.test(body))throw Error("Detail did not render");
- return {hasCardCode:true}
+ await page.locator(".modalback [data-close]").first().click({timeout:10000});
+ await page.waitForTimeout(250);
+ return {hasCardCode:true,detailClosed:true}
 });
 await step("Expansions listing renders",async()=>{
  await page.locator('.desktop-side [data-tab="album"]').first().click();
