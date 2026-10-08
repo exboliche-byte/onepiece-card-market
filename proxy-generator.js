@@ -10,6 +10,7 @@ const PHOTO_PIXELS={width:756,height:1056}; // ~305 DPI
 const PDF_LIB_URL="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js";
 let pdfLibPromise=null;
 let generating=false;
+const pdfCache={deck:null,standalone:null};
 
 function missingDeckProxies(deck){
   if(!state.user||!state.collectionReady){
@@ -126,36 +127,73 @@ async function createProxyPdf(cards,button,title="Proxies de cartas - MiAlbumOne
   return pdf.save({useObjectStreams:true});
 }
 
-async function generateDeckProxies(button){
-  if(generating)return;
-  const d=state.decks.find(deck=>deck.id===state.deckId);
-  if(!d){notify("Abre el mazo que quieres imprimir.");return}
-  let cards;
-  try{cards=missingDeckProxies(d)}
-  catch(error){notify(error.message);return}
-  if(!cards.length){notify("Ya tienes todas las cartas de este mazo; no necesitas proxies.");return}
-
-  await openProxyPdf(cards,button,"Proxies de cartas faltantes - MiAlbumOnePiece");
+function collectDeckProxyCards(){
+  const deck=state.decks.find(d=>d.id===state.deckId);
+  if(!deck)throw Error("Abre el mazo que quieres imprimir.");
+  const cards=missingDeckProxies(deck);
+  if(!cards.length)throw Error("Ya tienes todas las cartas de este mazo; no necesitas proxies.");
+  return cards;
 }
 
-async function generateStandaloneProxies(button){
-  if(generating)return;
-  const entries=Object.entries(state.proxySelection||{});
+function collectStandaloneProxyCards(){
   const cards=[];
-  for(const [id,count] of entries){
+  for(const [id,count] of Object.entries(state.proxySelection||{})){
     const c=card(id),n=Number(count);
-    if(!c||!Number.isSafeInteger(n)||n<=0||n>9999){notify("Hay una carta o cantidad inválida en la selección.");return}
+    if(!c||!Number.isSafeInteger(n)||n<=0||n>9999){
+      throw Error("Hay una carta o cantidad inválida en la selección.");
+    }
     for(let i=0;i<n;i++)cards.push(c);
   }
-  if(!cards.length){notify("Añade al menos una carta para crear el PDF.");return}
-  if(cards.length>400&&!confirm("Vas a generar "+cards.length+" cartas ("+Math.ceil(cards.length/9)+" hojas A4). ¿Continuar?"))return;
-  await openProxyPdf(cards,button,"Proxy Generator - MiAlbumOnePiece");
+  if(!cards.length)throw Error("Añade al menos una carta para crear el PDF.");
+  return cards;
 }
 
-async function openProxyPdf(cards,button,title){
+function getProxySelection(source){
+  const cards=source==="deck"?collectDeckProxyCards():collectStandaloneProxyCards();
+  if(source==="standalone"&&cards.length>400&&
+      !confirm("Vas a generar "+cards.length+" cartas ("+Math.ceil(cards.length/9)+" hojas A4). ¿Continuar?")){
+    return null;
+  }
+  return cards;
+}
+
+function proxyFileName(source){
+  return source==="deck"?"proxies-mazo.pdf":"proxies-personalizados.pdf";
+}
+
+function proxyDocumentTitle(source){
+  return source==="deck"?"Proxies de cartas faltantes - MiAlbumOnePiece":"Proxy Generator - MiAlbumOnePiece";
+}
+
+function cacheKey(cards){
+  // Keep the order and the exact printing of each requested proxy.
+  return cards.map(c=>c.id).join("\u0001");
+}
+
+async function prepareProxyFile(cards,button,source){
+  const signature=cacheKey(cards);
+  const cached=pdfCache[source];
+  if(cached&&cached.signature===signature)return cached.file;
+  const bytes=await createProxyPdf(cards,button,proxyDocumentTitle(source));
+  const file=new File([bytes],proxyFileName(source),{type:"application/pdf"});
+  pdfCache[source]={signature,file};
+  return file;
+}
+
+function downloadProxyFile(file){
+  const url=URL.createObjectURL(file);
+  const link=document.createElement("a");
+  link.href=url;
+  link.download=file.name;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),60000);
+}
+
+async function openProxyPdf(cards,button,source){
   if(generating)return;
-  // Reserve the PDF tab within the actual click. Browsers block window.open
-  // when called after awaiting image downloads or PDF generation.
+  // Reserve the PDF tab immediately before awaiting image and PDF generation.
   const pdfTab=window.open("about:blank","_blank");
   if(pdfTab){
     try{
@@ -167,15 +205,12 @@ async function openProxyPdf(cards,button,title){
   generating=true;
   const before=button.textContent;button.disabled=true;
   try{
-    const bytes=await createProxyPdf(cards,button,title);
-    const blob=new Blob([bytes],{type:"application/pdf"});
-    const url=URL.createObjectURL(blob);
-    // Display the PDF, not a forced download. If popups are blocked,
-    // navigate to the viewer in this same browser tab.
+    const file=await prepareProxyFile(cards,button,source);
+    const url=URL.createObjectURL(file);
     if(pdfTab&&!pdfTab.closed)pdfTab.location.replace(url);
     else window.location.assign(url);
-    notify("PDF A4 abierto: "+cards.length+" proxies · "+Math.ceil(cards.length/PER_PAGE)+" hojas. Imprime al 100%.");
-    // Keep the Blob URL valid for the duration of viewing/printing.
+    notify("PDF abierto. Para compartir el documento, vuelve a la web y pulsa «Compartir archivo PDF».");
+    // The Blob URL must remain alive while the viewer is open; sharing uses the File itself.
   }catch(error){
     if(pdfTab&&!pdfTab.closed)pdfTab.close();
     console.warn("Generador de proxies",error);
@@ -186,11 +221,60 @@ async function openProxyPdf(cards,button,title){
   }
 }
 
-// Delegation survives re-renders of the deck view, including cloud sync.
+async function shareProxyPdf(cards,button,source){
+  if(generating)return;
+  generating=true;
+  const before=button.textContent;button.disabled=true;
+  try{
+    const file=await prepareProxyFile(cards,button,source);
+    if(typeof navigator.share!=="function"||
+       typeof navigator.canShare!=="function"||
+       !navigator.canShare({files:[file]})){
+      downloadProxyFile(file);
+      alert("Este navegador no permite compartir archivos directamente. Hemos descargado "+
+        file.name+". En WhatsApp, adjúntalo como «Documento»; no compartas el enlace del visor.");
+      return;
+    }
+    // This must be invoked directly when a cached PDF is already prepared:
+    // Web Share needs a fresh user gesture. If generation consumed activation,
+    // invite the user to tap the same button again (the file is now cached).
+    try{
+      await navigator.share({files:[file],title:file.name});
+    }catch(error){
+      if(error?.name==="AbortError")return; // The user cancelled the share sheet.
+      if(error?.name==="NotAllowedError"){
+        alert("El PDF ya está preparado. Pulsa otra vez «Compartir archivo PDF» para enviarlo "+
+          "como documento por WhatsApp. No utilices el enlace del visor.");
+      }else{
+        console.warn("Compartir proxies",error);
+        alert("No se pudo compartir el archivo PDF. "+(error?.message||"Prueba otra vez.")+
+          "\nSi continúa fallando, puedes abrir el PDF, guardarlo y adjuntarlo en WhatsApp como Documento.");
+      }
+    }
+  }catch(error){
+    console.warn("Preparar PDF para compartir",error);
+    alert("No se pudo preparar el archivo PDF: "+(error?.message||"error desconocido"));
+  }finally{
+    generating=false;button.disabled=false;button.textContent=before;
+  }
+}
+
+function runProxyAction(button,source,action){
+  if(generating)return;
+  let cards;
+  try{cards=getProxySelection(source)}
+  catch(error){notify(error.message);return}
+  if(!cards)return;
+  if(action==="share")shareProxyPdf(cards,button,source);
+  else openProxyPdf(cards,button,source);
+}
+
+// Delegation survives re-renders of the deck and standalone generator.
 document.addEventListener("click",event=>{
-  const button=event.target.closest?.("#generateDeckProxies, #generateStandaloneProxies");
+  const button=event.target.closest?.("#generateDeckProxies, #generateStandaloneProxies, #shareDeckProxies, #shareStandaloneProxies");
   if(!button)return;
-  if(button.id==="generateStandaloneProxies")generateStandaloneProxies(button);
-  else generateDeckProxies(button);
+  const source=button.id.includes("Deck")?"deck":"standalone";
+  const action=button.id.startsWith("share")?"share":"open";
+  runProxyAction(button,source,action);
 });
 })();
