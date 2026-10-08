@@ -208,7 +208,7 @@
     return best;
   }
   function uniqueLeaders(query,set,alt,cheapestOnly=false){
-    const map=new Map(),q=norm(query||"").trim(),selected=setName(set);
+    const map=new Map(),q=norm(query||"").trim();
     for(const c of state.cards){
       if(c.category!=="Leader"&&c.rarity!=="Leader"&&c.rarity!=="L")continue;
       if(!cheapestOnly&&!alt&&c.id!==baseId(c.id))continue;
@@ -218,9 +218,8 @@
     }
     return [...map.values()].filter(c=>{
       if(q&&!norm(c.name+" "+c.id+" "+baseId(c.id)+" "+c.set).includes(q))return false;
-      if(!q&&selected&&selected!=="Todas"&&!String(c.set||c.id).replace(/-/g,"").startsWith(selected.replace(/-/g,"")))return false;
       return true;
-    }).slice(0,q?60:24);
+    }).slice(0,q?100:200);
   }
   function leadersHtml(query,set,alt,chosen,cheapestOnly=false){
     const leaders=uniqueLeaders(query,set,alt,cheapestOnly);
@@ -358,7 +357,18 @@
     const d=state.tournamentDraft;
     const decks=state.decks.filter(x=>!x.draftCompetitive);
     const selectedDeck=decks.find(x=>x.id===d.deckId);
-    const allSets=["OP-17","OP-16","OP-15","OP-14","OP-13","OP-12","OP-11","OP-10",...state.packs.map(p=>setName(p.code))].filter((v,i,a)=>a.indexOf(v)===i);
+    // Formats are set codes, not pack titles. New OP expansions appear automatically.
+    const allSets=[...new Set((state.packs||[]).map(p=>{
+      const raw=String(p.code||"").toUpperCase();
+      const op=raw.match(/^OP-?(\d{2,3})(?:-EB-?\d{2})?$/);
+      return op?"OP-"+op[1]:raw;
+    }).filter(Boolean))].sort((a,b)=>{
+      const x=a.match(/^OP-(\d+)$/),y=b.match(/^OP-(\d+)$/);
+      if(x&&y)return Number(y[1])-Number(x[1]);
+      if(x)return -1;if(y)return 1;
+      return a.localeCompare(b,"es",{numeric:true});
+    });
+    if(d.set&&!allSets.includes(d.set))allSets.unshift(d.set);
     return '<div class="tourney-wrap"><div class="tourney-header"><button class="tourney-back" id="tourneyFormBack">← Volver</button><h1>'+(d.id?"Editar torneo":"Nuevo torneo")+'</h1></div>'+
       '<div class="tourney-panel"><label class="tourney-field">Nombre del torneo<input maxlength="100" class="field" id="tourneyTitle" placeholder="Un torneo (si lo dejas vacío)" value="'+esc(d.title||"")+'"></label>'+
       '<div class="tourney-muted" style="margin-bottom:8px">Tipo de torneo</div><div class="tourney-selectrow">'+choices(TYPES,d.type||"Local Store","data-tourney-type")+'</div>'+
@@ -597,7 +607,7 @@
     on("#tourneyLogin","click",()=>navigateApp(()=>{state.tab="account"}));
     on("#tourneyStatsOpen","click",()=>{state.tournamentStats="all";rerender()});
     on("#tourneyStatsBack","click",()=>{state.tournamentStats=null;rerender()});
-    on("#tourneyNew","click",()=>{state.tournamentDraft={title:"",date:new Date(Date.now()-new Date().getTimezoneOffset()*60000).toISOString().slice(0,10),type:"Local Store",set:"OP-17",deckId:"",leaderId:"",alt:false,search:""};rerender()});
+    on("#tourneyNew","click",()=>{state.tournamentDraft={title:"",date:new Date(Date.now()-new Date().getTimezoneOffset()*60000).toISOString().slice(0,10),type:"Local Store",set:(state.packs||[]).map(p=>String(p.code||"").toUpperCase().match(/^OP-?(\d{2,3})(?:-EB-?\d{2})?$/)?.[1]).filter(Boolean).sort((a,b)=>Number(b)-Number(a)).map(n=>"OP-"+n)[0]||"",deckId:"",leaderId:"",alt:false,search:""};rerender()});
     document.querySelectorAll("[data-tourney-open]").forEach(b=>b.onclick=()=>navigateApp(()=>{state.tournamentId=b.dataset.tourneyOpen}));
     on("#tourneyFormBack","click",exitForm);
     on("#tourneyBack","click",()=>navigateApp(()=>{state.tournamentId=null;state.tournamentDeckOpen=false;state.tournamentRoundDraft=null;state.tournamentFinishDraft=null}));
