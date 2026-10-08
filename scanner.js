@@ -49,6 +49,16 @@ style.textContent=[
 document.head.appendChild(style);
 
 function cardByCode(code){return state.cards.filter(c=>idBase(c.id)===code)}
+// El escáner siempre presenta la impresión BASE si existe, incluso cuando
+// la huella visual pertenece a una paralela. La identidad exacta del catálogo
+// y la colección no se modifica; el usuario aún puede cambiar la impresión.
+function scannerBaseCard(id){
+  const code=idBase(id);
+  return state.cards.find(c=>c.id===code)
+    ||state.cards.find(c=>idBase(c.id)===code&&c.id===idBase(c.id))
+    ||state.cards.find(c=>idBase(c.id)===code)
+    ||null;
+}
 function matchingName(text){
   if(!text||text.length<6)return null;
   const upper=norm(text).replace(/[^A-Z0-9]+/g," ").replace(/\s+/g," ");
@@ -197,7 +207,17 @@ function scanVisual(){
 function handleVisualResults(ranked){
   if(!running||locked)return;
   const known=new Map(state.cards.map(c=>[c.id,c]));
-  visualResults=ranked.filter(x=>known.has(x.id)).slice(0,8);
+  // Varias paralelas pueden aparecer entre las primeras coincidencias:
+  // mostrar una sola opción por carta y usar siempre su impresión base.
+  const seenBases=new Set();
+  visualResults=ranked.flatMap(match=>{
+    const candidate=known.get(match.id);
+    if(!candidate)return [];
+    const base=known.get(idBase(candidate.id))||scannerBaseCard(candidate.id)||candidate;
+    if(seenBases.has(base.id))return [];
+    seenBases.add(base.id);
+    return [{...match,id:base.id}];
+  }).slice(0,8);
   const button=$("#scanCandidates");
   if(button){
     button.hidden=!visualResults.length;button.disabled=!visualResults.length;
@@ -291,7 +311,7 @@ function showVisualChoices(heading="Posibles cartas según la ilustración"){
     if(!chosen)return;
     releaseFreeze();
     show({card:chosen,code:idBase(chosen.id),variants:cardByCode(idBase(chosen.id)),
-      selectedId:chosen.id,source:"Elegida de los resultados visuales",confidence:"manual"});
+      selectedId:scannerBaseCard(chosen.id)?.id||chosen.id,source:"Elegida de los resultados visuales",confidence:"manual"});
   });
   $("#scanBackVisual").onclick=resume;
   status("Selecciona la impresión que se corresponde con tu carta.");
@@ -343,6 +363,11 @@ function showNameChoices(hit){
 }
 function show(hit){
   if(!running||!hit?.card)return;
+  // La búsqueda manual respeta la versión elegida expresamente;
+  // todos los reconocimientos automáticos y candidatos visuales van a BASE.
+  const isManualSearch=hit.source==="Búsqueda manual";
+  const base=isManualSearch?hit.card:(scannerBaseCard(hit.code||hit.card.id)||hit.card);
+  hit={...hit,card:base,selectedId:isManualSearch?(hit.selectedId||hit.card.id):base.id};
   locked=true;cancelAnimationFrame(scanTimer);
   const p=panel();p?.classList.add("locked");
   const videoStill=document.createElement("img");
