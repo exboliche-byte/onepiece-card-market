@@ -1840,6 +1840,78 @@ function bindSearch(id,fn){
   el.addEventListener("input",()=>{last=el.value;clearTimeout(timer);timer=setTimeout(()=>fn(last),80)});
 }
 function authModal(){return '<div class="modalback"><div class="modal"><div class="sectionhead"><h2>Cuenta</h2><button class="close" data-close-auth>×</button></div><h3>Entrar</h3><input id="authLogin2" class="field" placeholder="Usuario o email" autocomplete="username"><input id="authPassword2" type="password" class="field" style="margin-top:8px" placeholder="Contraseña"><button class="linkbtn" id="forgotPassword2" type="button" style="margin-top:10px">He olvidado la contraseña</button><button class="primary btn" id="login2" style="margin-top:10px">Entrar</button><details style="margin-top:16px"><summary style="cursor:pointer;font-weight:800">Crear cuenta</summary><div style="margin-top:10px"><input id="registerUser2" class="field" placeholder="Usuario" autocomplete="username"><input id="registerEmail2" type="email" class="field" style="margin-top:8px" placeholder="Email"><input id="registerPassword2a" type="password" class="field" style="margin-top:8px" placeholder="Contraseña"><input id="registerPassword2b" type="password" class="field" style="margin-top:8px" placeholder="Confirmar contraseña"><button class="secondary btn" id="register2" style="margin-top:10px">Crear cuenta</button></div></details></div></div>'}
+
+const RELOAD_VIEW_KEY="mialbumonepiece_reload_view_v1";
+function snapshotReloadView(){
+  // UI only: never cache ownership, Supabase rows or other account data.
+  const ui={
+    view:appViewSnapshot(),
+    scrollY:Math.max(0,window.scrollY||0),
+    detailId:state.detail?.id||"",
+    catalog:{...state.catalog},
+    collection:{...state.collection},
+    album:{...state.album},
+    expansions:{...state.expansions},
+    deckQuery:state.deckQuery,deckPage:state.deckPage,
+    deckFilters:{...state.deckFilters},
+    deckChoosingLeader:state.deckChoosingLeader,
+    deckDiscover:state.deckDiscover,
+    proxyQuery:state.proxyQuery,
+    proxySelection:{...state.proxySelection}
+  };
+  try{sessionStorage.setItem(RELOAD_VIEW_KEY,JSON.stringify(ui))}catch{}
+}
+function readReloadView(){
+  // A new visit or an external shared/auth URL must not reuse an old tab.
+  if(performance.getEntriesByType?.("navigation")?.[0]?.type!=="reload")return null;
+  if(location.pathname.startsWith("/auth/")||location.pathname.startsWith("/deck/")||location.pathname.startsWith("/card/"))return null;
+  try{
+    const raw=sessionStorage.getItem(RELOAD_VIEW_KEY);
+    sessionStorage.removeItem(RELOAD_VIEW_KEY);
+    const saved=JSON.parse(raw||"null");
+    return saved&&typeof saved==="object"&&saved.view&&typeof saved.view==="object"?saved:null;
+  }catch{return null}
+}
+function restoreReloadView(saved){
+  if(!saved||state.shared||state.authRecovery)return;
+  const {view}=saved;
+  const allowedTabs=new Set(["home","catalog","collection","album","decks","proxies","account"]);
+  if(!allowedTabs.has(view.tab))return;
+  const restoreFields=(target,data)=>{
+    if(!data||typeof data!=="object"||Array.isArray(data))return;
+    for(const key of Object.keys(target)){
+      if(Object.hasOwn(data,key)&&typeof data[key]===typeof target[key])target[key]=data[key];
+    }
+  };
+  restoreFields(state.catalog,saved.catalog);
+  restoreFields(state.collection,saved.collection);
+  restoreFields(state.album,saved.album);
+  restoreFields(state.expansions,saved.expansions);
+  restoreFields(state.deckFilters,saved.deckFilters);
+  state.tab=view.tab;
+  state.album.set=String(view.albumSet||"");
+  state.deckLibrary=view.deckLibrary!==false;
+  state.deckId=state.user&&state.decks.some(d=>d.id===view.deckId)?view.deckId:null;
+  if(state.tab==="decks"&&!state.deckId)state.deckLibrary=true;
+  state.deckQuery=typeof saved.deckQuery==="string"?saved.deckQuery:"";
+  state.deckPage=Math.max(1,Number(saved.deckPage)||1);
+  state.deckChoosingLeader=!!saved.deckChoosingLeader;
+  state.deckDiscover=!!saved.deckDiscover;
+  state.proxyQuery=typeof saved.proxyQuery==="string"?saved.proxyQuery:"";
+  if(saved.proxySelection&&typeof saved.proxySelection==="object"&&!Array.isArray(saved.proxySelection)){
+    state.proxySelection=Object.fromEntries(Object.entries(saved.proxySelection)
+      .filter(([id,n])=>typeof id==="string"&&Number.isSafeInteger(n)&&n>0&&n<=9999&&card(id)));
+  }
+  state.detail=saved.detailId?card(saved.detailId)||null:null;
+  detailHistoryActive=!!state.detail&&!!history.state?.mialbumDetail;
+  renderShell();
+  // Restore only after catalog, session and results have finished their first render.
+  const y=Math.max(0,Number(saved.scrollY)||0);
+  requestAnimationFrame(()=>requestAnimationFrame(()=>window.scrollTo({top:y,behavior:"instant"})));
+  // Guard against the late results/cloud repaint that can reset scroll on mobile.
+  setTimeout(()=>{if(state.tab===view.tab)window.scrollTo({top:y,behavior:"instant"})},160);
+}
+
 function appViewSnapshot(){
   return {tab:state.tab,albumSet:state.album.set||"",deckLibrary:state.deckLibrary!==false,deckId:state.deckId||null};
 }
@@ -2801,6 +2873,9 @@ async function loadCatalogData(){
   throw Error("No se pudo cargar el catálogo.");
 }
 async function boot(){
+  const savedReloadView=readReloadView();
+  window.addEventListener("pagehide",snapshotReloadView);
+  window.addEventListener("beforeunload",snapshotReloadView);
   loadLocal();
   loadCachedPrices();
   renderShell();
@@ -2822,7 +2897,8 @@ async function boot(){
     await loadShared();
     renderShell();
   }catch(e){$("#app").innerHTML='<div class="wrap"><div class="hero"><div><h1>MiAlbumOnePiece</h1><p>No se pudo cargar el catálogo.</p></div></div><div class="section"><div class="notice">Error cargando datos: '+esc(e.message||"desconocido")+'</div><button class="primary btn" onclick="location.reload()">Reintentar</button></div></div>'}
-  initSupabase();
+  await initSupabase();
+  restoreReloadView(savedReloadView);
 window.addEventListener("popstate",e=>{
   if(state.detail){
     detailHistoryActive=false;
