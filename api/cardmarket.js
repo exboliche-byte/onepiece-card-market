@@ -6,7 +6,7 @@ const SOURCE="https://raw.githubusercontent.com/michalkiral/optcg-data/main/data
 function norm(v){return String(v??"").trim().toLowerCase()}
 function priceNumber(v){
   const n=Number(v);
-  return Number.isFinite(n)?n:null;
+  return Number.isFinite(n)&&n>0?n:null;
 }
 async function loadPrices(){
   const now=Date.now();
