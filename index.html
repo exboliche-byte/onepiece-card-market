@@ -52,9 +52,9 @@ const fallbackImageUrl=c=>"https://images.weserv.nl/?url="+encodeURIComponent(of
 function preloadCardImage(c){const u=imageCdnUrl(c);if(!u||imagePreloadCache.has(u))return;const im=new Image();im.src=u;imagePreloadCache.set(u,im)}
 function cardImg(c,cls="cardimg"){
   const cdn=imageCdnUrl(c),official=officialImageUrl(c),fallback=fallbackImageUrl(c);
-  const loading=cls.includes("detail")?"eager":"lazy";
+  const loading=cls.includes("detail")||cls.includes("deckleader")?"eager":"lazy";
   const priority=cls.includes("detail")?' fetchpriority="high"':"";
-  return '<img class="'+cls+'" loading="'+loading+'" decoding="async"'+priority+' src="'+esc(cdn)+'" alt="'+esc(c.name||c.id)+'" data-image-official="'+esc(official)+'" data-image-fallback="'+esc(fallback)+'" onerror="if(this.dataset.imageStep!==\'1\'){this.dataset.imageStep=\'1\';this.src=this.dataset.imageOfficial}else if(this.dataset.imageStep!==\'2\'){this.dataset.imageStep=\'2\';this.src=this.dataset.imageFallback}else{this.style.visibility=\'hidden\'}">';
+  return '<img class="'+cls+'" loading="'+loading+'" decoding="sync"'+priority+' src="'+esc(cdn)+'" alt="'+esc(c.name||c.id)+'" data-image-official="'+esc(official)+'" data-image-fallback="'+esc(fallback)+'" onerror="if(this.dataset.imageStep!==\'1\'){this.dataset.imageStep=\'1\';this.src=this.dataset.imageOfficial}else if(this.dataset.imageStep!==\'2\'){this.dataset.imageStep=\'2\';this.src=this.dataset.imageFallback}else{this.style.visibility=\'hidden\'}">';
 }
 function deckOwnedImg(c,have,required){
   const total=Math.max(1,Number(required)||1),owned=Math.max(0,Math.min(total,Number(have)||0));
