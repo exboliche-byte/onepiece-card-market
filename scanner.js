@@ -104,6 +104,7 @@ style.textContent=[
 "#scanPanel #scanAutoStop[hidden]{display:none}",
 "#scanPanel .scanAutoCountdown{font-size:16px;font-weight:850;padding:10px;margin:10px 0;color:#161616;background:#ffd447;border-radius:9px;text-align:center}",
 "#scanPanel .scanAutoCountdown[hidden]{display:none}",
+"#scanPanel .scanCardPrice{margin:10px 0;padding:10px 12px;border:1px solid #796a37;border-radius:10px;background:#2b2514;color:#ffe18c;font-size:17px;font-weight:850;text-align:center}",
 "#scanPanel.locked .scanActions,#scanPanel.locked .scanTools{display:none}",
 "#scanPanel .scanDecision .scanChoiceButtons button{min-height:46px;touch-action:manipulation}",
 "#scanPanel .scanDecision[hidden]{display:none}#scanPanel .scanIdentity{display:flex;align-items:flex-start;gap:9px}#scanPanel .scanIdentity img{width:72px;aspect-ratio:.716;object-fit:contain;border-radius:5px}",
@@ -417,12 +418,32 @@ function updateScanCopiesLabel(card){
       "⏹ PARAR AÑADIDO AUTOMÁTICO";
   }
 }
+async function updateScannerPrice(card){
+  const label=$("#scanCardPrice");
+  if(!label)return;
+  if(!card){label.textContent="Elige una impresión para ver el precio.";return}
+  const id=card.id;
+  const display=()=>{
+    const value=priceOf(card);
+    label.textContent=value===null?"Precio de esta impresión: no disponible":
+      "Precio de esta impresión: "+money(value);
+    return value;
+  };
+  if(display()!==null)return;
+  label.textContent="Consultando precio de esta impresión…";
+  try{await ensurePrices([id])}
+  catch(error){console.warn("No se pudo consultar el precio exacto del escáner",error)}
+  // No mostrar el precio de otra versión si el usuario ha cambiado de impresión.
+  if(!running||$("#scanCardPrice")!==label||$("#scanVariant")?.value!==id)return;
+  display();
+}
 function chooseVariant(variants,selected){
   const selection=$("#scanVariant");
   if(!selection)return;
   const current=variants.find(c=>c.id===selection.value);
   const pic=$("#scanFoundImage"),count=$("#scanExactCount");
   updateScanCopiesLabel(current);
+  void updateScannerPrice(current);
   if(count)count.textContent=current?"Tienes "+ownedCount(current.id)+" copias de esta impresión.":"Selecciona una impresión exacta para guardarla.";
   if(pic&&current){
     pic.dataset.imageOfficial=officialImageUrl(current);
@@ -488,6 +509,7 @@ function show(hit){
     '<img id="scanFoundImage" src="'+esc(imageCdnUrl(hit.card))+'" data-image-official="'+esc(officialImageUrl(hit.card))+'" data-image-fallback="'+esc(fallbackImageUrl(hit.card))+'" alt="Carta reconocida">'+
     '<div><strong>'+esc(hit.card.name)+'</strong><div class="small">'+esc(hit.code)+' · '+esc(hit.source)+'</div>'+
     '<div class="small">Tienes '+owned+' copias de esta carta · '+Math.max(0,limit-owned)+' para el playset</div></div></div>'+
+    '<div class="scanCardPrice" id="scanCardPrice" aria-live="polite">Consultando precio…</div>'+
     '<p class="small">Confirma la impresión. Las paralelas y reimpresiones comparten código y no son intercambiables.</p>'+
     '<div id="scanAutoCountdown" class="scanAutoCountdown" hidden aria-live="polite"></div>'+
     '<select id="scanVariant">'+options+'</select><div id="scanExactCount" class="small"></div>'+
