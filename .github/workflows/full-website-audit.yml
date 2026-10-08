@@ -19,7 +19,7 @@ jobs:
         run: |
           npm install --no-save playwright@1.59.1
           npx playwright install --with-deps chromium
-      - name: Smoke-test current audited preview release
+      - name: Smoke-test public pages on production
         env:
-          BASE_URL: https://onepiece-card-market-ljvj82a1t-exboliche-6884.vercel.app
+          BASE_URL: https://onepiece-card-market.vercel.app
         run: node scripts/browser-smoke.mjs
