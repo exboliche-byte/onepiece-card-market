@@ -72,10 +72,10 @@ function initializeOrb(){
   const generation=orbGeneration,cards=orbCandidates();
   const progress=$("#scanIndex");
   if(progress)progress.textContent="Referencias: 0 / "+cards.length;
-  status("Cargando módulo de visión en segundo plano…");
+  status("Arrancando reconocimiento ORB en segundo plano…");
   try{
     if(!window.Worker)throw Error("El navegador no admite Web Workers.");
-    const worker=new Worker("/orb-worker.js?v=orbworker2");
+    const worker=new Worker("/orb-worker.js?v=orbworker3");
     orbWorker=worker;
     worker.onmessage=({data})=>{
       if(!running||generation!==orbGeneration||orbWorker!==worker)return;
@@ -88,10 +88,12 @@ function initializeOrb(){
       }
       if(data.type==="progress"){
         orbCount=data.loaded;orbFailed=data.failed;
-        if(progress)progress.textContent="Referencias: "+orbCount+" / "+data.total+
-          (orbFailed?" · No disponibles: "+orbFailed:"")+(data.done?" · Índice terminado":"");
-        if(data.done&&orbCount===0)status("No hay imágenes disponibles para el reconocimiento. Puedes buscar manualmente.");
+        if(progress)progress.textContent="Referencias listas: "+orbCount+" / "+data.total+
+          " · Comprobadas: "+(data.processed||orbCount+orbFailed)+
+          (orbFailed?" · Sin imagen: "+orbFailed:"")+(data.done?" · Índice terminado":"");
+        if(data.done&&orbCount===0)status("No hay referencias visuales descargables. Selecciona otra expansión o busca manualmente.");
         else if(data.done)status("Índice ORB preparado: "+orbCount+" cartas. Buscando…");
+        else if(orbCount>0&&attempts===0)status("Buscando en vídeo con "+orbCount+" referencias; cargando más…");
         return;
       }
       if(data.type==="result"){
@@ -199,7 +201,7 @@ function handleOrbResult(outcome){
   if(!running||locked)return;
   const best=outcome.best,second=outcome.second;
   const counter=$(".scanCounter");
-  if(counter)counter.textContent="ORB · "+orbCount+" refs · "+(best?.good||0)+" coincidencias";
+  if(counter)counter.textContent="Analizando "+attempts+" · "+orbCount+" cartas · "+(best?.good||0)+" coincidencias";
   const enough=best&&best.good>=32&&best.cells>=5;
   const ambiguous=enough&&second&&second.good>=28&&
     (second.good>=best.good*.9||best.good-second.good<7);

@@ -59,8 +59,8 @@ function hdist(a,b){
 }
 function dbOpen(){
   return new Promise(resolve=>{
-    if(!window.indexedDB){resolve(null);return}
-    const req=indexedDB.open("optcg-orb-descriptors",1);
+    if(typeof globalThis.indexedDB==="undefined"){resolve(null);return}
+    const req=globalThis.indexedDB.open("optcg-orb-descriptors",1);
     req.onupgradeneeded=()=>req.result.createObjectStore("images");
     req.onsuccess=()=>resolve(req.result);
     req.onerror=()=>resolve(null);
@@ -84,9 +84,14 @@ function dbWrite(db,id,data){
 }
 async function loadImage(url){
   if(typeof createImageBitmap==="function"){
-    const response=await fetch(url,{cache:"force-cache"});
-    if(!response.ok)throw Error("HTTP "+response.status);
-    const blob=await response.blob();
+    const controller=new AbortController();
+    const deadline=setTimeout(()=>controller.abort(),7000);
+    let response,blob;
+    try{
+      response=await fetch(url,{cache:"force-cache",signal:controller.signal});
+      if(!response.ok)throw Error("HTTP "+response.status);
+      blob=await response.blob();
+    }finally{clearTimeout(deadline)}
     if(!blob.type.startsWith("image/"))throw Error("No es una imagen");
     return await createImageBitmap(blob);
   }
@@ -100,8 +105,12 @@ async function loadImage(url){
 class OrbEngine {
   constructor(cv){
     this.cv=cv;this.disposed=false;
-    this.orb=new cv.ORB(1000);
-    this.matcher=new cv.BFMatcher(cv.NORM_HAMMING,true);
+    // El constructor ORB de Emscripten no admite un único parámetro.
+    this.orb=typeof cv.ORB.create==="function"?cv.ORB.create():new cv.ORB();
+    if(typeof this.orb.setMaxFeatures==="function")this.orb.setMaxFeatures(700);
+    this.matcher=typeof cv.BFMatcher.create==="function"?
+      cv.BFMatcher.create(cv.NORM_HAMMING,true):
+      new cv.BFMatcher(cv.NORM_HAMMING,true);
     this.mask=new cv.Mat();
     this.cards=[];
     this.postings=new Map();

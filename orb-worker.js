@@ -33,7 +33,7 @@ async function initialize(cards){
       throw Error("Este navegador no permite procesar imágenes en segundo plano. Prueba Chrome actualizado.");
     }
     post("status",{message:"Cargando módulo visual OpenCV en segundo plano…"});
-    importScripts("/orb-engine.js?v=orbworker2");
+    importScripts("/orb-engine.js?v=orbworker3");
     cv=await awaitCV();
     if(closed)return;
     engine=new self.OptcgOrbEngine(cv);
@@ -45,8 +45,8 @@ async function initialize(cards){
     for(let i=0;i<cards.length&&!closed;i++){
       try{if(await engine.indexCard(cards[i]))loaded++;else failed++}
       catch{failed++}
-      if(i%3===0||i===cards.length-1)
-        post("progress",{loaded,failed,total,done:i===cards.length-1});
+      if(i<15||i%5===0||i===cards.length-1)
+        post("progress",{loaded,failed,total,processed:i+1,done:i===cards.length-1});
       await new Promise(resolve=>setTimeout(resolve,12));
     }
   }catch(error){post("error",{message:String(error?.message||error)})}
