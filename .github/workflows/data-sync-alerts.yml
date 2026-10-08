@@ -1,5 +1,8 @@
 name: Data synchronization alerts
 on:
+  schedule:
+    - cron: '45 10 * * *'
+  workflow_dispatch:
   workflow_run:
     workflows:
       - Sync One Piece card database
@@ -8,9 +11,11 @@ on:
     types: [completed]
 permissions:
   contents: read
+  actions: read
   issues: write
 jobs:
   notify:
+    if: github.event_name == 'workflow_run'
     runs-on: ubuntu-latest
     steps:
       - name: Report failed automatic updates as GitHub issues
@@ -40,3 +45,40 @@ jobs:
             ].join('\n');
             if (found) await github.rest.issues.createComment({owner,repo,issue_number:found.number,body});
             else await github.rest.issues.create({owner,repo,title,body});
+  heartbeat:
+    if: github.event_name != 'workflow_run'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Alert when a scheduler stops running
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const {owner,repo} = context.repo;
+            const watched = [
+              {file:'sync-card-data.yml',label:'Catálogo',hours:30},
+              {file:'cardmarket-prices.yml',label:'Precios',hours:40},
+              {file:'build-vision-index.yml',label:'Escáner',hours:240}
+            ];
+            const open = await github.paginate(github.rest.issues.listForRepo,{owner,repo,state:'open',per_page:100});
+            for(const item of watched){
+              const title='[Automatización] Sin actualizaciones: '+item.label;
+              const found=open.find(issue=>!issue.pull_request && issue.title===title);
+              try{
+                const result=await github.rest.actions.listWorkflowRuns({
+                  owner,repo,workflow_id:item.file,branch:'main',per_page:12
+                });
+                const latestSuccess=(result.data.workflow_runs||[]).find(run=>run.status==='completed' && run.conclusion==='success');
+                const age=latestSuccess?Math.round((Date.now()-Date.parse(latestSuccess.updated_at))/3600000):null;
+                const late=age===null||age>item.hours;
+                if(late&&!found){
+                  await github.rest.issues.create({
+                    owner,repo,title,
+                    body:'La última ejecución correcta de **'+item.label+'** tiene '+(age===null?'fecha desconocida':age+' horas')+
+                      '. Umbral: '+item.hours+' horas. Revisa GitHub Actions y los permisos de programación; los datos anteriores siguen disponibles.'
+                  });
+                }else if(!late&&found){
+                  await github.rest.issues.createComment({owner,repo,issue_number:found.number,body:'Programación recuperada. Última ejecución correcta: '+latestSuccess.html_url});
+                  await github.rest.issues.update({owner,repo,issue_number:found.number,state:'closed'});
+                }
+              }catch(error){core.warning('No se ha podido revisar '+item.label+': '+error.message)}
+            }
