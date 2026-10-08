@@ -30,6 +30,7 @@ const esc=s=>String(s??"").replace(/[&<>"']/g,x=>({"&":"&amp;","<":"&lt;",">":"&
 const normalize=s=>String(s||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toUpperCase().trim();
 const cardCode=s=>normalize(s).replace(/[\s_]/g,"").replace(/[^A-Z0-9-]/g,"").replace(/^((?:OP|ST|EB|PRB)\d{2})(\d{3})$/,"$1-$2");
 const say=s=>{const node=$("#scanStatus");if(node)node.textContent=s};
+const service=s=>{const node=$("#scanService");if(node)node.textContent=s};
 const valid=()=>!closed&&!!root();
 function takePhoto(){
  if(!video||video.readyState<2||!video.videoWidth)return "";
@@ -108,8 +109,8 @@ async function vision(image,turn){
    if(turn!==generation||!valid()||locked)return null;
    const data=await response.json().catch(()=>({}));
    if(!response.ok){
-     if(response.status===401){aiDisabled=true;say("Sesión de IA caducada. El escáner seguirá intentando con OCR.");}
-     else if(response.status===429||response.status===503){aiRetryAt=Date.now()+30000;say((data.error||"IA ocupada")+". Se reintentará automáticamente.");}
+     if(response.status===401){aiDisabled=true;service("IA: sesión caducada. Solo OCR disponible.");say("Sesión de IA caducada. El escáner seguirá intentando con OCR.");}
+     else if(response.status===429||response.status===503){aiRetryAt=Date.now()+30000;service("IA temporalmente no disponible: "+(data.error||"cuota o servicio ocupado"));say((data.error||"IA ocupada")+". Se reintentará automáticamente.");}
      else{aiRetryAt=Date.now()+12000;say(data.error||"Error temporal del reconocimiento visual.");}
      return null;
    }
@@ -131,6 +132,7 @@ function stopLive(){
 function fallbackVision(message=""){
   stopLive();source="vision";liveConfigured=false;
   if(valid()&&!locked){
+    service("Modo: IA general con respaldo OCR. "+message);
     if(message)say(message+" Seguiré buscando con la IA disponible.");
     plan(500);
   }
@@ -224,6 +226,7 @@ async function startLive(turn){
       return;
     }
     liveConfigured=true;source="live";
+    service("Modo: reconocimiento especializado TCGGraph (con consumo por carta identificada).");
     const ws=new WebSocket("wss://api.tcggraph.com/v1/scan?ticket="+encodeURIComponent(body.ticket));
     liveSocket=ws;
     ws.onopen=()=>{
@@ -397,9 +400,9 @@ async function open(){
  if(root())return;
  if(!state.user||!state.collectionReady||!state.sb){alert("Inicia sesión y carga tu colección desde Supabase antes de escanear cartas.");return}
  if(!state.cards?.length){alert("El catálogo todavía no ha terminado de cargar.");return}
- generation++;const turn=generation;closed=false;locked=false;busy=false;aiDisabled=false;aiRetryAt=0;scanCount=0;streak=0;lastCode="";liveConfigured=false;liveReconnects=0;
+ generation++;const turn=generation;closed=false;locked=false;busy=false;aiDisabled=false;aiRetryAt=0;scanCount=0;streak=0;lastCode="";source="vision";liveConfigured=false;liveReconnects=0;
  const ui=document.createElement("section");ui.id="scanPanel";
- ui.innerHTML='<div class="inner"><h2>Escáner con IA <button id="scanClose" type="button">✕ Cerrar</button></h2><div id="scanStatus" role="status">Abriendo cámara…</div><div class="scanFrame"><video muted playsinline autoplay></video><div class="aim"></div><div id="scanResult"></div></div><div id="scanHint"></div><button id="scanResume">Reanudar reconocimiento</button><button id="scanManual">Buscar manualmente</button><div id="scanManualArea"></div><p class="muted">La IA analiza fotografías en la nube. Solo se envían imágenes al reconocer con tu cuenta. Los resultados pueden equivocarse: confirma siempre la impresión antes de guardarla.</p></div>';
+ ui.innerHTML='<div class="inner"><h2>Escáner con IA <button id="scanClose" type="button">✕ Cerrar</button></h2><div id="scanStatus" role="status">Abriendo cámara…</div><div id="scanService" class="muted" role="note">Comprobando el proveedor de reconocimiento…</div><div class="scanFrame"><video muted playsinline autoplay></video><div class="aim"></div><div id="scanResult"></div></div><div id="scanHint"></div><button id="scanResume">Reanudar reconocimiento</button><button id="scanManual">Buscar manualmente</button><div id="scanManualArea"></div><p class="muted">La IA procesa fotografías en servidores externos. Confirma siempre la impresión exacta antes de guardar una carta en Supabase.</p></div>';
  document.body.append(ui);
  video=$("#scanPanel video")||root().querySelector("video");
  $("#scanClose").onclick=close;$("#scanResume").onclick=resume;$("#scanManual").onclick=manual;
