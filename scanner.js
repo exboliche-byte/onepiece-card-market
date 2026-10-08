@@ -153,15 +153,22 @@ function startRecognition(){
     }
   })();
 }
+function cardGuideSize(previewWidth,previewHeight){
+  // El marco llega de arriba abajo del vídeo visible (3 px de margen).
+  // Si el sensor es más estrecho que una carta, ajustamos solo la anchura
+  // para que el marco siga entero en pantalla, sin ampliar ni recortar la cámara.
+  const height=Math.max(0,previewHeight-6);
+  return {height,width:Math.max(0,Math.min(previewWidth-6,height*.716))};
+}
 function fitGuide(){
   const stage=$(".scanStage"),guide=$(".scanGuide");
   if(!stage||!guide)return;
   const w=Math.max(100,stage.clientWidth),h=Math.max(100,stage.clientHeight);
   const vw=camera?.videoWidth||0,vh=camera?.videoHeight||0;
-  // Conservar la imagen completa del sensor, evitando el zoom causado por object-fit: cover.
+  // Mantener el sensor completo con object-fit:contain y centrar el marco sobre el vídeo.
   const factor=vw&&vh?Math.min(w/vw,h/vh):1;
   const usableW=vw?vw*factor:w,usableH=vh?vh*factor:h;
-  const height=Math.min(usableH*.80,usableW*.90/.716,h*.70),width=height*.716;
+  const {width,height}=cardGuideSize(Math.min(w,usableW),Math.min(h,usableH));
   guide.style.width=Math.round(width)+"px";guide.style.height=Math.round(height)+"px";
 }
 function visibleVideoBounds(){
