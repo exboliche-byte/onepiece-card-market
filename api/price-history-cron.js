@@ -6,7 +6,7 @@ export default {
     const secret=process.env.CRON_SECRET;
     if(!secret||request.headers.get("authorization")!=="Bearer "+secret)return json({error:"Unauthorized"},401);
     const url=String(process.env.SUPABASE_URL||"").replace(/\/$/,"");
-    if(!/^https:\/\/[^/]+\\.supabase\.co$/.test(url))return json({error:"Supabase not configured"},503);
+    if(!url.startsWith("https://")||!url.endsWith(".supabase.co"))return json({error:"Supabase not configured"},503);
     try{
       const result=await fetch(url+"/functions/v1/collection-price-ingest",{method:"POST",headers:{authorization:"Bearer "+secret},signal:AbortSignal.timeout(120000)});
       const payload=await result.json().catch(()=>({error:"Invalid upstream response"}));
