@@ -157,7 +157,7 @@ const PAGE=60;
 const state={
   cards:[],packs:[],groups:[],groupByKey:new Map(),prices:{},priceDate:null,importedCards:{},
   collection:{},decks:[],tournaments:[],tournamentId:null,tournamentDraft:null,tournamentRoundDraft:null,wishlist:{},user:null,sb:null,
-  tab:"catalog",set:"",query:"",detail:null,deckId:null,
+  tab:"catalog",set:"",query:"",detail:null,deckId:null,collectionStatsOpen:false,deckCompositionSort:"id",deckCompositionDir:"asc",
   proxyQuery:"",proxySelection:{},
   catalog:{set:"Todas",category:"Todos",color:"Todos",rarity:"Todos",type:"Todos",attribute:"Todos",ownership:"Todas",sort:"id",dir:"asc",page:1,grouped:true,minCost:"",maxCost:"",minPower:"",maxPower:"",minPrice:"",maxPrice:"",query:"",filtersOpen:false},
   owned:{},collectionReady:false,collection:{query:"",set:"Todas",category:"Todos",color:"Todos",rarity:"Todos",type:"Todos",attribute:"Todos",quantity:"Todas",playset:"Todas",sort:"id",dir:"asc",page:1,filtersOpen:false},
@@ -1060,11 +1060,34 @@ async function renderCollectionResults(){
 function collectionView(){
   if(!state.user)return '<div class="wrap"><div class="hero"><h1>Mi colección</h1></div><div class="section center"><h2>Inicia sesión para ver tu colección</h2><p class="muted">Solo se guarda y consulta desde tu cuenta de Supabase.</p><button class="primary btn" data-tab="account">Iniciar sesión</button></div></div>';
   if(!state.collectionReady)return '<div class="wrap"><div class="hero"><h1>Mi colección</h1></div><div class="notice">Cargando la colección desde Supabase…</div><button class="secondary btn" id="retryCollectionLoad">Reintentar carga</button></div>';
-  const s=collectionStats();
+  if(state.collectionStatsOpen)return collectionStatisticsView();
   return '<div class="wrap"><div class="hero"><div><h1>Mi colección</h1><p>Todas mis cartas, todos los sets, filtrables y ordenables.</p></div></div>'+
-    '<details class="deck-stats-toggle collection-stats-toggle"><summary><b>📊 Estadísticas de mi colección</b><span class="deck-stats-expand">Ver detalles</span></summary>'+
-    '<div class="deck-stats-content" id="collectionStatsContent">'+collectionStatsDetails(s)+'</div>'+'<details class="history-toggle" id="collectionHistoryToggle"><summary>📈 Evolución del valor</summary><div class="history-body" id="collectionHistoryBody"></div></details></details>'+
+    '<button type="button" class="secondary btn collection-stats-entry" id="openCollectionStats" style="width:100%;padding:16px;margin:0 0 15px;text-align:left;display:flex;justify-content:space-between;align-items:center;gap:12px"><span><b>📊 Estadísticas de mi colección</b><span style="display:block;font-size:12px;margin-top:4px;color:var(--muted)">Valor, progreso, gráfica histórica y subidas/bajadas</span></span><span>Ver estadísticas →</span></button>'+
     collectionToolbar()+'<div id="collectionResults"></div></div>';
+}
+function collectionStatisticsBreakdowns(){
+  const category=new Map(),sets=new Map();
+  for(const c of state.cards){
+    const n=qty(c.id);if(n<=0)continue;
+    const kind=String(c.category||"Otros");
+    const set=String(cardExpansionCode(c)||c.set||"Otros");
+    category.set(kind,(category.get(kind)||0)+n);
+    sets.set(set,(sets.get(set)||0)+n);
+  }
+  const panel=(title,data)=>{
+    const entries=[...data].sort((a,b)=>b[1]-a[1]).slice(0,7),max=Math.max(1,...entries.map(([,n])=>n));
+    return '<section class="collection-stat-panel"><h3>'+esc(title)+'</h3>'+
+      (entries.length?entries.map(([name,n])=>'<div class="collection-stat-barline"><span>'+esc(name)+'</span><b>'+n.toLocaleString("es-ES")+'</b><div class="collection-stat-track"><i style="width:'+(100*n/max).toFixed(1)+'%"></i></div></div>').join(""):'<p class="small">Sin cartas todavía.</p>')+
+      '</section>';
+  };
+  return '<div class="collection-stat-breakdowns">'+panel("Copias por tipo de carta",category)+panel("Expansiones con más copias",sets)+'</div>';
+}
+function collectionStatisticsView(){
+  const summary=collectionStats();
+  return '<div class="wrap collection-statistics-view"><div class="hero"><div><h1>📊 Estadísticas de mi colección</h1><p>Resumen, distribución y evolución de las cartas que tienes.</p></div><button class="secondary btn" id="closeCollectionStats" type="button">← Volver a mi colección</button></div>'+
+    '<section class="section"><h2>Resumen de mi colección</h2><div id="collectionStatsContent">'+collectionStatsDetails(summary)+'</div></section>'+
+    '<section class="section"><h2>Distribución de cartas</h2>'+collectionStatisticsBreakdowns()+'</section>'+
+    '<section class="section" id="collectionMarketSection"><h2>📈 Evolución del valor</h2><p class="small">Valor de mercado de tus impresiones exactas, con las cantidades que tienes actualmente.</p><div class="history-body" id="collectionHistoryBody"><p class="small">Cargando historial…</p></div></section></div>';
 }
 function collectionStatsDetails(s){
   const expensive=s.mostExpensive;
@@ -1414,7 +1437,12 @@ function decksView(){
 function deckUniqueCount(d){return new Set(Object.entries(d?.cards||{}).filter(([,n])=>Number(n)>0).map(([id])=>deckPrintedCode(id))).size+(d?.leader?1:0)}
 function deckCompositionView(d){
   const total=deckCardTotal(d),unique=deckUniqueCount(d);
-  return '<div class="section"><div class="sectionhead"><div><h2>Tu mazo</h2><div class="small">'+total+'/50 cartas · '+unique+' cartas diferentes'+(d.leader?' · 1 líder':'')+'</div></div></div><div class="deck-owned-grid" id="deckRows">'+deckRows(d)+'</div></div>';
+  const sortOptions=[["id","Número de carta"],["category","Tipo de carta"],["cost","Coste"],["power","Poder"],["name","Nombre"],["price","Precio"],["quantity","Copias en el mazo"]];
+  const sort='<div class="sort-controls" style="display:flex;flex-wrap:wrap;gap:9px;margin:10px 0">'+
+    filterLabel("Ordenar cartas del mazo",'<select class="field" id="deckCompositionSort">'+sortOptions.map(([id,label])=>'<option value="'+id+'" '+(state.deckCompositionSort===id?'selected':'')+'>'+label+'</option>').join("")+'</select>')+
+    filterLabel("Orden",'<select class="field" id="deckCompositionDir"><option value="asc" '+(state.deckCompositionDir==="asc"?"selected":"")+'>Ascendente</option><option value="desc" '+(state.deckCompositionDir==="desc"?"selected":"")+'>Descendente</option></select>')+
+    '</div>';
+  return '<div class="section"><div class="sectionhead"><div><h2>Tu mazo</h2><div class="small">'+total+'/50 cartas · '+unique+' cartas diferentes'+(d.leader?' · 1 líder':'')+'</div></div></div>'+sort+'<div class="deck-owned-grid" id="deckRows">'+deckRows(d)+'</div></div>';
 }
 // A playable card appears once in the deck even if several exact printings
 // are listed. Keep saved deck print IDs untouched: this groups presentation only.
@@ -1428,7 +1456,28 @@ function deckCompositionGroups(d){
     const g=groups.get(code);
     g.count+=count;g.entries.push({id,count});
   }
-  return [...groups.values()].sort((a,b)=>a.code.localeCompare(b.code,"es",{numeric:true}));
+  const criterion=state.deckCompositionSort||"id",direction=state.deckCompositionDir==="desc"?-1:1;
+  const source=g=>g.entries.map(e=>card(e.id)).find(Boolean);
+  const attribute=g=>{
+    const c=source(g);
+    if(criterion==="id")return g.code;
+    if(criterion==="category")return c?.category||"";
+    if(criterion==="cost")return numericCardValue(c?.cost);
+    if(criterion==="power")return numericCardValue(c?.power);
+    if(criterion==="name")return c?.name||g.code;
+    if(criterion==="quantity")return g.count;
+    if(criterion==="price")return c?priceOf(c):null;
+    return g.code;
+  };
+  return [...groups.values()].sort((a,b)=>{
+    const x=attribute(a),y=attribute(b),missingX=x===null||x===undefined||x==="",missingY=y===null||y===undefined||y==="";
+    if(missingX||missingY){if(missingX!==missingY)return missingX?1:-1}
+    else {
+      const delta=(typeof x==="number"&&typeof y==="number")?x-y:String(x).localeCompare(String(y),"es",{numeric:true,sensitivity:"base"});
+      if(delta)return delta*direction;
+    }
+    return a.code.localeCompare(b.code,"es",{numeric:true});
+  });
 }
 function deckRows(d){
   const r=[];
@@ -2013,7 +2062,12 @@ function accountView(){
     '<div><h3>Todos los mazos</h3><p class="small">Guarda todos los mazos en un archivo JSON o añade los de una copia de seguridad sin borrar los actuales.</p>'+
     '<div class="inline-actions"><button class="secondary btn" id="exportAllDecks">Exportar todos los mazos</button>'+
     '<button class="secondary btn" id="importAllDecks">Importar todos los mazos</button>'+
-    '<input id="decksBackupFile" type="file" class="fileinput" accept=".json,application/json"></div></div></div>';
+    '<input id="decksBackupFile" type="file" class="fileinput" accept=".json,application/json"></div></div>'+
+    '<div><h3>Mis torneos</h3><p class="small">Los torneos se guardan en este navegador por cuenta. Exporta JSON para conservarlos; importa copias sin sobrescribir torneos existentes.</p>'+
+    '<div class="inline-actions"><button class="secondary btn" id="exportTournamentsBackup">Exportar torneos (JSON)</button>'+
+    '<button class="secondary btn" id="importTournamentsBackup">Importar torneos (JSON)</button>'+
+    '<input id="tournamentsBackupFile" type="file" class="fileinput" accept=".json,application/json">'+
+    '<button class="danger btn" id="deleteAllTournaments">Borrar todos mis torneos</button></div></div></div>';
   const security='<div class="account-security-group"><h3>Cambiar contraseña</h3>'+
     '<input id="changePassword" class="field" type="password" placeholder="Nueva contraseña (mín. 6 caracteres)" autocomplete="new-password">'+
     '<input id="changePassword2" class="field" type="password" style="margin-top:8px" placeholder="Repite la nueva contraseña" autocomplete="new-password">'+
@@ -2147,7 +2201,10 @@ function renderShell(){
   $("#app").innerHTML='<div class="app'+(sidebarCollapsed?' sidebar-collapsed':'')+'"><header class="top"><div class="brand"><b>ONE PIECE</b><span>MiAlbumOnePiece</span></div>'+account+'</header>'+main+nav()+(state.detail?detailView(state.detail):"")+(state.auth?authModal():"")+(state.newDeck?newDeckModal():"")+'</div>';
   bindShell();
   if(state.tab==="catalog")renderCatalogResults();
-  if(state.tab==="collection")renderCollectionResults();
+  if(state.tab==="collection"){
+    if(state.collectionStatsOpen)window.loadCollectionHistory?.();
+    else renderCollectionResults();
+  }
   if(state.tab==="album")renderAlbumResults();
   if(state.tab==="decks")renderDeckResults();
   if(state.tab==="proxies"){renderProxyResults();renderProxyPicked()}
@@ -2156,7 +2213,7 @@ function renderShell(){
 function updateLiveCollectionCount(){const el=$("#liveCollectionCount");if(!el)return;if(!state.user){el.textContent="Inicia sesión para consultar tu colección";return}if(!state.collectionReady){el.textContent="Cargando colección desde Supabase…";return}const s=collectionStats();el.textContent="Mi colección: "+s.distinct.toLocaleString("es-ES")+" cartas · "+s.copies.toLocaleString("es-ES")+" copias";}
 function renderVisibleOnly(){
   if(state.tab==="catalog")renderCatalogResults();
-  else if(state.tab==="collection")renderCollectionResults();
+  else if(state.tab==="collection"&&!state.collectionStatsOpen)renderCollectionResults();
   else if(state.tab==="album")renderAlbumResults();
   else if(state.tab==="proxies"){renderProxyResults();renderProxyPicked()}
   else if(state.tab==="decks"){const rows=$("#deckRows");const d=state.decks.find(x=>x.id===state.deckId);if(rows&&d){rows.innerHTML=deckRows(d);bindResultEvents(rows)}renderDeckResults()}
@@ -2266,7 +2323,7 @@ function restoreReloadView(saved){
 }
 
 function appViewSnapshot(){
-  return {tab:state.tab,albumSet:state.album.set||"",deckLibrary:state.deckLibrary!==false,deckId:state.deckId||null,tournamentId:state.tournamentId||null};
+  return {tab:state.tab,albumSet:state.album.set||"",deckLibrary:state.deckLibrary!==false,deckId:state.deckId||null,tournamentId:state.tournamentId||null,collectionStatsOpen:state.tab==="collection"&&!!state.collectionStatsOpen};
 }
 function replaceAppHistory(){
   const current=history.state&&typeof history.state==="object"?history.state:{};
@@ -2279,6 +2336,7 @@ function restoreAppView(view){
   if(!view)return false;
   state.detail=null;detailHistoryActive=false;state.auth=false;state.newDeck=false;state.shared=false;
   state.tab=view.tab||"catalog";
+  state.collectionStatsOpen=state.tab==="collection"&&!!view.collectionStatsOpen;
   state.album.set=view.albumSet||"";
   state.deckLibrary=view.deckLibrary!==false;
   state.deckId=view.deckId||null;
@@ -2315,7 +2373,7 @@ function bindShell(){
     if(next===state.tab&&!state.detail)return;
     if(state.detail&&detailHistoryActive)history.replaceState({mialbumView:appViewSnapshot()},"",location.href);
     detailHistoryActive=false;state.detail=null;
-    navigateApp(()=>{state.tab=next;state.shared=false;if(next!=="tournaments"){state.tournamentDraft=null;state.tournamentRoundDraft=null;state.tournamentStats=null}});
+    navigateApp(()=>{state.tab=next;state.collectionStatsOpen=false;state.shared=false;if(next!=="tournaments"){state.tournamentDraft=null;state.tournamentRoundDraft=null;state.tournamentStats=null}});
   });
   $("#retryCollectionLoad")?.addEventListener("click",async()=>{if(!state.user)return;const id=state.user.id;await loadCollectionFromCloud(id);if(state.user?.id===id)renderShell()});
   $("#accountBtn")?.addEventListener("click",()=>{if(state.tab!=="account")navigateApp(()=>{state.tab="account";state.shared=false})});
@@ -2352,6 +2410,11 @@ function bindShell(){
     $("#clearCatalogFilters")?.addEventListener("click",()=>{Object.assign(state.catalog,{set:"Todas",category:"Todos",color:"Todos",rarity:"Todos",type:"Todos",attribute:"Todos",ownership:"Todas",minCost:"",maxCost:"",minPower:"",maxPower:"",minPrice:"",maxPrice:"",page:1});renderShell()});
   }
   if(state.tab==="collection"){
+    $("#openCollectionStats")?.addEventListener("click",()=>navigateApp(()=>{state.collectionStatsOpen=true}));
+    $("#closeCollectionStats")?.addEventListener("click",()=>{
+      if(history.state?.mialbumView?.collectionStatsOpen&&history.length>1)history.back();
+      else{state.collectionStatsOpen=false;replaceAppHistory();renderShell();}
+    });
     bindSearch("#collectionSearch",v=>{state.collection.query=v;state.collection.page=1;renderCollectionResults()});
     const map={colSet:"set",colCategory:"category",colColor:"color",colRarity:"rarity",colType:"type",colAttribute:"attribute",colQty:"quantity",colPlayset:"playset",colSort:"sort",colDir:"dir"};
     Object.entries(map).forEach(([id,k])=>$("#"+id)?.addEventListener("change",async()=>{
@@ -2430,6 +2493,14 @@ function bindShell(){
     const map={deckSet:"set",deckCat:"category",deckColor:"color",deckRarity:"rarity",deckType:"type",deckAttribute:"attribute",deckOwnership:"ownership",deckSort:"sort",deckDir:"dir"};
     Object.entries(map).forEach(([id,k])=>$("#"+id)?.addEventListener("change",async()=>{state.deckFilters[k]=$("#"+id).value;state.deckPage=1;await renderDeckResults()}));
     const deckRowsHost=$("#deckRows");if(deckRowsHost)bindResultEvents(deckRowsHost);
+    const changeDeckCompositionSort=()=>{
+      state.deckCompositionSort=$("#deckCompositionSort")?.value||"id";
+      state.deckCompositionDir=$("#deckCompositionDir")?.value||"asc";
+      const host=$("#deckRows"),deck=state.decks.find(x=>x.id===state.deckId);
+      if(host&&deck){host.innerHTML=deckRows(deck);bindResultEvents(host)}
+    };
+    $("#deckCompositionSort")?.addEventListener("change",changeDeckCompositionSort);
+    $("#deckCompositionDir")?.addEventListener("change",changeDeckCompositionSort);
     document.querySelectorAll("[data-removeleader]").forEach(b=>b.onclick=removeLeader);
     $("#deckFilterToggle")?.addEventListener("click",()=>{state.deckFilters.filtersOpen=!state.deckFilters.filtersOpen;renderShell()});
     $("#closeDeckFilters")?.addEventListener("click",()=>{state.deckFilters.filtersOpen=false;renderShell()});
@@ -2479,6 +2550,13 @@ function bindAccount(){
     const file=e.target.files?.[0];e.target.value="";
     if(file)await importAllDecksFile(file);
   });
+  $("#exportTournamentsBackup")?.addEventListener("click",()=>window.exportAllTournaments?.());
+  $("#importTournamentsBackup")?.addEventListener("click",()=>$("#tournamentsBackupFile")?.click());
+  $("#tournamentsBackupFile")?.addEventListener("change",async e=>{
+    const file=e.target.files?.[0];e.target.value="";
+    if(file)await window.importAllTournaments?.(file);
+  });
+  $("#deleteAllTournaments")?.addEventListener("click",()=>window.deleteAllTournaments?.());
   $("#deleteAccount")?.addEventListener("click",deleteAccount);
   $("#logout")?.addEventListener("click",async()=>{try{await state.sb?.auth.signOut()}catch{}state.user=null;state.authRecovery=false;state.deckId=null;state.deckLibrary=true;loadAccountLocal();notify("Sesión cerrada");renderShell()});
 }
