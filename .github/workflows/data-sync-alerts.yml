@@ -1,0 +1,42 @@
+name: Data synchronization alerts
+on:
+  workflow_run:
+    workflows:
+      - Sync One Piece card database
+      - cardmarket-prices
+      - Build One Piece visual fingerprint index
+    types: [completed]
+permissions:
+  contents: read
+  issues: write
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Report failed automatic updates as GitHub issues
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const run = context.payload.workflow_run;
+            if (!run || run.head_branch !== 'main' || !['success','failure','timed_out'].includes(run.conclusion)) return;
+            const title = '[Automatización] Error: ' + run.name;
+            const {owner,repo} = context.repo;
+            const open = await github.paginate(github.rest.issues.listForRepo,{owner,repo,state:'open',per_page:100});
+            const found = open.find(issue=>!issue.pull_request && issue.title===title);
+            if (run.conclusion === 'success') {
+              if (found) {
+                await github.rest.issues.createComment({owner,repo,issue_number:found.number,body:'Sincronización recuperada: '+run.html_url});
+                await github.rest.issues.update({owner,repo,issue_number:found.number,state:'closed'});
+              }
+              return;
+            }
+            const body = [
+              'La actualización automática **'+run.name+'** terminó con **'+run.conclusion+'**.',
+              '',
+              'Ejecución: '+run.html_url,
+              'Commit: '+run.head_sha,
+              '',
+              'Si la validación falló, la versión anterior de los datos sigue disponible.'
+            ].join('\n');
+            if (found) await github.rest.issues.createComment({owner,repo,issue_number:found.number,body});
+            else await github.rest.issues.create({owner,repo,title,body});
