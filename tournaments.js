@@ -574,6 +574,66 @@
       rerender();
     });
   }
+  // Personal tournament backups are local to the signed-in account and browser.
+  // Export/restore/remove are available exclusively in Cuenta → Datos y copias de seguridad.
+  function exportAllTournaments(){
+    if(!ownerKey()){notify("Inicia sesión para exportar torneos.");return}
+    const data={format:"mialbumonepiece-tournaments-v1",tournaments:state.tournaments||[]};
+    const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});
+    downloadBlob(blob,"mis-torneos-"+new Date().toISOString().slice(0,10)+".json");
+    notify("Copia JSON de torneos preparada");
+  }
+  async function importAllTournaments(file){
+    const key=ownerKey();
+    if(!key||!file){notify("Inicia sesión para importar torneos.");return}
+    if(file.size>5*1024*1024){alert("El archivo excede el tamaño máximo de 5 MB.");return}
+    try{
+      const document=JSON.parse(await file.text());
+      if(ownerKey()!==key)return;
+      if(document?.format!=="mialbumonepiece-tournaments-v1"||!Array.isArray(document.tournaments))
+        throw Error("Formato JSON de torneos incorrecto");
+      if(document.tournaments.length>2000)throw Error("El archivo contiene demasiados torneos");
+      const names=new Set();
+      for(const t of document.tournaments){
+        if(!t||typeof t!=="object"||Array.isArray(t)||typeof t.id!=="string"||!t.id.trim()||t.id.length>160||
+           typeof t.title!=="string"||!t.title.trim()||t.title.length>500||!Array.isArray(t.rounds)||
+           t.rounds.length>200||names.has(t.id))throw Error("El archivo contiene torneos no válidos o identificadores repetidos");
+        names.add(t.id);
+      }
+      const current=Array.isArray(state.tournaments)?state.tournaments:[];
+      const existing=new Set(current.map(t=>t.id));
+      const fresh=document.tournaments.filter(t=>!existing.has(t.id));
+      if(!fresh.length){notify("No hay torneos nuevos que importar.");return}
+      if(current.length+fresh.length>2000)throw Error("Supera el límite de 2.000 torneos");
+      if(!confirm("¿Importar "+fresh.length+" torneos nuevos? Se mantendrán los existentes sin modificarlos."))return;
+      if(ownerKey()!==key)return;
+      const combined=[...current,...fresh];
+      // Persist first: storage quota failure must never overwrite in-memory data.
+      localStorage.setItem(key,JSON.stringify(combined));
+      state.tournaments=combined;
+      notify("Importados "+fresh.length+" torneos; ninguno de los anteriores se ha sobrescrito.");
+    }catch(error){
+      console.warn("Error importando torneos",error);
+      alert("No se pudo importar la copia: "+(error.message||error));
+    }
+  }
+  function deleteAllTournaments(){
+    const key=ownerKey();if(!key)return notify("Inicia sesión para borrar tus torneos.");
+    const n=state.tournaments?.length||0;
+    if(!n)return notify("No hay torneos que borrar.");
+    if(!confirm("¿Eliminar DEFINITIVAMENTE los "+n+" torneos de este navegador y todas sus rondas? Exporta antes un JSON si quieres conservarlos."))return;
+    if(prompt("Para confirmar el borrado de TODOS tus torneos escribe BORRAR:")!=="BORRAR")return notify("Borrado cancelado");
+    if(ownerKey()!==key)return;
+    try{
+      localStorage.removeItem(key);
+      state.tournaments=[];state.tournamentId=null;state.tournamentDraft=null;
+      state.tournamentRoundDraft=null;state.tournamentFinishDraft=null;state.tournamentStats=null;
+      notify("Tus torneos locales han sido borrados.");
+    }catch(error){console.warn("No se pudieron borrar los torneos",error);notify("No se pudo completar el borrado.");}
+  }
+  window.exportAllTournaments=exportAllTournaments;
+  window.importAllTournaments=importAllTournaments;
+  window.deleteAllTournaments=deleteAllTournaments;
   window.tournamentsView=view;
   window.tournamentsBind=bind;
   window.tournamentsLoadForAccount=load;
