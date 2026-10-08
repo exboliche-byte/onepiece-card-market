@@ -38,6 +38,9 @@ jobs:
       - name: Update Cardmarket prices
         run: node scripts/update-cardmarket-prices.mjs
 
+      - name: Verify complete price feed and exact printing identities
+        run: node --test scripts/card-dataset.test.mjs scripts/resolve-ambiguous-prices.test.cjs scripts/parse-market-price.test.cjs scripts/pricing-source-set.test.mjs
+
       - name: Commit updated dataset
         run: |
           git config user.name "github-actions[bot]"
