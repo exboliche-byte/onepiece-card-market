@@ -1,10 +1,10 @@
-/* Meta competitivo: datos de Limitless separados de estadísticas voluntarias de la comunidad. */
+/* Meta competitivo: Limitless y estadísticas agregadas automáticas de torneos de la comunidad. */
 (function(){
 "use strict";
 const m={scope:"global",section:"tiers",days:90,format:"auto",leader:"",expanded:false,
  global:null,community:null,loading:false,communityLoading:false,error:"",communityError:"",
- consent:null,consentUser:null,consentLoading:false,consentSaving:false,lastGlobalAttempt:"",lastCommunityAttempt:""};
-const css=".meta-page{max-width:1320px;padding-bottom:105px}.meta-tabs{display:flex;gap:7px;overflow-x:auto;padding:9px 0}.meta-tabs button{border:1px solid var(--line);background:var(--panel2);color:var(--text);border-radius:10px;padding:10px 12px;font-weight:800;white-space:nowrap}.meta-tabs button.active{border-color:var(--accent);color:var(--accent);background:#332d19}.meta-controls{display:flex;flex-wrap:wrap;gap:8px;align-items:end;margin:12px 0}.meta-controls label{display:grid;gap:5px;flex:1;min-width:115px;color:var(--muted);font-size:12px}.meta-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:12px 0}.meta-stat{border:1px solid var(--line);background:var(--panel);border-radius:12px;padding:11px}.meta-stat b{font-size:clamp(18px,3vw,25px);display:block}.meta-stat small{font-size:11px;color:var(--muted)}.meta-tier{display:flex;border:1px solid var(--line);background:var(--panel);border-radius:14px;overflow:hidden;margin-bottom:9px}.meta-tier-grade{width:51px;flex:none;display:grid;place-items:center;color:#16191e;font-size:26px;font-weight:950}.meta-tier-grade.s{background:#e9898e}.meta-tier-grade.a{background:#efbb79}.meta-tier-grade.b{background:#e9d68d}.meta-tier-grade.c{background:#a5c6a6}.meta-tier-grade.d{background:#8fb2cb}.meta-tier-grade.unknown{background:#8993a5}.meta-tier-items{display:flex;flex-wrap:wrap;gap:7px;min-width:0;padding:9px}.meta-leader-card{width:88px;border:1px solid var(--line);background:var(--panel2);color:var(--text);border-radius:9px;text-align:center;padding:5px}.meta-leader-card img{width:100%;aspect-ratio:.716;object-fit:cover;display:block;border-radius:5px}.meta-leader-card b{display:block;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-size:11px;margin-top:5px}.meta-leader-card small{display:block;color:var(--muted);font-size:10px}.meta-scroller{width:100%;max-height:70vh;overflow:auto;border:1px solid var(--line);border-radius:12px}.meta-table{width:100%;min-width:650px;border-collapse:separate;border-spacing:0;font-size:12px}.meta-table th,.meta-table td{padding:9px 8px;text-align:center;white-space:nowrap;border-right:1px solid #334052;border-bottom:1px solid #334052}.meta-table th{position:sticky;top:0;z-index:2;background:#283246}.meta-table th:first-child{left:0;z-index:4}.meta-table td:first-child{position:sticky;left:0;z-index:1;background:#192333;text-align:left}.meta-table small{display:block;color:#a0adbf;font-size:10px}.meta-win{background:#15513d;color:#bcf7db}.meta-mid{background:#554921;color:#fff4c7}.meta-loss{background:#592933;color:#ffcad4}.meta-no{background:#252b37;color:#929cac}.meta-consent{border:1px solid #496a5d;background:#192722;padding:14px;border-radius:14px;margin:14px 0}.meta-consent p,.meta-source{color:var(--muted);font-size:12px;line-height:1.5}.meta-source a{color:var(--accent)}@media(max-width:650px){.meta-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.meta-tier-grade{width:40px;font-size:21px}.meta-leader-card{width:73px}.meta-tier-items{padding:6px;gap:5px}}";
+ lastGlobalAttempt:"",lastCommunityAttempt:""};
+const css=".meta-page{max-width:1320px;padding-bottom:105px}.meta-tabs{display:flex;gap:7px;overflow-x:auto;padding:9px 0}.meta-tabs button{border:1px solid var(--line);background:var(--panel2);color:var(--text);border-radius:10px;padding:10px 12px;font-weight:800;white-space:nowrap}.meta-tabs button.active{border-color:var(--accent);color:var(--accent);background:#332d19}.meta-controls{display:flex;flex-wrap:wrap;gap:8px;align-items:end;margin:12px 0}.meta-controls label{display:grid;gap:5px;flex:1;min-width:115px;color:var(--muted);font-size:12px}.meta-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:12px 0}.meta-stat{border:1px solid var(--line);background:var(--panel);border-radius:12px;padding:11px}.meta-stat b{font-size:clamp(18px,3vw,25px);display:block}.meta-stat small{font-size:11px;color:var(--muted)}.meta-tier{display:flex;border:1px solid var(--line);background:var(--panel);border-radius:14px;overflow:hidden;margin-bottom:9px}.meta-tier-grade{width:51px;flex:none;display:grid;place-items:center;color:#16191e;font-size:26px;font-weight:950}.meta-tier-grade.s{background:#e9898e}.meta-tier-grade.a{background:#efbb79}.meta-tier-grade.b{background:#e9d68d}.meta-tier-grade.c{background:#a5c6a6}.meta-tier-grade.d{background:#8fb2cb}.meta-tier-grade.unknown{background:#8993a5}.meta-tier-items{display:flex;flex-wrap:wrap;gap:7px;min-width:0;padding:9px}.meta-leader-card{width:88px;border:1px solid var(--line);background:var(--panel2);color:var(--text);border-radius:9px;text-align:center;padding:5px}.meta-leader-card img{width:100%;aspect-ratio:.716;object-fit:cover;display:block;border-radius:5px}.meta-leader-card b{display:block;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-size:11px;margin-top:5px}.meta-leader-card small{display:block;color:var(--muted);font-size:10px}.meta-scroller{width:100%;max-height:70vh;overflow:auto;border:1px solid var(--line);border-radius:12px}.meta-table{width:100%;min-width:650px;border-collapse:separate;border-spacing:0;font-size:12px}.meta-table th,.meta-table td{padding:9px 8px;text-align:center;white-space:nowrap;border-right:1px solid #334052;border-bottom:1px solid #334052}.meta-table th{position:sticky;top:0;z-index:2;background:#283246}.meta-table th:first-child{left:0;z-index:4}.meta-table td:first-child{position:sticky;left:0;z-index:1;background:#192333;text-align:left}.meta-table small{display:block;color:#a0adbf;font-size:10px}.meta-win{background:#15513d;color:#bcf7db}.meta-mid{background:#554921;color:#fff4c7}.meta-loss{background:#592933;color:#ffcad4}.meta-no{background:#252b37;color:#929cac}.meta-source{color:var(--muted);font-size:12px;line-height:1.5}.meta-source a{color:var(--accent)}@media(max-width:650px){.meta-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.meta-tier-grade{width:40px;font-size:21px}.meta-leader-card{width:73px}.meta-tier-items{padding:6px;gap:5px}}";
 const s=document.createElement("style");s.textContent=css;document.head.appendChild(s);
 const $=x=>document.querySelector(x);
 const integer=x=>Number(x||0).toLocaleString("es-ES");
@@ -32,7 +32,7 @@ function statCards(d){
     [integer(isLocal?d.recordedGames:d.games),isLocal?"Resultados registrados":"Partidas analizadas"],
     [integer(d.leaders.length),"Líderes con estadísticas"],
     [integer(isLocal?d.contributingUsers:d.includedEvents),isLocal?"Jugadores participantes":"Torneos incluidos"],
-    [integer(isLocal?d.consentingUsers:d.scannedEvents),isLocal?"Cuentas inscritas":"Torneos consultados"]
+    [integer(isLocal?d.eligibleTournaments:d.scannedEvents),isLocal?"Torneos finalizados":"Torneos consultados"]
   ];
   return '<div class="meta-stats">'+values.map(([val,title])=>'<div class="meta-stat"><b>'+val+'</b><small>'+title+'</small></div>').join("")+'</div>';
 }
@@ -83,13 +83,6 @@ function ranking(d){
     '</tbody></table></div>';
 }
 const nav=(value,label)=>'<button data-meta-section="'+value+'" class="'+(m.section===value?"active":"")+'">'+label+'</button>';
-function consentView(){
-  if(!state.user)return '<div class="meta-consent"><b>Participa en el meta de MiAlbumOnePiece</b><p>Inicia sesión para incluir de forma voluntaria estadísticas anónimas de tus torneos. No se comparte ningún torneo individual.</p><button class="secondary btn" data-tab="account">Ir a Cuenta</button></div>';
-  return '<div class="meta-consent"><b>Compartir resultados: '+(m.consent===true?"Sí":"No")+'</b>'+
-    '<p>Solo resultados W/L de torneos finalizados: nunca nombres, posiciones, comentarios ni listas. Para retirar tus resultados basta con desactivar esta opción. Las estadísticas necesitan 3 cuentas y 6 partidas por grupo.</p>'+
-    (m.consent===null?'<span class="small">Consultando tu consentimiento…</span>':
-      '<button id="metaConsent" class="'+(m.consent?"secondary":"primary")+' btn"'+(m.consentSaving?" disabled":"")+'>'+(m.consent?"Dejar de participar":"Participar con mis resultados")+'</button>')+'</div>';
-}
 function view(){
   const community=m.scope==="community",d=active(),loading=community?m.communityLoading:m.loading,error=community?m.communityError:m.error;
   const formats=[["auto","Formato más reciente"],["all","Todos los formatos"],...(m.global?.formats||[]).map(x=>[x,x])];
@@ -98,14 +91,14 @@ function view(){
     '<div class="meta-controls"><label>Período<select class="field" id="metaDays">'+[30,90,180,365].map(x=>'<option value="'+x+'"'+(m.days===x?" selected":"")+'>'+x+' días</option>').join("")+'</select></label>'+
     (!community?'<label>Formato<select class="field" id="metaFormat">'+formats.map(([id,label])=>'<option value="'+esc(id)+'"'+(m.format===id?" selected":"")+'>'+esc(label)+'</option>').join("")+'</select></label>':"")+
     '<button class="secondary btn" id="metaRefresh">↻ Actualizar</button></div>'+
-    (community?consentView():'<p class="meta-source">Fuente de torneos: <a href="https://play.limitlesstcg.com" target="_blank" rel="noopener">Limitless</a>. Puedes consultar también el meta independiente del simulador en <a href="https://oplaytcg.com/es/meta-stats" target="_blank" rel="noopener">OPlayTCG</a>; no se mezclan las muestras.</p>')+
+    (community?'<p class="meta-source">Los resultados de los torneos finalizados se incorporan automáticamente al meta de la comunidad. Solo publicamos estadísticas agregadas cuando hay suficiente muestra; nunca mostramos nombres, listas ni comentarios individuales.</p>':'<p class="meta-source">Fuente de torneos: <a href="https://play.limitlesstcg.com" target="_blank" rel="noopener">Limitless</a>. Puedes consultar también el meta independiente del simulador en <a href="https://oplaytcg.com/es/meta-stats" target="_blank" rel="noopener">OPlayTCG</a>; no se mezclan las muestras.</p>')+
     (loading?'<div class="notice">Procesando resultados…</div>':"")+(error?'<div class="notice">'+esc(error)+'</div>':"")+
     (d?'<p class="small">Actualizado '+esc(new Date(d.updatedAt||Date.now()).toLocaleString("es-ES"))+
-       (community?" · Estadísticas voluntarias y no representativas de todos los usuarios":" · Formato: "+esc(d.formatUsed||"—")+(d.formatUsed==="all"?" · Formatos combinados":"")+(d.partial?" · Consulta parcial":""))+'</p>'+
+       (community?" · Datos de todos los torneos finalizados; las muestras pequeñas quedan ocultas":" · Formato: "+esc(d.formatUsed||"—")+(d.formatUsed==="all"?" · Formatos combinados":"")+(d.partial?" · Consulta parcial":""))+'</p>'+
       statCards(d)+'<div class="meta-tabs">'+nav("tiers","Tier list")+nav("matrix","Matriz W/R")+nav("matchups","Matchups · 1.º / 2.º")+nav("leaders","Ranking")+'</div>'+
       (m.section==="tiers"?tiers(d):m.section==="matrix"?matrix(d):m.section==="matchups"?matchupTable(d):ranking(d))+
       '<p class="meta-source">Solo se computan resultados identificados, sin inventar datos. Los tiers son orientativos, no predicciones oficiales.</p>':
-      (!loading?'<div class="notice">'+(community?"Sin datos comunitarios públicos. Es necesario aplicar la migración SQL y disponer de participantes voluntarios suficientes.":"No hay datos disponibles por el momento.")+'</div>':""))+'</div>';
+      (!loading?'<div class="notice">'+(community?"Todavía no hay estadísticas comunitarias con suficiente muestra para mostrarlas. Todos los torneos finalizados ya cuentan automáticamente.":"No hay datos disponibles por el momento.")+'</div>':""))+'</div>';
 }
 async function loadGlobal(force=false){
   const days=m.days,format=m.format,key=days+":"+format;
@@ -136,30 +129,6 @@ async function loadCommunity(force=false){
     "Falta aplicar la migración SQL del meta comunitario.":String(e.message||e)}
   finally{m.communityLoading=false;if(state.tab==="meta")renderShell()}
 }
-async function loadConsent(){
-  const id=state.user?.id||"";
-  if(m.consentUser===id||m.consentLoading)return;
-  m.consentUser=id;m.consent=null;
-  if(!id||!state.sb)return;
-  m.consentLoading=true;
-  try{
-    const r=await state.sb.from("meta_opt_ins").select("enabled").eq("user_id",id).maybeSingle();
-    if(r.error)throw r.error;
-    if(m.consentUser===id)m.consent=!!r.data?.enabled;
-  }catch{if(m.consentUser===id)m.consent=false}
-  finally{m.consentLoading=false;if(state.tab==="meta")renderShell()}
-}
-async function changeConsent(){
-  const id=state.user?.id;if(!id||!state.sb||m.consentSaving)return;
-  m.consentSaving=true;
-  try{
-    const enabled=m.consent!==true;
-    const r=await state.sb.from("meta_opt_ins").upsert({user_id:id,enabled,updated_at:new Date().toISOString()},{onConflict:"user_id"});
-    if(r.error)throw r.error;
-    if(state.user?.id===id){m.consent=enabled;m.community=null;await loadCommunity(true)}
-  }catch{m.communityError="No se pudo modificar tu consentimiento. Comprueba la migración."}
-  finally{m.consentSaving=false;if(state.tab==="meta")renderShell()}
-}
 function bind(){
   document.querySelectorAll("[data-meta-scope]").forEach(b=>b.onclick=()=>{m.scope=b.dataset.metaScope;m.leader="";renderShell()});
   document.querySelectorAll("[data-meta-section]").forEach(b=>b.onclick=()=>{m.section=b.dataset.metaSection;renderShell()});
@@ -169,8 +138,7 @@ function bind(){
   $("#metaLeaderSelect")?.addEventListener("change",e=>{m.leader=e.target.value;renderShell()});
   $("#metaExpand")?.addEventListener("click",()=>{m.expanded=!m.expanded;renderShell()});
   $("#metaRefresh")?.addEventListener("click",()=>m.scope==="global"?void loadGlobal(true):void loadCommunity(true));
-  $("#metaConsent")?.addEventListener("click",changeConsent);
-  if(m.scope==="global")void loadGlobal();else{void loadCommunity();void loadConsent()}
+  if(m.scope==="global")void loadGlobal();else void loadCommunity()
 }
 window.metaView=view;window.metaBind=bind;
 })();
