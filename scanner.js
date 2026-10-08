@@ -2,14 +2,23 @@
 "use strict";
 let video=null,stream=null,timer=null,ocrWorker=null,ocrLoading=null,closed=true,busy=false,locked=false,generation=0;
 let frame="",lastCode="",streak=0,matches=[],recognition=null,aiDisabled=false,suggested=null;
+let aiRetryAt=0,scanCount=0,source="vision",liveSocket=null,liveBusy=false,liveReconnects=0,liveTimer=null,liveSerial=0,providerAbort=null;
 const style=document.createElement("style");
 style.textContent=[
 "#scanLaunch{position:fixed;bottom:80px;right:14px;z-index:200;background:#ffd447;color:#111;border:0;border-radius:28px;padding:13px 15px;font-weight:800;box-shadow:0 6px 20px #0009;cursor:pointer}",
-"#scanPanel{position:fixed;inset:0;z-index:9999;overflow:auto;background:#080a10;color:#fff;padding:14px;font-family:system-ui,sans-serif}",
-"#scanPanel .inner{max-width:560px;margin:auto}#scanPanel .scanFrame{position:relative;aspect-ratio:3/4;max-height:65vh;margin:10px 0;background:#0a0a0a;overflow:hidden;border-radius:13px;border:1px solid #4b5465;display:grid;place-items:center}",
-"#scanPanel video,#scanPanel .scanStill{width:100%;height:100%;object-fit:contain}",
-"#scanPanel .aim{position:absolute;inset:8% 10%;border:2px dashed #ffd4479e;pointer-events:none;border-radius:12px}",
-"#scanPanel .result{position:absolute;bottom:6px;left:6px;right:6px;max-height:82%;overflow:auto;background:#101724f5;padding:12px;border:1px solid #ffd447;border-radius:12px}",
+"#scanPanel{position:fixed;inset:0;z-index:9999;overflow-y:auto;overscroll-behavior:contain;background:#080a10;color:#fff;padding:env(safe-area-inset-top,8px) 10px env(safe-area-inset-bottom,8px);font-family:system-ui,sans-serif}",
+"#scanPanel .inner{max-width:680px;margin:auto;display:flex;flex-direction:column;min-height:100%;gap:7px}",
+"#scanPanel h2{font-size:17px;margin:3px 0;display:flex;justify-content:space-between;align-items:center;gap:8px}",
+"#scanPanel .scanFrame{position:relative;flex:none;height:clamp(300px,calc(100dvh - 235px),1050px);width:100%;margin:0;background:#050505;overflow:hidden;border-radius:11px;border:1px solid #4b5465}",
+"#scanPanel .scanFrame video,#scanPanel .scanFrame .scanStill{position:absolute;inset:0;display:block;width:100%;height:100%;object-fit:cover}",
+"#scanPanel .aim{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);height:min(87%,calc(78vw / 0.716));max-width:85%;aspect-ratio:0.716;border:2px dashed #ffd447c8;border-radius:13px;pointer-events:none;box-shadow:0 0 0 200vmax #0000002b}",
+"#scanPanel.locked .aim{display:none}",
+"#scanPanel .result{position:absolute;left:5px;right:5px;bottom:5px;max-height:88%;overflow-y:auto;background:#101724f4;border-radius:12px;padding:10px;border:1px solid #ffd447}",
+"@media (min-width:720px){#scanPanel .scanFrame{height:clamp(400px,calc(100dvh - 210px),1100px)}#scanPanel .aim{height:min(88%,calc(40vw / 0.716))}}",
+
+
+
+
 "#scanPanel .found{display:flex;gap:11px;align-items:flex-start}#scanPanel .found img{width:72px;max-height:110px;object-fit:contain}",
 "#scanPanel button{padding:10px;margin:3px;border:1px solid #526079;border-radius:9px;background:#263248;color:white;font-weight:700;cursor:pointer}#scanPanel button.primary{background:#ffd447;color:#151515;border-color:#ffd447}",
 "#scanPanel input,#scanPanel select{padding:10px;background:#263248;color:white;border:1px solid #526079;max-width:100%;border-radius:8px}",
@@ -24,11 +33,17 @@ const say=s=>{const node=$("#scanStatus");if(node)node.textContent=s};
 const valid=()=>!closed&&!!root();
 function takePhoto(){
  if(!video||video.readyState<2||!video.videoWidth)return "";
- const w=video.videoWidth,h=video.videoHeight,aspect=.73;
- let cw=w,ch=h;if(w/h>aspect)cw=h*aspect;else ch=w/aspect;
- const c=document.createElement("canvas");c.width=624;c.height=856;
- c.getContext("2d").drawImage(video,(w-cw)/2,(h-ch)/2,cw,ch,0,0,c.width,c.height);
- return c.toDataURL("image/jpeg",.76);
+ // Copy the same portion of the camera which is actually visible in the UI
+ // (the video is object-fit: cover). Avoid cropping off the printed code.
+ const sw=video.videoWidth,sh=video.videoHeight;
+ const rect=video.getBoundingClientRect(),dw=Math.max(1,rect.width),dh=Math.max(1,rect.height);
+ const scale=Math.max(dw/sw,dh/sh);
+ const cropW=Math.min(sw,dw/scale),cropH=Math.min(sh,dh/scale);
+ const sx=(sw-cropW)/2,sy=(sh-cropH)/2;
+ const c=document.createElement("canvas"),w=Math.min(960,Math.round(cropW));
+ c.width=Math.max(320,w);c.height=Math.max(420,Math.round(c.width*cropH/cropW));
+ c.getContext("2d").drawImage(video,sx,sy,cropW,cropH,0,0,c.width,c.height);
+ return c.toDataURL("image/jpeg",.78);
 }
 function plan(ms=5200){clearTimeout(timer);if(valid()&&!locked)timer=setTimeout(scan,ms)}
 async function getOCR(){
