@@ -3181,17 +3181,66 @@ function renderShareModal(text,title){
 }
 
 async function loadShared(){
-  const slug=location.pathname.match(/^\/deck\/([^/]+)$/)?.[1]||new URLSearchParams(location.search).get("deckshare");if(!slug)return;
-  try{await loadSupabaseConfig();
+  const collectionPath=location.pathname.match(/^\/collection\/([^/]+)\/?$/);
+  if(collectionPath){
+    state.publicCollection={slug:collectionPath[1],cards:[],error:true};
+    try{
+      await loadSupabaseConfig();
+      if(!/^[a-f0-9]{32}$/.test(collectionPath[1]))return;
+      const r=await fetch(SUPABASE_URL+"/rest/v1/rpc/public_collection_snapshot",{
+        method:"POST",headers:{apikey:SUPABASE_KEY,Authorization:"Bearer "+SUPABASE_KEY,"content-type":"application/json"},
+        body:JSON.stringify({p_slug:collectionPath[1]}),cache:"no-store"
+      });
+      if(!r.ok)throw Error("HTTP "+r.status);
+      const snapshot=await r.json();
+      if(!snapshot||!Array.isArray(snapshot.cards))return;
+      const cards=snapshot.cards.filter(x=>x&&typeof x.id==="string"&&x.id.length<=128&&
+        Number.isSafeInteger(Number(x.quantity))&&Number(x.quantity)>0&&Number(x.quantity)<=99)
+        .map(x=>({id:x.id,quantity:Number(x.quantity)})).slice(0,20000);
+      state.publicCollection={slug:collectionPath[1],cards,error:false};
+    }catch(e){console.warn("No se pudo abrir la colección compartida",e)}
+    return;
+  }
+  const slug=location.pathname.match(/^\/deck\/([^/]+)\/?$/)?.[1]||new URLSearchParams(location.search).get("deckshare");
+  if(!slug)return;
+  try{
+    await loadSupabaseConfig();
     let p;
-    if(location.pathname.startsWith("/deck/")){const r=await fetch(SUPABASE_URL+"/rest/v1/deck_shares?select=payload&share_slug=eq."+encodeURIComponent(slug)+"&limit=1",{headers:{apikey:SUPABASE_KEY,Authorization:"Bearer "+SUPABASE_KEY}});const rows=await r.json();p=rows[0]?.payload}
-    else{let b=slug.replace(/-/g,"+").replace(/_/g,"/");while(b.length%4)b+="=";p=JSON.parse(decodeURIComponent(escape(atob(b))))}
-    if(p){const fake={id:"shared",name:p.name,leader:p.leader,cards:p.cards,description:p.description};state.tab="decks";state.decks=[fake];state.deckId="shared";state.shared=true}
-  }catch{}
+    if(location.pathname.startsWith("/deck/")){
+      if(!/^[a-f0-9]{32}$/.test(slug))return;
+      const url=SUPABASE_URL+"/rest/v1/deck_shares?select=payload&share_slug=eq."+encodeURIComponent(slug)+"&limit=1";
+      const r=await fetch(url,{headers:{apikey:SUPABASE_KEY,Authorization:"Bearer "+SUPABASE_KEY},cache:"no-store"});
+      if(!r.ok)throw Error("HTTP "+r.status);
+      const rows=await r.json();p=rows?.[0]?.payload;
+    }else{
+      let b=slug.replace(/-/g,"+").replace(/_/g,"/");while(b.length%4)b+="=";
+      p=JSON.parse(decodeURIComponent(escape(atob(b))));
+    }
+    if(p&&p.cards&&typeof p.cards==="object"&&!Array.isArray(p.cards)){
+      const fake={id:"shared",name:String(p.name||"Mazo compartido").slice(0,120),
+        leader:String(p.leader||"").slice(0,128),cards:p.cards,description:String(p.description||"").slice(0,2000)};
+      state.tab="decks";state.sharedDeck=fake;state.shared=true;
+    }
+  }catch(e){console.warn("No se pudo abrir el mazo compartido",e)}
 }
 function sharedDeckView(){
-  const d=state.decks.find(x=>x.id==="shared"),v=deckValidate(d||{});if(!d)return "";
-  return '<div class="wrap"><div class="hero"><div><h1>Mazo compartido</h1><p>'+esc(d.name)+'</p></div></div><div class="section">'+(d.description?'<p style="white-space:pre-wrap;overflow-wrap:anywhere">'+esc(d.description)+'</p>':'')+'<div class="stats"><div class="stat"><b>'+v.total+'/50</b><span>Cartas</span></div><div class="stat"><b>'+esc(d.leader||"—")+'</b><span>Líder</span></div><div class="stat"><b>'+money(deckMissingCost(d))+'</b><span>Faltantes</span></div><div class="stat"><b>'+ (v.valid?"✓":"⚠")+'</b><span>Legalidad</span></div></div><div class="list">'+deckRows(d)+'</div></div></div>';
+  const d=state.sharedDeck;
+  if(!d)return '<div class="wrap"><h1>Mazo compartido</h1><p>No está disponible.</p><a class="secondary btn" href="/">Volver</a></div>';
+  const cards=Object.entries(d.cards||{}).filter(([id,n])=>typeof id==="string"&&
+    Number.isSafeInteger(Number(n))&&Number(n)>0&&Number(n)<=50).slice(0,50);
+  const total=cards.reduce((n,[,q])=>n+Number(q),0);
+  const leader=d.leader?card(d.leader):null;
+  const all=(leader?[{card:leader,id:d.leader,count:1}]:d.leader?[{card:null,id:d.leader,count:1}]:[])
+   .concat(cards.map(([id,count])=>({id,count:Number(count),card:card(id)})));
+  return '<div class="wrap"><div class="hero"><div><h1>🃏 Mazo compartido</h1><p>'+esc(d.name)+'</p></div><a class="secondary btn" href="/">← MiAlbumOnePiece</a></div>'+
+    '<div class="section"><p class="small">Lista pública · solo lectura · '+total+'/50 cartas'+(d.leader?" · 1 líder":"")+'</p>'+
+    (d.description?'<p style="white-space:pre-wrap;overflow-wrap:anywhere">'+esc(d.description)+'</p>':"")+
+    '<div class="grid">'+all.map(entry=>'<article class="card">'+
+      (entry.card?cardImg(entry.card,"cardimg"):'<div class="cardimg" style="display:grid;place-items:center">Sin imagen</div>')+
+      '<div class="cardbody"><div class="name">'+esc(entry.card?.name||entry.id)+'</div>'+
+      '<div class="small">'+esc(entry.id)+' · '+esc(entry.card?.set||"")+'</div>'+
+      '<div class="small"><b>'+(entry.id===d.leader?"Líder · ":"")+'×'+entry.count+'</b></div></div></article>').join("")+
+    '</div></div></div>';
 }
 function csvEscape(v){
   const s=String(v??"");
