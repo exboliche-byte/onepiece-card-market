@@ -2784,6 +2784,10 @@ function writeCollection(id,nextValue){
       }
       if(state.user?.id!==userId)return false;
       if(n===0)delete state.owned[id];else state.owned[id]=n;
+      // Notify the open scanner only after an exact-print write is confirmed.
+      window.dispatchEvent(new CustomEvent("mialbum:collection-updated",{
+        detail:{userId,id,quantity:n}
+      }));
       updateLiveCollectionCount();
       if(state.detail)renderShell();else renderVisibleOnly();
       notify(n?"Cantidad guardada en tu cuenta":"Carta eliminada de tu cuenta");
