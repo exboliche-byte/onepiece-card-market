@@ -1063,7 +1063,7 @@ function collectionView(){
   const s=collectionStats();
   return '<div class="wrap"><div class="hero"><div><h1>Mi colección</h1><p>Todas mis cartas, todos los sets, filtrables y ordenables.</p></div></div>'+
     '<details class="deck-stats-toggle collection-stats-toggle"><summary><b>📊 Estadísticas de mi colección</b><span class="deck-stats-expand">Ver detalles</span></summary>'+
-    '<div class="deck-stats-content" id="collectionStatsContent">'+collectionStatsDetails(s)+'</div></details>'+
+    '<div class="deck-stats-content" id="collectionStatsContent">'+collectionStatsDetails(s)+'</div>'+'<details class="history-toggle" id="collectionHistoryToggle"><summary>📈 Evolución del valor</summary><div class="history-body" id="collectionHistoryBody"></div></details></details>'+
     collectionToolbar()+'<div id="collectionResults"></div></div>';
 }
 function collectionStatsDetails(s){
@@ -1086,6 +1086,7 @@ function collectionStatsDetails(s){
 function updateCollectionValue(){
   const el=$("#collectionStatsContent");
   if(el)el.innerHTML=collectionStatsDetails(collectionStats());
+  window.refreshCollectionHistory?.();
 }
 function albumView(){
   const f=state.album;
@@ -3340,5 +3341,6 @@ window.addEventListener("popstate",e=>{
 <script src="/proxy-generator.js"></script>
 <script src="/deck-image-share.js"></script>
 <script src="/tournaments.js"></script>
+<script src="/collection-history.js"></script>
 </body>
 </html>
