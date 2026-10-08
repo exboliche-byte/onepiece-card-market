@@ -442,7 +442,7 @@ function parseLimitlessPage(html, requestedUrl) {
     : null;
   const eur = vendorMatch?.[2] ? parseLimitlessPrice(vendorMatch[2]) : null;
 
-  const versionLinks = [...text.matchAll(/href="(\/cards\/en\/[^"?]+)\?v=(\d+)"/gi)]
+  const versionLinks = [...text.matchAll(/href="(\/cards\/(?:en\/)?[^"?]+)\?v=(\d+)"/gi)]
     .map(match => ({
       version: Number(match[2]),
       url: new URL(match[1] + "?v=" + match[2], "https://onepiece.limitlesstcg.com").toString()
@@ -604,13 +604,20 @@ async function loadExactPrintOracle() {
       urlsByPrint.get(key).push(String(url));
     }
 
+    // This mirror was archived in August 2026. Historical print URLs can
+    // help identify a printing, but historical EUR prices are NOT current.
     const priceByPrint = new Map();
-    for (const [id, value] of Object.entries(summary?.cards || {})) {
-      const eur = Number(value?.eur);
-      if (Number.isFinite(eur) && eur > 0) priceByPrint.set(String(id), eur);
+    const updated=Date.parse(String(summary?.updatedAt||""));
+    const fresh=Number.isFinite(updated) && updated<=Date.now()+86400000 && Date.now()-updated<=3*86400000;
+    if(fresh){
+      for (const [id, value] of Object.entries(summary?.cards || {})) {
+        const eur = Number(value?.eur);
+        if (Number.isFinite(eur) && eur > 0) priceByPrint.set(String(id), eur);
+      }
+    }else{
+      console.warn("Archived/stale external price oracle ignored; date:",summary?.updatedAt||"unknown");
     }
-
-    return {urlsByPrint, priceByPrint};
+    return {urlsByPrint, priceByPrint,oraclePriceFresh:fresh};
   } catch (error) {
     console.warn("Exact print oracle unavailable:", error?.message || error);
     return {urlsByPrint:new Map(), priceByPrint:new Map()};
@@ -1015,7 +1022,7 @@ async function main() {
       guide.sell,
       guide.SELL
     ) : null;
-    const previousEur = priceNumber(prior.eur);
+    const previousEur = !prior.stalePrice && !/Automatic exact-print market summary fallback/i.test(String(prior.source||"")) ? priceNumber(prior.eur) : null;
     const exactLimitless = !!(limitlessPrint?.url || limitlessPrint?.eur != null);
     // Source printing from the catalogue is authoritative; the Limitless
     // expansion title may describe the original card rather than its reprint.
