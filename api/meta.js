@@ -1,5 +1,5 @@
 // Meta de torneos públicos One Piece. Limitless no proporciona quién salió primero.
-const URL="https://play.limitlesstcg.com/api",cache=new Map(),TTL=20*60*1000;
+const LIMITLESS_API_URL="https://play.limitlesstcg.com/api",cache=new Map(),TTL=20*60*1000;
 const bounded=(v,a,b)=>Math.min(b,Math.max(a,Number(v)||a));
 const cardId=c=>{
   const s=String(c?.set||"").trim().toUpperCase().replace(/-$/,""),n=String(c?.number||"").trim();
@@ -9,7 +9,7 @@ const cardId=c=>{
 async function get(path){
   const ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),10000);
   try{
-    const r=await fetch(URL+path,{headers:{accept:"application/json","user-agent":"MiAlbumOnePiece/1.0"},signal:ctrl.signal});
+    const r=await fetch(LIMITLESS_API_URL+path,{headers:{accept:"application/json","user-agent":"MiAlbumOnePiece/1.0"},signal:ctrl.signal});
     if(r.status===429){const e=new Error("Limitless 429");e.rateLimited=true;throw e}
     if(!r.ok)throw Error("Limitless "+r.status);
     const x=await r.json();if(!Array.isArray(x))throw Error("Respuesta inesperada");
