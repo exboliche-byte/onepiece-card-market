@@ -1,5 +1,7 @@
 import fs from "node:fs/promises";
 import expansionAliases from "./expansion-aliases.cjs";
+import marketPriceParser from "./parse-market-price.cjs";
+const {parseLimitlessPrice}=marketPriceParser;
 import ambiguityResolver from "./resolve-ambiguous-prices.cjs";
 const {resolveAmbiguousPrintLinks}=ambiguityResolver;
 const {registerCatalogExpansionNames,registerProductExpansionNames}=expansionAliases;
@@ -415,16 +417,6 @@ function cardNameMatches(card, product) {
   return 0;
 }
 
-
-function parseLimitlessPrice(value) {
-  const raw = String(value || "").trim().replace(/[^\d.,]/g, "");
-  if (!raw) return null;
-  const normalized = raw.includes(",") && raw.includes(".")
-    ? raw.replace(/\./g, "").replace(",", ".")
-    : raw.replace(",", ".");
-  const n = Number(normalized);
-  return Number.isFinite(n) && n > 0 ? n : null;
-}
 
 function parseLimitlessPage(html, requestedUrl) {
   const text = String(html || "");
