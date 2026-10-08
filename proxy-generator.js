@@ -101,10 +101,10 @@ function proxyPdfPosition(index){
 }
 function mmToPt(value){return value*72/25.4}
 
-async function createProxyPdf(cards,button){
+async function createProxyPdf(cards,button,title="Proxies de cartas - MiAlbumOnePiece"){
   const {PDFDocument,rgb}=await loadPdfLib();
   const pdf=await PDFDocument.create();
-  pdf.setTitle("Proxies de cartas faltantes - MiAlbumOnePiece");
+  pdf.setTitle(title);
   pdf.setSubject("A4, 9 cartas por página, 63 x 88 mm, imprimir al 100%");
   const imageCache=new Map();
   let page;
@@ -135,6 +135,25 @@ async function generateDeckProxies(button){
   catch(error){notify(error.message);return}
   if(!cards.length){notify("Ya tienes todas las cartas de este mazo; no necesitas proxies.");return}
 
+  await openProxyPdf(cards,button,"Proxies de cartas faltantes - MiAlbumOnePiece");
+}
+
+async function generateStandaloneProxies(button){
+  if(generating)return;
+  const entries=Object.entries(state.proxySelection||{});
+  const cards=[];
+  for(const [id,count] of entries){
+    const c=card(id),n=Number(count);
+    if(!c||!Number.isSafeInteger(n)||n<=0||n>9999){notify("Hay una carta o cantidad inválida en la selección.");return}
+    for(let i=0;i<n;i++)cards.push(c);
+  }
+  if(!cards.length){notify("Añade al menos una carta para crear el PDF.");return}
+  if(cards.length>400&&!confirm("Vas a generar "+cards.length+" cartas ("+Math.ceil(cards.length/9)+" hojas A4). ¿Continuar?"))return;
+  await openProxyPdf(cards,button,"Proxy Generator - MiAlbumOnePiece");
+}
+
+async function openProxyPdf(cards,button,title){
+  if(generating)return;
   // Reserve the PDF tab within the actual click. Browsers block window.open
   // when called after awaiting image downloads or PDF generation.
   const pdfTab=window.open("about:blank","_blank");
@@ -148,7 +167,7 @@ async function generateDeckProxies(button){
   generating=true;
   const before=button.textContent;button.disabled=true;
   try{
-    const bytes=await createProxyPdf(cards,button);
+    const bytes=await createProxyPdf(cards,button,title);
     const blob=new Blob([bytes],{type:"application/pdf"});
     const url=URL.createObjectURL(blob);
     // Display the PDF, not a forced download. If popups are blocked,
@@ -169,7 +188,9 @@ async function generateDeckProxies(button){
 
 // Delegation survives re-renders of the deck view, including cloud sync.
 document.addEventListener("click",event=>{
-  const button=event.target.closest?.("#generateDeckProxies");
-  if(button)generateDeckProxies(button);
+  const button=event.target.closest?.("#generateDeckProxies, #generateStandaloneProxies");
+  if(!button)return;
+  if(button.id==="generateStandaloneProxies")generateStandaloneProxies(button);
+  else generateDeckProxies(button);
 });
 })();
