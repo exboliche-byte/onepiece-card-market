@@ -480,18 +480,22 @@
     });
   }
   async function createShareJpg(t){
-    const cv=document.createElement("canvas");cv.width=1080;cv.height=1350;const c=cv.getContext("2d");
-    const grad=c.createLinearGradient(0,0,1080,1350);grad.addColorStop(0,"#1b2534");grad.addColorStop(1,"#080c14");c.fillStyle=grad;c.fillRect(0,0,1080,1350);
-    rounded(c,40,34,1000,1282,28,"#111924");
+    const rounds=t.rounds||[];
+    const rowTop=690,rowStep=100,rowHeight=90;
+    // Una ronda por fila y altura adaptable: no recortar resultados al compartir.
+    const height=Math.max(1350,rowTop+Math.max(rounds.length,1)*rowStep+135);
+    const cv=document.createElement("canvas");cv.width=1080;cv.height=height;const c=cv.getContext("2d");
+    const grad=c.createLinearGradient(0,0,1080,height);grad.addColorStop(0,"#1b2534");grad.addColorStop(1,"#080c14");c.fillStyle=grad;c.fillRect(0,0,1080,height);
+    rounded(c,40,34,1000,height-68,28,"#111924");
     rounded(c,40,34,1000,12,6,"#ffd447");
     drawText(c,"MI ALBUM ONE PIECE",76,102,25,"#ffd447","800");
     drawText(c,"TOURNAMENT REPORT",76,159,44,"#ffffff","800");
     const record=tournamentRecord(t);
-    const imgs=await Promise.all([loadPortrait(t.leaderId),...(t.rounds||[]).slice(0,7).map(r=>loadPortrait(cheapestLeader(r.opponentId)?.id||r.opponentId))]);
+    const imgs=await Promise.all([loadPortrait(t.leaderId),...rounds.map(r=>loadPortrait(cheapestLeader(r.opponentId)?.id||r.opponentId))]);
     function paintAvatar(img,x,y,w,h){
       rounded(c,x,y,w,h,20,"#354152");
       if(!img)return;
-      try{c.save();c.beginPath();c.roundRect(x,y,w,h,20);c.clip();const aspect=img.width/img.height,scale=Math.max(w/img.width,h/img.height);const iw=img.width*scale,ih=img.height*scale;c.drawImage(img,x+(w-iw)/2,y+(h-ih)/2,iw,ih);c.restore()}catch(e){c.restore()}
+      try{c.save();c.beginPath();c.roundRect(x,y,w,h,20);c.clip();const scale=Math.max(w/img.width,h/img.height);const iw=img.width*scale,ih=img.height*scale;c.drawImage(img,x+(w-iw)/2,y+(h-ih)/2,iw,ih);c.restore()}catch(e){c.restore()}
     }
     paintAvatar(imgs[0],76,205,226,226);
     drawText(c,t.title,340,268,35,"#fff","800",630);
@@ -504,18 +508,24 @@
     drawText(c,t.finished&&t.placement?"PUESTO #"+t.placement:"EN CURSO",555,535,30,"#ffd447","800",430);
     drawText(c,t.finished&&t.players?"/ "+t.players+" participantes":"",557,578,22,"#bdc6d7","600");
     drawText(c,"RONDAS",77,667,27,"#ffffff","800");
-    const rows=(t.rounds||[]).slice(0,7);
-    let y=690;
-    for(let i=0;i<rows.length;i++){
-      const r=rows[i],height=68;rounded(c,76,y,928,height,12,i%2?"#1d2834":"#26313f");
-      paintAvatar(imgs[i+1],91,y+6,56,56);
-      drawText(c,(i+1)+".  "+(r.opponentId?leaderName(r.opponentId):roundTypes[r.kind]),164,y+42,22,"#ffffff","700",700);
-      drawText(c,r.result==="W"?"W":r.result==="L"?"L":"—",933,y+43,28,r.result==="W"?"#77ef9d":r.result==="L"?"#ff8c9b":"#c1cad4","800");
-      y+=76;
+    for(let i=0;i<rounds.length;i++){
+      const r=rounds[i],y=rowTop+i*rowStep;
+      rounded(c,76,y,928,rowHeight,12,i%2?"#1d2834":"#26313f");
+      paintAvatar(imgs[i+1],91,y+13,64,64);
+      drawText(c,(i+1)+".  "+(r.opponentId?leaderName(r.opponentId):roundTypes[r.kind]||"Ronda"),171,y+35,22,"#ffffff","700",675);
+      const details=[roundTypes[r.kind]||"Suiza"];
+      if(r.kind!=="bye"&&r.kind!=="noshow"){
+        if(r.dice==="W")details.push("Gané dado");
+        else if(r.dice==="L")details.push("Perdí dado");
+        if(r.start==="1")details.push("Salí primero");
+        else if(r.start==="2")details.push("Salí segundo");
+      }
+      drawText(c,details.join("  ·  "),171,y+67,19,"#a9c9dd","600",670);
+      const result=r.result==="W"?"VICTORIA":r.result==="L"?"DERROTA":"—";
+      drawText(c,result,863,y+54,19,r.result==="W"?"#77ef9d":r.result==="L"?"#ff8c9b":"#c1cad4","800",127);
     }
-    if(t.rounds.length>7)drawText(c,"+ "+(t.rounds.length-7)+" rondas más",85,Math.min(y+30,1270),20,"#b7c2d4","500");
-    if(!rows.length)drawText(c,"Todavía no hay rondas registradas",83,744,22,"#9eacbd");
-    drawText(c,"MiAlbumOnePiece · mis torneos",76,1280,22,"#9caabd","600");
+    if(!rounds.length)drawText(c,"Todavía no hay rondas registradas",83,744,22,"#9eacbd");
+    drawText(c,"MiAlbumOnePiece · mis torneos",76,height-70,22,"#9caabd","600");
     return new Promise((resolve,reject)=>cv.toBlob(b=>b?resolve(b):reject(Error("No se pudo generar el JPG")),"image/jpeg",0.92));
   }
   async function share(t){
