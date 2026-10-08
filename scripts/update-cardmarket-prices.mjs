@@ -237,6 +237,7 @@ function sourceSetCode(card) {
   if (/^OP\d{2}-EB\d{2}$/i.test(rawSet)) return rawSet;
   // These are physical reprint editions; falling back to the printed code
   // (ST05, OP12, etc.) silently assigns the original product to a reprint.
+  if (/^PROMOTION-?CARD$/i.test(rawSet)) return /^P-\d{3}$/i.test(cardBase) ? "P" : rawSet;
   if (/^(?:FAMILY-?DECK-?SET|LIMITED-?PRODUCT-?CARD|OTHER-?PRODUCT-?CARD)$/i.test(rawSet)) return rawSet;
   if (/^(EB|OP|ST|PRB)-?\d{2}$/i.test(rawSet)) {
     const m = rawSet.match(/^(EB|OP|ST|PRB)-?(\d{2})$/i);
