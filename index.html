@@ -2139,6 +2139,7 @@ function nav(){
   return side+mobile;
 }
 function renderShell(){
+  if(reloadViewPending)return;
   let main=state.shared?sharedDeckView():(state.tab==="home"?homeView():state.tab==="catalog"?catalogView():state.tab==="collection"?collectionView():state.tab==="album"?albumView():state.tab==="decks"?decksView():state.tab==="tournaments"?(window.tournamentsView?.()||""):state.tab==="proxies"?proxyView():accountView());
   const account='<button class="account" id="accountBtn">'+(state.user?esc(accountDisplayName()||"Cuenta"):"Cuenta")+'</button>';
   document.body.dataset.currentTab=state.tab;
@@ -2182,6 +2183,15 @@ function bindSearch(id,fn){
 function authModal(){return '<div class="modalback"><div class="modal"><div class="sectionhead"><h2>Cuenta</h2><button class="close" data-close-auth>×</button></div><h3>Entrar</h3><input id="authLogin2" class="field" placeholder="Usuario o email" autocomplete="username"><input id="authPassword2" type="password" class="field" style="margin-top:8px" placeholder="Contraseña"><button class="linkbtn" id="forgotPassword2" type="button" style="margin-top:10px">He olvidado la contraseña</button><button class="primary btn" id="login2" style="margin-top:10px">Entrar</button><details style="margin-top:16px"><summary style="cursor:pointer;font-weight:800">Crear cuenta</summary><div style="margin-top:10px"><input id="registerUser2" class="field" placeholder="Usuario" autocomplete="username"><input id="registerEmail2" type="email" class="field" style="margin-top:8px" placeholder="Email"><input id="registerPassword2a" type="password" class="field" style="margin-top:8px" placeholder="Contraseña"><input id="registerPassword2b" type="password" class="field" style="margin-top:8px" placeholder="Confirmar contraseña"><button class="secondary btn" id="register2" style="margin-top:10px">Crear cuenta</button></div></details></div></div>'}
 
 const RELOAD_VIEW_KEY="mialbumonepiece_reload_view_v1";
+const RELOAD_ALLOWED_TABS=new Set(["home","catalog","collection","album","decks","tournaments","proxies","account"]);
+let reloadViewPending=false;
+function showReloadPlaceholder(){
+  const labels={home:"Inicio",catalog:"Catálogo",collection:"Colección",album:"Expansiones",decks:"Mazos",tournaments:"Mis torneos",proxies:"Proxies",account:"Cuenta"};
+  const name=labels[state.tab]||"MiAlbumOnePiece";
+  document.body.dataset.currentTab=state.tab;
+  $("#app").innerHTML='<div class="app'+(sidebarCollapsed?' sidebar-collapsed':'')+'"><header class="top"><div class="brand"><b>ONE PIECE</b><span>MiAlbumOnePiece</span></div></header>'+
+    '<div class="wrap"><div class="hero"><h1>'+esc(name)+'</h1></div><div class="section"><p class="muted">Restaurando esta pantalla…</p></div></div>'+nav()+'</div>';
+}
 function snapshotReloadView(){
   // UI only: never cache ownership, Supabase rows or other account data.
   const ui={
@@ -2196,6 +2206,7 @@ function snapshotReloadView(){
     deckFilters:{...state.deckFilters},
     deckChoosingLeader:state.deckChoosingLeader,
     deckDiscover:state.deckDiscover,
+    tournamentStats:state.tournamentStats||null,
     proxyQuery:state.proxyQuery,
     proxySelection:{...state.proxySelection}
   };
@@ -2215,8 +2226,7 @@ function readReloadView(){
 function restoreReloadView(saved){
   if(!saved||state.shared||state.authRecovery)return;
   const {view}=saved;
-  const allowedTabs=new Set(["home","catalog","collection","album","decks","tournaments","proxies","account"]);
-  if(!allowedTabs.has(view.tab))return;
+  if(!RELOAD_ALLOWED_TABS.has(view.tab))return;
   const restoreFields=(target,data)=>{
     if(!data||typeof data!=="object"||Array.isArray(data))return;
     for(const key of Object.keys(target)){
@@ -2234,6 +2244,7 @@ function restoreReloadView(saved){
   state.deckId=state.user&&state.decks.some(d=>d.id===view.deckId)?view.deckId:null;
   if(state.tab==="decks"&&!state.deckId)state.deckLibrary=true;
   state.tournamentId=state.user&&state.tournaments.some(t=>t.id===view.tournamentId)?view.tournamentId:null;
+  state.tournamentStats=saved.tournamentStats==="all"?"all":state.tournamentId&&saved.tournamentStats===state.tournamentId?state.tournamentId:null;
   state.deckQuery=typeof saved.deckQuery==="string"?saved.deckQuery:"";
   state.deckPage=Math.max(1,Number(saved.deckPage)||1);
   state.deckChoosingLeader=!!saved.deckChoosingLeader;
@@ -2271,7 +2282,7 @@ function restoreAppView(view){
   state.deckLibrary=view.deckLibrary!==false;
   state.deckId=view.deckId||null;
   state.tournamentId=state.user&&state.tournaments.some(t=>t.id===view.tournamentId)?view.tournamentId:null;
-  state.tournamentDraft=null;state.tournamentRoundDraft=null;
+  state.tournamentStats=null;state.tournamentDraft=null;state.tournamentRoundDraft=null;
   renderShell();
   window.scrollTo({top:0,behavior:"auto"});
   return true;
@@ -2303,7 +2314,7 @@ function bindShell(){
     if(next===state.tab&&!state.detail)return;
     if(state.detail&&detailHistoryActive)history.replaceState({mialbumView:appViewSnapshot()},"",location.href);
     detailHistoryActive=false;state.detail=null;
-    navigateApp(()=>{state.tab=next;state.shared=false;if(next!=="tournaments"){state.tournamentDraft=null;state.tournamentRoundDraft=null}});
+    navigateApp(()=>{state.tab=next;state.shared=false;if(next!=="tournaments"){state.tournamentDraft=null;state.tournamentRoundDraft=null;state.tournamentStats=null}});
   });
   $("#retryCollectionLoad")?.addEventListener("click",async()=>{if(!state.user)return;const id=state.user.id;await loadCollectionFromCloud(id);if(state.user?.id===id)renderShell()});
   $("#accountBtn")?.addEventListener("click",()=>{if(state.tab!=="account")navigateApp(()=>{state.tab="account";state.shared=false})});
@@ -3283,11 +3294,14 @@ async function loadCatalogData(){
 }
 async function boot(){
   const savedReloadView=readReloadView();
+  reloadViewPending=!!(savedReloadView&&RELOAD_ALLOWED_TABS.has(savedReloadView.view?.tab));
+  if(reloadViewPending)state.tab=savedReloadView.view.tab;
   window.addEventListener("pagehide",snapshotReloadView);
   window.addEventListener("beforeunload",snapshotReloadView);
   loadLocal();
   loadCachedPrices();
-  renderShell();
+  if(reloadViewPending)showReloadPlaceholder();
+  else renderShell();
   try{
     // Load catalog and market data together. On a true first visit there is no
     // local price cache, so the first card grid must not render until prices are
@@ -3307,7 +3321,9 @@ async function boot(){
     renderShell();
   }catch(e){$("#app").innerHTML='<div class="wrap"><div class="hero"><div><h1>MiAlbumOnePiece</h1><p>No se pudo cargar el catálogo.</p></div></div><div class="section"><div class="notice">Error cargando datos: '+esc(e.message||"desconocido")+'</div><button class="primary btn" onclick="location.reload()">Reintentar</button></div></div>'}
   await initSupabase();
-  restoreReloadView(savedReloadView);
+  reloadViewPending=false;
+  if(savedReloadView)restoreReloadView(savedReloadView);
+  else renderShell();
 window.addEventListener("popstate",e=>{
   if(state.detail){
     detailHistoryActive=false;

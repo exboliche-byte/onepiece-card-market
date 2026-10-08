@@ -71,6 +71,28 @@
   .tourney-optionbar button.negative{background:#9e353b;border-color:#9e353b}
   .tourney-muted{font-size:12px;color:var(--muted)}
   .tourney-hint{padding:10px;border:1px solid #434e5f;border-radius:11px;background:#18202b;color:var(--muted);font-size:12px}
+  .tourney-round-badges{display:flex;flex-wrap:wrap;gap:6px;padding:0 12px 10px 30px}
+  .tourney-round-badges span{font-size:11px;border:1px solid #45516a;border-radius:8px;padding:5px 7px;color:#d0dae7}
+  .tourney-round-badges .good{border-color:#367b60;color:#79e1ad}
+  .tourney-round-badges .bad{border-color:#814653;color:#ff9ca7}
+  .tourney-stats-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:12px 0 18px}
+  .tourney-stat-tile{border:1px solid var(--line);background:var(--panel2);border-radius:13px;padding:13px;min-width:0}
+  .tourney-stat-tile strong{display:block;font-size:clamp(18px,2.4vw,25px);overflow-wrap:anywhere}
+  .tourney-stat-tile span{font-size:11px;color:var(--muted);display:block;margin-top:3px}
+  .tourney-stat-table{width:100%;border-collapse:collapse}
+  .tourney-stat-table th,.tourney-stat-table td{padding:10px 7px;border-bottom:1px solid var(--line);text-align:left;font-size:12px}
+  .tourney-stat-table th{color:var(--muted);font-weight:600}
+  .tourney-stat-table td:last-child,.tourney-stat-table th:last-child{text-align:right}
+  .tourney-stat-name{display:flex;gap:9px;align-items:center;min-width:0}
+  .tourney-stat-name img{width:38px;height:52px;object-fit:cover;border-radius:5px;flex:none}
+  .tourney-stat-name span{min-width:0;overflow-wrap:anywhere}
+  .tourney-stat-panels{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+  .tourney-stat-panels>.tourney-panel{margin:0;min-width:0}
+  .tourney-stat-tablescroll{overflow-x:auto}
+  .tourney-inline-actions{display:flex;gap:7px;flex-wrap:wrap;justify-content:space-between;align-items:center}
+  .tourney-header>.tourney-actions{margin:0;justify-content:end}
+  .tourney-header>.tourney-actions .btn{min-width:0;flex:0 1 auto;padding:10px}
+  @media(max-width:750px){.tourney-stats-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.tourney-stat-panels{grid-template-columns:1fr}}
   @media(max-width:500px){
     .tourney-fields2{grid-template-columns:1fr 1fr;gap:8px}
     .tourney-tile{gap:10px;padding:10px}
@@ -92,7 +114,7 @@
   function getTournament(){return (state.tournaments||[]).find(t=>t.id===state.tournamentId)}
   function save(){const key=ownerKey();if(!key)return false;try{localStorage.setItem(key,JSON.stringify(state.tournaments));return true}catch(e){notify("No se pudo guardar: almacenamiento lleno");return false}}
   function load(){
-    state.tournaments=[];state.tournamentId=null;state.tournamentDraft=null;state.tournamentRoundDraft=null;state.tournamentFinishDraft=null;
+    state.tournaments=[];state.tournamentId=null;state.tournamentDraft=null;state.tournamentRoundDraft=null;state.tournamentFinishDraft=null;state.tournamentStats=null;
     const key=ownerKey();if(!key)return;
     try{
       const data=JSON.parse(localStorage.getItem(key)||"[]");
@@ -158,7 +180,7 @@
   }
   function tournamentList(){
     const arr=(state.tournaments||[]).slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))||String(b.createdAt).localeCompare(String(a.createdAt)));
-    return '<div class="tourney-wrap"><div class="tourney-header"><div><h1>🏆 Mis torneos</h1><div class="tourney-muted">Registra tus partidas, resultados y posiciones.</div></div><button class="primary btn" id="tourneyNew">＋ Nuevo</button></div>'+
+    return '<div class="tourney-wrap"><div class="tourney-header"><div><h1>🏆 Mis torneos</h1><div class="tourney-muted">Registra tus partidas, resultados y posiciones.</div></div><div class="tourney-actions"><button class="secondary btn" id="tourneyStatsOpen">📊 Estadísticas</button><button class="primary btn" id="tourneyNew">＋ Nuevo</button></div></div>'+
       '<p class="tourney-hint">Los torneos se guardan en este dispositivo y en esta cuenta local. Para conservarlos o pasarlos a otro dispositivo, utiliza la copia de seguridad.</p>'+
       (arr.length?'<div class="tourney-grid">'+arr.map(t=>{const r=tournamentRecord(t);return '<button type="button" class="tourney-tile" data-tourney-open="'+esc(t.id)+'">'+
         (portrait(t.leaderId)?'<img class="tourney-portrait" src="'+esc(portrait(t.leaderId))+'" alt="">':'<div class="tourney-portrait"></div>')+
@@ -166,6 +188,112 @@
         '<div class="tourney-score">'+r.wins+' - '+r.losses+'<small>'+(t.finished?'#'+Number(t.placement)+' / '+Number(t.players):"En curso")+'</small></div></button>'}).join("")+'</div>':
         '<div class="tourney-empty">Todavía no tienes torneos.<p>Crea el primero para ir registrando las rondas.</p></div>')+
       '<div class="tourney-actions"><button class="secondary btn" id="tourneyBackup">Exportar torneos (JSON)</button><button class="secondary btn" id="tourneyRestore">Importar copia</button><input hidden id="tourneyBackupInput" type="file" accept=".json,application/json"></div></div>';
+  }
+  // Las estadísticas de juego excluyen BYEs y No Shows para no inflar el win rate.
+  // Los récords oficiales de un torneo conservan sus BYEs.
+  function tournamentStatistics(tournaments){
+    const result={tournaments:tournaments.length,completed:0,rounds:0,played:0,wins:0,losses:0,byes:0,noShows:0,notes:0,firstPlaces:0,podiums:0,placementSum:0,placementCount:0,playersSum:0,playersCount:0,streak:0,bestStreak:0,
+      dice:{W:{wins:0,losses:0},L:{wins:0,losses:0}},
+      start:{"1":{wins:0,losses:0},"2":{wins:0,losses:0}},
+      kinds:new Map(),own:new Map(),opponents:new Map(),types:new Map()};
+    const grouping=(map,key,label)=>{
+      if(!map.has(key))map.set(key,{id:key,label,wins:0,losses:0,games:0});
+      return map.get(key);
+    };
+    const add=(map,key,label,win)=>{
+      const row=grouping(map,key,label);row.games++;if(win)row.wins++;else row.losses++;
+    };
+    for(const t of [...tournaments].sort((a,b)=>String(a.date||'').localeCompare(String(b.date||''))||String(a.createdAt||'').localeCompare(String(b.createdAt||'')))){
+      if(t.finished){
+        result.completed++;
+        const place=Number(t.placement),players=Number(t.players);
+        if(Number.isInteger(place)&&place>0){result.placementSum+=place;result.placementCount++;if(place===1)result.firstPlaces++;if(place<=3)result.podiums++}
+        if(Number.isInteger(players)&&players>0){result.playersSum+=players;result.playersCount++}
+      }
+      const key=norm(baseId(t.leaderId||"desconocido"))||"desconocido";
+      for(const round of t.rounds||[]){
+        result.rounds++;
+        if(String(round.note||"").trim())result.notes++;
+        if(round.kind==="bye"){result.byes++;continue}
+        if(round.kind==="noshow"){result.noShows++;continue}
+        if(round.result!=="W"&&round.result!=="L")continue;
+        const win=round.result==="W";
+        result.played++;if(win){result.wins++;result.streak++;result.bestStreak=Math.max(result.bestStreak,result.streak)}else{result.losses++;result.streak=0}
+        if(round.dice==="W"||round.dice==="L")result.dice[round.dice][win?"wins":"losses"]++;
+        if(round.start==="1"||round.start==="2")result.start[round.start][win?"wins":"losses"]++;
+        add(result.own,key,leaderName(t.leaderId),win);
+        if(round.opponentId){
+          const rival=norm(baseId(round.opponentId));
+          add(result.opponents,rival,leaderName(round.opponentId),win);
+        }
+        add(result.kinds,round.kind||"swiss",roundTypes[round.kind]||"Suiza",win);
+        add(result.types,t.type||"Otro",t.type||"Otro",win);
+      }
+    }
+    return result;
+  }
+  function statsRate(w,l){const total=w+l;return total?(100*w/total).toLocaleString("es-ES",{maximumFractionDigits:1})+" %":"—"}
+  function statsNumber(n){return Number(n||0).toLocaleString("es-ES",{maximumFractionDigits:1})}
+  function statTile(number,label){return '<div class="tourney-stat-tile"><strong>'+esc(number)+'</strong><span>'+esc(label)+'</span></div>'}
+  function statSection(title,content){
+    return '<section class="tourney-panel"><h2>'+esc(title)+'</h2>'+content+'</section>';
+  }
+  function leaderboardTable(map,limit=15,withImages=false){
+    const rows=[...map.values()].sort((a,b)=>b.games-a.games||b.wins-a.wins||String(a.label).localeCompare(String(b.label),"es")).slice(0,limit);
+    if(!rows.length)return '<p class="tourney-muted">Sin partidas registradas.</p>';
+    return '<div class="tourney-stat-tablescroll"><table class="tourney-stat-table"><thead><tr><th>Líder / categoría</th><th>W</th><th>L</th><th>W/R</th></tr></thead><tbody>'+
+      rows.map(r=>'<tr><td><div class="tourney-stat-name">'+(withImages&&portrait(cheapestLeader(r.id)?.id||r.id)?'<img loading="lazy" src="'+esc(portrait(cheapestLeader(r.id)?.id||r.id))+'" alt="">':"")+
+      '<span>'+esc(r.label)+' <span class="tourney-muted">('+r.games+')</span></span></div></td>'+
+      '<td>'+r.wins+'</td><td>'+r.losses+'</td><td>'+esc(statsRate(r.wins,r.losses))+'</td></tr>').join("")+
+      '</tbody></table></div>';
+  }
+  function statsHighlights(s){
+    const rivals=[...s.opponents.values()];
+    const topWins=rivals.filter(r=>r.wins>0).sort((a,b)=>b.wins-a.wins||b.games-a.games)[0];
+    const topLosses=rivals.filter(r=>r.losses>0).sort((a,b)=>b.losses-a.losses||b.games-a.games)[0];
+    const enough=rivals.filter(r=>r.games>=3);
+    const highest=enough.slice().sort((a,b)=>b.wins/b.games-a.wins/a.games||b.games-a.games)[0];
+    const lowest=enough.slice().sort((a,b)=>a.wins/a.games-b.wins/b.games||b.games-a.games)[0];
+    const tile=(leader,title,metric)=>'<div class="tourney-stat-tile"><strong>'+esc(leader?leader.label:"—")+'</strong><span>'+esc(title+(leader?" · "+metric(leader):""))+'</span></div>';
+    return '<div class="tourney-stats-grid">'+
+      tile(topWins,"Rival al que más has ganado",x=>x.wins+" victorias")+
+      tile(topLosses,"Rival que más te ha ganado",x=>x.losses+" derrotas")+
+      tile(highest,"Mejor W/R vs. rival (mín. 3)",x=>statsRate(x.wins,x.losses))+
+      tile(lowest,"Peor W/R vs. rival (mín. 3)",x=>statsRate(x.wins,x.losses))+
+      '</div>';
+  }
+  function tournamentStatsView(only){
+    const all=only?[only]:state.tournaments||[];
+    const s=tournamentStatistics(all);
+    return '<div class="tourney-wrap"><div class="tourney-header"><div><h1>📊 Estadísticas</h1><p class="tourney-muted">'+esc(only?only.title:"Historial de todos tus torneos")+'</p></div><button class="secondary btn" id="tourneyStatsBack">← Volver</button></div>'+
+      '<p class="tourney-hint">El W/R se calcula sobre partidas jugadas (victorias / victorias + derrotas). Los BYEs y No Shows se muestran aparte y no alteran los porcentajes. Las estadísticas solo incluyen los torneos registrados en este dispositivo.</p>'+
+      '<div class="tourney-stats-grid">'+
+      statTile(statsNumber(s.tournaments),"Torneos")+
+      statTile(statsNumber(s.completed),"Torneos finalizados")+
+      statTile(statsNumber(s.played),"Partidas jugadas")+
+      statTile(statsRate(s.wins,s.losses),"W/R global")+
+      statTile(statsNumber(s.wins),"Victorias jugadas")+
+      statTile(statsNumber(s.losses),"Derrotas jugadas")+
+      statTile(statsNumber(s.rounds),"Rondas totales")+
+      statTile(statsNumber(s.byes),"BYEs")+
+      statTile(statsNumber(s.noShows),"No Shows")+
+      statTile(statsNumber(s.firstPlaces),"Primeros puestos")+
+      statTile(statsNumber(s.podiums),"Top 3")+
+      statTile(s.placementCount?statsNumber(s.placementSum/s.placementCount):"—","Posición media")+
+      statTile(s.playersCount?statsNumber(s.playersSum/s.playersCount):"—","Participantes promedio")+
+      statTile(s.tournaments?statsNumber(s.rounds/s.tournaments):"—","Rondas por torneo")+
+      statTile(statsNumber(s.bestStreak),"Mejor racha de victorias")+
+      statTile(statsNumber(s.notes),"Rondas con comentarios")+
+      '</div>'+
+      (s.played?statsHighlights(s):"")+
+      '<div class="tourney-stat-panels">'+
+      statSection("🎲 Tirada de dados",leaderboardTable(new Map(Object.entries(s.dice).map(([k,v])=>[k,{label:k==="W"?"Dado ganado":"Dado perdido",...v,games:v.wins+v.losses}]).filter(([k,v])=>v.games))))+
+      statSection("🥇 Orden de salida",leaderboardTable(new Map(Object.entries(s.start).map(([k,v])=>[k,{label:k==="1"?"Salí primero":"Salí segundo",...v,games:v.wins+v.losses}]).filter(([k,v])=>v.games))))+
+      statSection("🃏 Líderes que he jugado",leaderboardTable(s.own,30,true))+
+      statSection("⚔️ Resultados por líder rival",leaderboardTable(s.opponents,60,true))+
+      statSection("🏆 Tipo de torneo",leaderboardTable(s.types,20))+
+      statSection("🔀 Tipo de ronda",leaderboardTable(s.kinds,10))+
+      '</div></div>';
   }
   function editingForm(){
     const d=state.tournamentDraft;
@@ -190,19 +318,22 @@
       '<div><div class="tourney-pills"><span class="tourney-pill">'+esc(t.set||"Set libre")+'</span><span class="tourney-pill green">'+esc(t.type)+'</span></div>'+
       '<h2>'+r.wins+' - '+r.losses+'</h2><div class="tourney-muted">'+esc(leaderName(t.leaderId))+'</div>'+
       '<div class="tourney-sub">'+(t.finished?('Puesto '+t.placement+' de '+t.players+' jugadores'):"Torneo en curso · clasificación pendiente")+'</div></div></div>'+
-      '<div class="tourney-actions"><button class="secondary btn" id="tourneyEdit">Editar torneo</button><button class="primary btn" id="tourneyShare">📤 Compartir JPG</button></div>'+
+      '<div class="tourney-actions"><button class="secondary btn" id="tourneyEdit">Editar torneo</button><button class="secondary btn" id="tourneyStatsOne">📊 Estadísticas</button><button class="primary btn" id="tourneyShare">📤 Compartir JPG</button></div>'+
       '<div class="tourney-actions">'+(t.finished?'<button class="secondary btn" id="tourneyReopen">↻ Reabrir torneo</button>':'<button class="primary btn" id="tourneyFinish">✓ Finalizar torneo</button>')+'</div></div>'+
-      '<div class="tourney-header"><h2 style="margin:0">Rondas ('+t.rounds.length+')</h2>'+(t.finished?'':'<button class="primary btn" id="tourneyAddRound">＋ Añadir ronda</button>')+'</div>'+
+      '<div class="tourney-header"><h2 style="margin:0">Rondas ('+t.rounds.length+')</h2><button class="danger btn" id="tourneyDelete">Eliminar torneo</button></div>'+
       (t.rounds.length?'<div class="tourney-rounds">'+t.rounds.map((round,i)=>
         '<div class="tourney-round"><div class="tourney-round-main"><span class="tourney-muted">'+(i+1)+'</span>'+
         (portrait(cheapestLeader(round.opponentId)?.id||round.opponentId)?'<img alt="" src="'+esc(portrait(cheapestLeader(round.opponentId)?.id||round.opponentId))+'">':'<div style="width:59px">🏁</div>')+
         '<div class="tourney-round-name"><strong>'+esc(round.opponentId?leaderName(round.opponentId):roundTypes[round.kind]||"Ronda")+'</strong>'+
-        '<small>'+esc(roundTypes[round.kind]||"Suiza")+(round.kind==="bye"||round.kind==="noshow"?"":' · '+(round.start==="1"?"Empecé 1º":"Empecé 2º")+' · Dados: '+(round.dice==="W"?"ganados":"perdidos"))+'</small></div>'+
+        '<small>'+esc(roundTypes[round.kind]||"Suiza")+'</small></div>'+
         '<span class="tourney-round-result '+(round.result==="W"?"win":round.result==="L"?"loss":"neutral")+'">'+esc(round.result==="W"?"W":round.result==="L"?"L":"—")+'</span></div>'+
-        (round.note?'<div class="tourney-note">'+esc(round.note)+'</div>':'')+
+        (round.kind==="bye"||round.kind==="noshow"?"":'<div class="tourney-round-badges">'+
+          (round.dice==="W"?'<span class="good">🎲 Gané dado</span>':round.dice==="L"?'<span class="bad">🎲 Perdí dado</span>':'')+
+          (round.start==="1"?'<span>Salí primero</span>':round.start==="2"?'<span>Salí segundo</span>':'')+'</div>')+
+        (round.note?'<div class="tourney-note"><b>Comentarios</b><div>'+esc(round.note)+'</div></div>':'')+
         (t.finished?"":'<div class="tourney-round-footer"><button data-tourney-edit-round="'+i+'">Editar</button><button data-tourney-delete-round="'+i+'">Eliminar</button></div>')+
         '</div>').join("")+'</div>':'<div class="tourney-empty">Añade rondas para calcular tu resultado automáticamente.</div>')+
-      '<div class="tourney-actions"><button class="secondary btn" id="tourneyDelete">Eliminar torneo</button></div>'+
+      (t.finished?'':'<div class="tourney-actions"><button class="primary btn" id="tourneyAddRound">＋ Añadir ronda</button></div>')+
       (state.tournamentRoundDraft?roundDialog(t):"")+
       (state.tournamentFinishDraft?finishDialog(t):"")+'</div>';
   }
@@ -239,6 +370,7 @@
     if(!state.user)return '<div class="tourney-wrap"><div class="tourney-header"><h1>🏆 Mis torneos</h1></div><div class="tourney-panel"><h2>Inicia sesión</h2><p>Necesitas una cuenta para registrar tus torneos.</p><button class="primary btn" id="tourneyLogin">Ir a mi cuenta</button></div></div>';
     if(state.tournamentDraft)return editingForm();
     const t=getTournament();
+    if(state.tournamentStats)return tournamentStatsView(state.tournamentStats==="all"?null:t);
     return t?detailsView(t):tournamentList();
   }
   function captureForm(){
@@ -400,6 +532,8 @@
     if(state.tab!=="tournaments")return;
     const on=(s,ev,f)=>document.querySelector(s)?.addEventListener(ev,f);
     on("#tourneyLogin","click",()=>navigateApp(()=>{state.tab="account"}));
+    on("#tourneyStatsOpen","click",()=>{state.tournamentStats="all";rerender()});
+    on("#tourneyStatsBack","click",()=>{state.tournamentStats=null;rerender()});
     on("#tourneyNew","click",()=>{state.tournamentDraft={title:"",date:new Date(Date.now()-new Date().getTimezoneOffset()*60000).toISOString().slice(0,10),type:"Local Store",set:"OP-17",deckId:"",leaderId:"",alt:false,search:""};rerender()});
     document.querySelectorAll("[data-tourney-open]").forEach(b=>b.onclick=()=>navigateApp(()=>{state.tournamentId=b.dataset.tourneyOpen}));
     on("#tourneyFormBack","click",exitForm);
@@ -424,6 +558,7 @@
     const t=getTournament();if(!t)return;
     on("#tourneyEdit","click",()=>{state.tournamentDraft={...t,search:"",alt:false};rerender()});
     on("#tourneyShare","click",()=>share(t));
+    on("#tourneyStatsOne","click",()=>{state.tournamentStats=t.id;rerender()});
     on("#tourneyFinish","click",()=>{if(t.finished)return;state.tournamentFinishDraft={placement:t.placement||"",players:t.players||""};rerender()});
     on("#tourneyReopen","click",()=>{if(!t.finished)return;t.finished=false;t.updatedAt=new Date().toISOString();state.tournamentFinishDraft=null;save();rerender();notify("Torneo reabierto")});
     on("#tourneyCancelFinish","click",()=>{state.tournamentFinishDraft=null;rerender()});
