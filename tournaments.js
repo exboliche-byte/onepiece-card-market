@@ -3,6 +3,56 @@
   "use strict";
   const TYPES=["Local Store","Extra Grand Battle","Store Championship","Treasure Cup","Regional","Online","Otro"];
   const KEY="mialbumonepiece_tournaments_";
+  const DELETED_KEY="mialbumonepiece_tournament_deleted_";
+  let syncQueue=Promise.resolve();
+  const getDeleted=id=>{try{return JSON.parse(localStorage.getItem(DELETED_KEY+id)||"{}")||{}}catch{return {}}};
+  const timeOf=t=>String(t?.updatedAt||t?.createdAt||"1970-01-01T00:00:00.000Z");
+  async function syncAccountTournaments(id){
+    if(!id||state.user?.id!==id||!state.sb)return false;
+    const response=await state.sb.from("tournaments").select("id,data,updated_at,deleted_at").eq("user_id",id);
+    if(response.error)throw response.error;
+    if(state.user?.id!==id)return false;
+    const previous=localStorage.getItem(KEY+id)||"[]",local=JSON.parse(previous);
+    const entries=new Map((Array.isArray(local)?local:[]).filter(t=>t?.id&&Array.isArray(t.rounds)).map(t=>[t.id,t]));
+    const deleted=getDeleted(id),remote=new Map((response.data||[]).map(r=>[r.id,r])),toWrite=[];
+    for(const [key,row] of remote){
+      if(row.deleted_at){entries.delete(key);deleted[key]=row.deleted_at;continue}
+      if(deleted[key]){entries.delete(key);toWrite.push({user_id:id,id:key,data:{},updated_at:deleted[key],deleted_at:deleted[key]});continue}
+      const localRow=entries.get(key);
+      if(!localRow||timeOf(localRow)<=String(row.updated_at||"")){
+        if(row.data&&Array.isArray(row.data.rounds))entries.set(key,row.data);
+      }else toWrite.push({user_id:id,id:key,data:localRow,updated_at:timeOf(localRow),deleted_at:null});
+    }
+    for(const [key,item] of entries)if(!remote.has(key)&&!deleted[key])
+      toWrite.push({user_id:id,id:key,data:item,updated_at:timeOf(item),deleted_at:null});
+    for(const [key,date] of Object.entries(deleted))if(!remote.has(key))
+      toWrite.push({user_id:id,id:key,data:{},updated_at:date,deleted_at:date});
+    for(let i=0;i<toWrite.length;i+=40){
+      const result=await state.sb.from("tournaments").upsert(toWrite.slice(i,i+40),{onConflict:"user_id,id"});
+      if(result.error)throw result.error;
+      if(state.user?.id!==id)return false;
+    }
+    if(state.user?.id===id&&localStorage.getItem(KEY+id)===previous){
+      state.tournaments=[...entries.values()];
+      localStorage.setItem(KEY+id,JSON.stringify(state.tournaments));
+      if(state.tab==="tournaments"&&!state.tournamentDraft&&!state.tournamentRoundDraft&&!state.tournamentFinishDraft)renderShell();
+    }
+    localStorage.setItem(DELETED_KEY+id,JSON.stringify(deleted));
+    state.tournamentCloudError="";
+    return true;
+  }
+  function syncTournaments(){
+    const id=state.user?.id;if(!id||!state.sb)return Promise.resolve(false);
+    syncQueue=syncQueue.catch(()=>{}).then(()=>syncAccountTournaments(id)).catch(e=>{
+      console.warn("Tournaments cloud",e);
+      if(state.user?.id===id){
+        state.tournamentCloudError="No se han sincronizado los torneos: "+(e.message||e);
+        if(state.tab==="tournaments")renderShell();
+      }
+      return false;
+    });
+    return syncQueue;
+  }
   const roundTypes={swiss:"Suiza",topcut:"Top Cut",bye:"BYE",noshow:"No Show"};
   const styles=String.raw`
   .tourney-wrap{max-width:1020px;margin:auto;padding:16px 14px 95px}
@@ -112,7 +162,17 @@
   const style=document.createElement("style");style.textContent=styles;document.head.appendChild(style);
   function ownerKey(){return state.user?.id?KEY+state.user.id:null}
   function getTournament(){return (state.tournaments||[]).find(t=>t.id===state.tournamentId)}
-  function save(){const key=ownerKey();if(!key)return false;try{localStorage.setItem(key,JSON.stringify(state.tournaments));return true}catch(e){notify("No se pudo guardar: almacenamiento lleno");return false}}
+  function save(deletedIds=[]){
+    const key=ownerKey();if(!key)return false;
+    try{
+      const removed=getDeleted(state.user.id);
+      for(const id of deletedIds)removed[id]=new Date().toISOString();
+      localStorage.setItem(DELETED_KEY+state.user.id,JSON.stringify(removed));
+      localStorage.setItem(key,JSON.stringify(state.tournaments));
+      void syncTournaments();
+      return true;
+    }catch(e){notify("No se pudo conservar la modificación local");return false}
+  }
   function load(){
     state.tournaments=[];state.tournamentId=null;state.tournamentDraft=null;state.tournamentRoundDraft=null;state.tournamentFinishDraft=null;state.tournamentStats=null;
     const key=ownerKey();if(!key)return;
@@ -654,4 +714,5 @@
   window.tournamentsView=view;
   window.tournamentsBind=bind;
   window.tournamentsLoadForAccount=load;
+  window.tournamentsSyncForAccount=id=>id===state.user?.id?syncTournaments():Promise.resolve(false);
 })();
