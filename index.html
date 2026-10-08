@@ -526,7 +526,7 @@ function groupFiltered(){
       case"name":return norm(g.card?.name);
       case"rarity":return norm(g.card?.rarity);
       case"quantity":return logicalQty(g.card);
-      case"price":return groupPriceStats(g).sort;
+      case"price":return priceOf(catalogCoverCard(g));
       case"cost":return groupNumber(g,"cost");
       case"power":return groupNumber(g,"power");
       case"set":return packSortKey(g.card?.set);
@@ -714,11 +714,38 @@ function cardTile(c,extra=""){
     (state.user&&state.collectionReady?'<div class="quick"><button class="secondary" data-qty="'+esc(c.id)+'" data-d="-1">−</button><div class="qty">'+q+'</div><button class="primary" data-qty="'+esc(c.id)+'" data-d="1">+</button></div>':'')+
     extra+'</div></article>';
 }
+// The catalog cover is the cheapest standard printing from the original
+// expansion, not whichever parallel/reprint happens to occur first.
+// This changes presentation only; prices and quantities remain per exact ID.
+function catalogCoverCard(g){
+  const versions=(g?.versions||[]).filter(Boolean);
+  if(!versions.length)return g?.card||null;
+  const standard=versions.filter(c=>!c.isParallel&&
+    !/_(?:p|c)\d+$/i.test(String(c.id||""))&&
+    variantKindOf(c)!=="parallel");
+  const original=standard.filter(c=>{
+    const root=baseId(c.id).match(/^(OP|ST|EB|PRB)\d{2}/i)?.[0];
+    return root&&normalizePrintSet(cardExpansionCode(c))===normalizePrintSet(root);
+  });
+  const candidates=original.length?original:standard.length?standard:versions;
+  const basePrints=candidates.filter(c=>variantKindOf(c)==="base");
+  const pool=basePrints.length?basePrints:candidates;
+  return pool.slice().sort((a,b)=>{
+    const ap=priceOf(a),bp=priceOf(b);
+    if(ap!==null&&bp!==null&&ap!==bp)return ap-bp;
+    if(ap===null&&bp!==null)return 1;
+    if(ap!==null&&bp===null)return -1;
+    const aa=a.id===baseId(a.id)?0:1,bb=b.id===baseId(b.id)?0:1;
+    return aa-bb||String(a.id).localeCompare(String(b.id),"es",{numeric:true});
+  })[0];
+}
 function groupedTile(g){
-  const c=g.card,q=logicalQty(c);
+  const c=state.tab==="catalog"?catalogCoverCard(g):g.card,q=logicalQty(c);
   const albumMissing=state.tab==="album"&&!q;
   const priceStats=groupPriceStats(g),minPrice=priceStats.min,maxPrice=priceStats.max;
-  const priceLabel=minPrice===null?"Precio —":
+  const coverPrice=state.tab==="catalog"?priceOf(c):null;
+  const priceLabel=state.tab==="catalog"?(coverPrice===null?"Precio —":money(coverPrice)):
+    minPrice===null?"Precio —":
     state.catalog.sort==="price"&&state.catalog.dir==="desc"?"Hasta "+money(maxPrice):
     maxPrice!==minPrice?"Desde "+money(minPrice):money(minPrice);
   return '<article class="card '+(albumMissing?"missing-card":"")+'">'+(q?'<span class="tag">×'+q+' total</span>':'<span class="tag missing">Falta</span>')+
@@ -794,7 +821,7 @@ async function renderCatalogResults(){
   if(needsPrices){try{await ensurePrices();}catch(e){console.warn("catalog prices",e)}}
   const data=groupFiltered(),pages=Math.max(1,Math.ceil(data.length/PAGE));state.catalog.page=Math.min(state.catalog.page,pages);
   const start=(state.catalog.page-1)*PAGE,visible=data.slice(start,start+PAGE);
-  visible.slice(0,12).forEach(g=>preloadCardImage(g.card));
+  visible.slice(0,12).forEach(g=>preloadCardImage(catalogCoverCard(g)));
   state.catalog.grouped=true;
   const mode="versiones agrupadas",active=catalogActiveFilterCount();
   host.innerHTML='<div class="grid">'+visible.map(g=>state.catalog.grouped?groupedTile(g):cardTile(g.card)).join("")+'</div>'+pagination(data.length,state.catalog.page,"catalog");
