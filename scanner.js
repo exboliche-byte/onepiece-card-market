@@ -4,7 +4,7 @@
 let camera=null,stream=null,track=null;
 let recognizer=null,recognizerReady=false,recognizerGeneration=0,lastFrameAt=0,engineError="";
 let visionWorker=null,visionReady=false,visionPending=false,visionCount=0,lastVisionAt=0,lastOCRAt=0,ocrPending=false,ocrHint="";
-let lastVisualId="",visualStable=0,visualResults=[],ocrAttempts=0,nameHints=[];
+let recentVisualMatches=[],visualResults=[],ocrAttempts=0,nameHints=[];
 const visionCanvas=document.createElement("canvas");
 visionCanvas.width=160;visionCanvas.height=224;
 const visionContext=visionCanvas.getContext("2d",{willReadFrequently:true});
@@ -82,7 +82,7 @@ function stopRecognition(){
 function startRecognition(){
   stopRecognition();
   const generation=recognizerGeneration;
-  visualResults=[];lastVisualId="";visualStable=0;
+  visualResults=[];recentVisualMatches=[];
   const index=$("#scanIndex"),candidateBtn=$("#scanCandidates");
   if(index)index.textContent="Cargando huellas de ilustraciones…";
   if(candidateBtn){candidateBtn.hidden=true;candidateBtn.disabled=true}
@@ -179,7 +179,7 @@ function plan(){
   const tick=now=>{
     if(!running||locked||document.hidden)return;
     scanTimer=requestAnimationFrame(tick);
-    if(visionReady&&!visionPending&&now-lastVisionAt>750){
+    if(visionReady&&!visionPending&&now-lastVisionAt>450){
       lastVisionAt=now;scanVisual();
     }
     if(recognizerReady&&!ocrPending&&now-lastOCRAt>5200){
@@ -223,29 +223,25 @@ function handleVisualResults(ranked){
     button.hidden=!visualResults.length;button.disabled=!visualResults.length;
     if(visualResults.length)button.textContent="Ver "+Math.min(5,visualResults.length)+" posibles cartas";
   }
-  const best=visualResults[0],second=visualResults[1];
-  if(!best){
-    lastVisualId="";visualStable=0;
+  const best=visualResults[0];
+  // Diez capturas consecutivas forman una ventana deslizante.
+  // Las coincidencias válidas NO necesitan aparecer seguidas.
+  const id=best&&best.score<=104&&best.art<=110?best.id:null;
+  recentVisualMatches.push(id);
+  if(recentVisualMatches.length>10)recentVisualMatches.shift();
+  if(!id){
     if(attempts%4===0)status("Buscando ilustración. Alinea los cuatro bordes y evita reflejos.");
     return;
   }
-  const gap=second?second.score-best.score:999;
-  if(lastVisualId===best.id)visualStable++;
-  else{lastVisualId=best.id;visualStable=1}
-  if(best.score<=64&&gap>=12){
-    status("Posible "+best.id+" · verificación "+visualStable+"/3");
-    if(visualStable>=3){
-      const card=known.get(best.id),code=idBase(best.id);
-      shot=snapshot(true);
-      show({card,code,variants:cardByCode(code),
-        source:"Reconocimiento visual; comprueba la impresión",confidence:"visual"});
-    }
-  }else if(visualStable>=4&&best.score<=104&&best.art<=110){
-    // Cuatro coincidencias visuales consecutivas: abrir candidatos automáticamente.
-    // Los resultados aproximados requieren confirmación humana.
-    showVisualChoices("Coincidencia visual aproximada: elige tu carta");
-  }else if(attempts%2===0){
-    status("Comparando arte… Posible "+best.id+" · comprobando coincidencia visual.");
+  const found=recentVisualMatches.filter(value=>value===id).length;
+  if(found>=3){
+    const card=known.get(id),code=idBase(id);
+    if(!card)return;
+    shot=snapshot(true);
+    show({card,code,variants:cardByCode(code),
+      source:"Coincidencia visual (3 de las últimas 10 capturas)",confidence:"visual"});
+  }else{
+    status("Posible "+id+" · "+found+"/3 coincidencias en las últimas 10 capturas");
   }
 }
 async function scanOCR(){
@@ -427,7 +423,7 @@ function resume(){
   if(!running)return;
   session++;lastCode="";repeatCount=0;lastSeenAt=0;shot=null;activeHit=null;
   releaseFreeze();
-  visualResults=[];lastVisualId="";visualStable=0;ocrHint="";nameHints=[];
+  visualResults=[];recentVisualMatches=[];ocrHint="";nameHints=[];
   status(visionReady?"Comparando ilustraciones…":"Preparando reconocimiento…");plan();
 }
 function manual(){
