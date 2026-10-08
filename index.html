@@ -1116,7 +1116,7 @@ function deckLibraryView(){
       (state.deckDiscover?competitiveDeckSearchView():"")+
       '<div class="section center"><h2>Inicia sesión para gestionar tus mazos</h2><p class="muted">La búsqueda puede consultarse sin cuenta; para importar o guardar necesitas iniciar sesión.</p><button class="primary btn" id="deckAccountBtn2">Entrar o crear cuenta</button></div></div>';
   }
-  const savedDecks=state.decks.filter(d=>!d?.draftCompetitive);const tiles=savedDecks.map(d=>{const l=card(d.leader),v=deckValidate(d);return '<button class="setcard decktile" data-open-deck="'+esc(d.id)+'">'+(l?cardImg(l,"deckleader"):'<div class="deckleader fallback" style="display:grid">Sin líder</div>')+'<div class="decktilebody"><b>'+esc(d.name)+'</b>'+(d.description?'<div class="small" style="white-space:pre-wrap;overflow-wrap:anywhere;margin:5px 0 7px">'+esc(d.description)+'</div>':'')+'<div class="small">'+v.total+'/50 cartas · '+deckUniqueCount(d)+' diferentes · '+(d.leader?"1 líder":"sin líder")+'</div><div class="small">'+(v.valid?"✓ Legal":"⚠ No legal")+' · Valor '+money(deckTotalValue(d))+' · te faltan '+money(deckMissingCost(d))+'</div></div></button>'}).join("");
+  const savedDecks=state.decks.filter(d=>!d?.draftCompetitive);const tiles=savedDecks.map(d=>{const l=card(d.leader),v=deckValidate(d);return '<div class="setcard decktile"><button type="button" class="deck-tile-open" style="width:100%;background:transparent;border:0;color:inherit;text-align:left;cursor:pointer" data-open-deck="'+esc(d.id)+'">'+(l?cardImg(l,"deckleader"):'<div class="deckleader fallback" style="display:grid">Sin líder</div>')+'<div class="decktilebody"><b>'+esc(d.name)+'</b>'+(d.description?'<div class="small" style="white-space:pre-wrap;overflow-wrap:anywhere;margin:5px 0 7px">'+esc(d.description)+'</div>':'')+'<div class="small">'+v.total+'/50 cartas · '+deckUniqueCount(d)+' diferentes · '+(d.leader?"1 líder":"sin líder")+'</div><div class="small">'+(v.valid?"✓ Legal":"⚠ No legal")+' · Valor '+money(deckTotalValue(d))+' · te faltan '+money(deckMissingCost(d))+'</div></div><button type="button" class="secondary btn" data-quick-edit-deck="'+esc(d.id)+'" style="margin:8px;width:calc(100% - 16px)">Editar nombre y descripción</button></div>'}).join("");
   return '<div class="wrap"><div class="hero"><div><h1>Mazos</h1><p>Tus mazos sincronizados con '+esc(state.user.email||"tu cuenta")+'.</p></div><button class="secondary btn" id="importDeckBtn">Importar lista</button></div>'+
     '<div class="deck-actions"><button class="deck-action" id="newDeck"><b>＋ Crear mazo</b><span>Construye un mazo desde cero eligiendo líder y cartas.</span></button><button class="deck-action" id="findCompetitiveDecks"><b>🏆 Buscar mazos</b><span>Busca listas con buenos resultados por líder e impórtalas directamente.</span></button></div>'+
     (state.deckDiscover?competitiveDeckSearchView():"")+
@@ -1565,6 +1565,7 @@ function bindShell(){
     detailHistoryActive=false;state.detail=null;
     navigateApp(()=>{state.tab=next;state.shared=false});
   });
+  document.querySelectorAll("[data-quick-edit-deck]").forEach(b=>b.addEventListener("click",()=>{state.deckId=b.dataset.quickEditDeck;state.deckLibrary=false;renderShell();const editor=$("#deckMetaEditor");if(editor){editor.hidden=false;$("#editDeckName")?.focus()}}));
   $("#accountBtn")?.addEventListener("click",()=>{if(state.tab!=="account")navigateApp(()=>{state.tab="account";state.shared=false})});
   document.querySelectorAll("[data-close]").forEach(b=>b.onclick=()=>{state.newDeck=false;renderShell()});
   document.querySelectorAll("[data-close-auth]").forEach(b=>b.onclick=()=>{state.auth=false;renderShell()});
@@ -2004,7 +2005,7 @@ async function loadShared(){
 }
 function sharedDeckView(){
   const d=state.decks.find(x=>x.id==="shared"),v=deckValidate(d||{});if(!d)return "";
-  return '<div class="wrap"><div class="hero"><div><h1>Mazo compartido</h1><p>'+esc(d.name)+'</p></div></div><div class="section"><div class="stats"><div class="stat"><b>'+v.total+'/50</b><span>Cartas</span></div><div class="stat"><b>'+esc(d.leader||"—")+'</b><span>Líder</span></div><div class="stat"><b>'+money(deckMissingCost(d))+'</b><span>Faltantes</span></div><div class="stat"><b>'+ (v.valid?"✓":"⚠")+'</b><span>Legalidad</span></div></div><div class="list">'+deckRows(d)+'</div></div></div>';
+  return '<div class="wrap"><div class="hero"><div><h1>Mazo compartido</h1><p>'+esc(d.name)+'</p></div></div><div class="section">'+(d.description?'<p style="white-space:pre-wrap;overflow-wrap:anywhere">'+esc(d.description)+'</p>':'')+'<div class="stats"><div class="stat"><b>'+v.total+'/50</b><span>Cartas</span></div><div class="stat"><b>'+esc(d.leader||"—")+'</b><span>Líder</span></div><div class="stat"><b>'+money(deckMissingCost(d))+'</b><span>Faltantes</span></div><div class="stat"><b>'+ (v.valid?"✓":"⚠")+'</b><span>Legalidad</span></div></div><div class="list">'+deckRows(d)+'</div></div></div>';
 }
 function csvEscape(v){
   const s=String(v??"");
