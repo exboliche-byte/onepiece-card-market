@@ -36,6 +36,7 @@ style.textContent=[
 "#scanPanel .scanIdentity strong{font-size:16px}#scanPanel .small{font-size:12px;color:#cad4e4}#scanPanel select,#scanPanel input[type=number],#scanPanel input[type=search]{color:#fff;background:#1d2b42;border:1px solid #68758b;border-radius:8px;padding:10px;font:inherit}",
 "#scanPanel select{width:100%}#scanPanel input[type=search]{width:100%}#scanPanel .scanChoiceButtons{display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin:10px 0}#scanPanel .scanChoiceButtons button{flex:1}#scanPanel .scanChoiceButtons input{width:67px}",
 "#scanPanel .scanSearchResults{display:grid;gap:5px;margin-top:8px}#scanPanel .scanSearchResults button{width:100%;text-align:left}#scanPanel .scanScroll{max-height:43vh;overflow-y:auto}",
+"#scanPanel .scanNameChoices{display:grid;gap:6px;max-height:48vh;overflow-y:auto;margin-top:10px}#scanPanel .scanNameChoices button{display:flex;align-items:center;text-align:left;gap:10px;width:100%}#scanPanel .scanNameChoices img{width:48px;aspect-ratio:.716;object-fit:cover;border-radius:4px}#scanPanel .scanNameChoices span{display:grid;gap:3px}",
 "#scanPanel .scanHelp{font-size:11px;color:#a8b6cb;text-align:center;flex:none}",
 "@media (min-width:760px){#scanPanel .scanLayout{padding-left:15px;padding-right:15px}#scanPanel .scanActions button{max-width:240px}}"
 ].join("");
@@ -57,42 +58,44 @@ function normalizeCode(raw){
   return "";
 }
 function codeCandidates(text){
-  const compact=norm(text).replace(/[^A-Z0-9]/g,"");
-  // Missing/damaged punctuation is normal when scanning physical glossy cards.
-  const pattern=/(?:OP|0P|ST|5T|EB|E8|PRB|PR8)[0-9OILSB]{5}|P[0-9OILSB]{3}/g;
-  const matches=compact.match(pattern)||[];
-  return [...new Set(matches.map(normalizeCode).filter(Boolean))];
+  // Avoid fabricating an ID by concatenating different OCR lines.
+  const found=new Set();
+  for(const line of norm(text).split(/[\r\n]+/)){
+    const pattern=/(?:^|[^A-Z0-9])((?:OP|0P|ST|5T|EB|E8|PRB|PR8)[ .:_-]*[0-9OILSB]{2}[ .:_-]*[0-9OILSB]{3}|P[ .:_-]*[0-9OILSB]{3})(?=$|[^A-Z0-9])/g;
+    for(const match of line.matchAll(pattern)){
+      const code=normalizeCode(match[1]);
+      if(code)found.add(code);
+    }
+  }
+  return [...found];
 }
 function cardByCode(code){
   if(!code)return [];
   return state.cards.filter(c=>normalizeCode(idBase(c.id))===code);
 }
 function lookup(text){
-  const codes=codeCandidates(text);
-  for(const code of codes){
-    const choices=cardByCode(code);
-    if(choices.length){
-      const main=choices.find(c=>normalizeCode(c.id)===code)||choices[0];
-      return {card:main,code,variants:choices,source:"Código leído",confidence:"high"};
-    }
+  for(const code of codeCandidates(text)){
+    const variants=cardByCode(code);
+    if(!variants.length)continue;
+    const main=variants.find(c=>normalizeCode(c.id)===code)||variants[0];
+    return {card:main,code,variants,source:"Número de carta leído",confidence:"high"};
   }
-  const raw=norm(text);
-  if(raw.length<5)return null;
-  // Name-only matches are permitted only when the entire catalog has exactly
-  // one logical card with this name; duplicate card names are never guessed.
-  const uniqueNames=new Map();
+  return null; // No automatic guesses based solely on names.
+}
+function nameCandidates(text){
+  const lines=norm(text).split(/[\r\n]+/).map(line=>line.replace(/[^A-Z0-9]+/g," ").replace(/\s+/g," ").trim()).filter(line=>line.length>=5);
+  if(!lines.length)return null;
+  const matches=new Map();
   for(const c of state.cards){
-    const name=norm(c.name);if(name.length<5)continue;
-    if(raw.includes(name)){
-      if(!uniqueNames.has(name))uniqueNames.set(name,new Set());
-      uniqueNames.get(name).add(idBase(c.id));
-    }
+    const name=norm(c.name).replace(/[^A-Z0-9]+/g," ").replace(/\s+/g," ").trim();
+    if(name.length<5||!lines.some(line=>line===name||line.endsWith(" "+name)||line.startsWith(name+" ")))continue;
+    const code=idBase(c.id);
+    if(!matches.has(code))matches.set(code,c);
   }
-  const possible=[...uniqueNames.entries()].filter(([,ids])=>ids.size===1).sort((a,b)=>b[0].length-a[0].length);
-  if(possible.length!==1)return null;
-  const code=[...possible[0][1]][0];
-  const choices=state.cards.filter(c=>idBase(c.id)===code);
-  return choices.length?{card:choices[0],code,variants:choices,source:"Nombre leído (verificar)",confidence:"medium"}:null;
+  if(!matches.size)return null;
+  const longest=Math.max(...[...matches.values()].map(c=>norm(c.name).length));
+  const cards=[...matches.values()].filter(c=>norm(c.name).length===longest).slice(0,80);
+  return cards.length?{cards,name:cards[0].name,code:"NAME:"+norm(cards[0].name),confidence:"name"}:null;
 }
 function fitGuide(){
   const stage=$(".scanStage"),guide=$(".scanGuide");
@@ -129,13 +132,15 @@ function snapshot(){
   return {card:crop,still:still.toDataURL("image/jpeg",.79)};
 }
 function cropForCode(card){
-  // One Piece IDs are printed in the lower portion of each card.
+  // Magnify the tiny printed ID at the bottom-right edge.
   const c=document.createElement("canvas"),w=card.width,h=card.height;
-  c.width=Math.min(1400,Math.round(w*1.6));
-  c.height=Math.round(c.width*.29*h/w);
+  const left=w*.39,top=h*.82,partWidth=w-left,partHeight=h-top;
+  c.width=Math.min(1500,Math.round(partWidth*3));
+  c.height=Math.max(1,Math.round(c.width*partHeight/partWidth));
   const g=c.getContext("2d");
-  if("filter" in g)g.filter="grayscale(1) contrast(1.7)";
-  g.drawImage(card,0,h*.71,w,h*.29,0,0,c.width,c.height);
+  g.imageSmoothingEnabled=true;g.imageSmoothingQuality="high";
+  if("filter" in g)g.filter="grayscale(1) contrast(1.9)";
+  g.drawImage(card,left,top,partWidth,partHeight,0,0,c.width,c.height);
   return c;
 }
 function plan(wait=260){
@@ -169,19 +174,18 @@ async function getWorker(turn){
 async function recognizeCard(frame,turn){
   const engine=await getWorker(turn);
   if(turn!==session||!running||locked)return null;
-  // Recognize the bottom strip first (fast, where the printed ID lives).
+  // Automatically recognize only a physical printed card code.
   const bottom=await engine.recognize(cropForCode(frame.card));
   if(turn!==session||!running||locked)return null;
-  let found=lookup(bottom?.data?.text||"");
-  if(found?.confidence==="high")return found;
-  // Periodically inspect the entire card for cards whose code is outside the
-  // crop, rotated, or poorly focused. This also allows unique-name detection.
-  if(attempts%2!==0)return found;
+  const codeHit=lookup(bottom?.data?.text||"");
+  if(codeHit)return codeHit;
+  // Periodically read the entire card if the corner is obscured.
+  if(attempts%2!==0)return null;
   const full=await engine.recognize(frame.card);
   if(turn!==session||!running||locked)return null;
   const alternate=lookup(full?.data?.text||"");
-  if(alternate?.confidence==="high")return alternate;
-  return alternate||found;
+  if(alternate)return alternate;
+  return nameCandidates(full?.data?.text||"");
 }
 function remember(hit,frame){
   const now=Date.now(),code=hit.code;
@@ -189,10 +193,13 @@ function remember(hit,frame){
   else repeatCount=1;
   lastCode=code;lastSeenAt=now;
   if(repeatCount>=2){
-    shot=frame;activeHit=hit;show(hit);
+    shot=frame;activeHit=hit;
+    if(hit.confidence==="name")showNameChoices(hit);
+    else show(hit);
     return true;
   }
-  status("Posible "+hit.card.name+" · verificando en otra imagen…");
+  status(hit.confidence==="name"?"Nombre detectado: "+hit.name+" · buscando el número para distinguir la carta…":
+    "Posible "+hit.card.name+" ("+hit.code+") · verificando en otra imagen…");
   return false;
 }
 async function scan(){
@@ -238,6 +245,30 @@ function chooseVariant(variants,selected){
       else pic.onerror=null;
     };
   }
+}
+function showNameChoices(hit){
+  if(!running||!hit?.cards?.length)return;
+  locked=true;clearTimeout(scanTimer);
+  panel()?.classList.add("locked");
+  const still=document.createElement("img");still.className="scanFreeze";still.src=shot?.still||"";
+  $(".scanFreeze")?.remove();$(".scanStage").prepend(still);
+  if(camera)camera.style.visibility="hidden";
+  const area=$("#scanDecision");area.hidden=false;
+  area.innerHTML='<strong>Nombre leído: '+esc(hit.name)+'</strong>'+
+    '<p class="small">Distintas cartas pueden compartir nombre. No he podido leer el número; elige el código de tu carta o enfoca la esquina inferior derecha.</p>'+
+    '<div class="scanNameChoices">'+hit.cards.map(c=>
+      '<button type="button" data-scan-choose="'+esc(idBase(c.id))+'">'+
+      cardImg(c,"scanCandidateImage")+'<span><b>'+esc(idBase(c.id))+'</b><small>'+esc(c.name)+' · '+esc(c.set||"")+'</small></span></button>'
+    ).join("")+'</div>'+
+    '<div class="scanChoiceButtons"><button type="button" id="scanTryCode">Volver a leer el número</button></div>';
+  area.querySelectorAll("[data-scan-choose]").forEach(b=>b.onclick=()=>{
+    const code=b.dataset.scanChoose,variants=cardByCode(code);
+    if(!variants.length)return;
+    releaseFreeze();
+    show({card:variants.find(v=>idBase(v.id)===v.id)||variants[0],code,variants,source:"Elegido por ti",confidence:"manual"});
+  });
+  $("#scanTryCode").onclick=resume;
+  status("Solo se ha leído el nombre: selecciona el código correcto. Nada se guarda automáticamente.");
 }
 function show(hit){
   if(!running||!hit?.card)return;
