@@ -156,7 +156,7 @@ const LEADER_PLAYSET=1;
 const PAGE=60;
 const state={
   cards:[],packs:[],groups:[],groupByKey:new Map(),prices:{},priceDate:null,importedCards:{},
-  collection:{},decks:[],tournaments:[],tournamentId:null,tournamentDraft:null,tournamentRoundDraft:null,wishlist:{},user:null,sb:null,
+  collection:{},decks:[],sharedDeck:null,publicCollection:null,tournaments:[],tournamentId:null,tournamentDraft:null,tournamentRoundDraft:null,wishlist:{},user:null,sb:null,
   tab:"catalog",set:"",query:"",detail:null,deckId:null,collectionStatsOpen:false,deckCompositionSort:"id",deckCompositionDir:"asc",
   proxyQuery:"",proxySelection:{},
   catalog:{set:"Todas",category:"Todos",color:"Todos",rarity:"Todos",type:"Todos",attribute:"Todos",ownership:"Todas",sort:"id",dir:"asc",page:1,grouped:true,minCost:"",maxCost:"",minPower:"",maxPower:"",minPrice:"",maxPrice:"",query:"",filtersOpen:false},
@@ -1062,7 +1062,8 @@ function collectionView(){
   if(!state.collectionReady)return '<div class="wrap"><div class="hero"><h1>Mi colección</h1></div><div class="notice">Cargando la colección desde Supabase…</div><button class="secondary btn" id="retryCollectionLoad">Reintentar carga</button></div>';
   if(state.collectionStatsOpen)return collectionStatisticsView();
   return '<div class="wrap"><div class="hero"><div><h1>Mi colección</h1><p>Todas mis cartas, todos los sets, filtrables y ordenables.</p></div></div>'+
-    '<button type="button" class="secondary btn collection-stats-entry" id="openCollectionStats" style="padding:9px 13px;margin:0 0 12px;font-size:13px;font-weight:750;display:inline-flex;align-items:center;gap:8px">📊 Estadísticas de mi colección <span aria-hidden="true">→</span></button>'+
+    '<div class="inline-actions" style="margin-bottom:12px;gap:8px"><button type="button" class="secondary btn collection-stats-entry" id="openCollectionStats" style="padding:9px 13px;font-size:13px;font-weight:750">📊 Estadísticas de mi colección →</button>'+
+    '<button type="button" class="secondary btn" id="openCollectionShare" style="padding:9px 13px;font-size:13px">🔗 Compartir colección</button></div>'+
     collectionToolbar()+'<div id="collectionResults"></div></div>';
 }
 function collectionStatisticsBreakdowns(){
@@ -2230,6 +2231,11 @@ function nav(){
 }
 function renderShell(){
   if(reloadViewPending)return;
+  if(state.publicCollection){
+    document.body.dataset.currentTab="public-collection";
+    $("#app").innerHTML=publicCollectionView();
+    bindPublicCollection();return;
+  }
   let main=state.shared?sharedDeckView():(state.tab==="home"?homeView():state.tab==="catalog"?catalogView():state.tab==="collection"?collectionView():state.tab==="album"?albumView():state.tab==="decks"?decksView():state.tab==="tournaments"?(window.tournamentsView?.()||""):state.tab==="meta"?(window.metaView?.()||""):state.tab==="proxies"?proxyView():accountView());
   const account='<button class="account" id="accountBtn">'+(state.user?esc(accountDisplayName()||"Cuenta"):"Cuenta")+'</button>';
   document.body.dataset.currentTab=state.tab;
@@ -2409,7 +2415,7 @@ function bindShell(){
     if(next===state.tab&&!state.detail)return;
     if(state.detail&&detailHistoryActive)history.replaceState({mialbumView:appViewSnapshot()},"",location.href);
     detailHistoryActive=false;state.detail=null;
-    navigateApp(()=>{state.tab=next;state.collectionStatsOpen=false;state.shared=false;if(next!=="tournaments"){state.tournamentDraft=null;state.tournamentRoundDraft=null;state.tournamentStats=null}});
+    navigateApp(()=>{state.tab=next;state.collectionStatsOpen=false;state.shared=false;state.sharedDeck=null;if(next!=="tournaments"){state.tournamentDraft=null;state.tournamentRoundDraft=null;state.tournamentStats=null}});
   });
   $("#retryCollectionLoad")?.addEventListener("click",async()=>{if(!state.user)return;const id=state.user.id;await loadCollectionFromCloud(id);if(state.user?.id===id)renderShell()});
   $("#accountBtn")?.addEventListener("click",()=>{if(state.tab!=="account")navigateApp(()=>{state.tab="account";state.shared=false})});
@@ -2447,6 +2453,7 @@ function bindShell(){
   }
   if(state.tab==="collection"){
     $("#openCollectionStats")?.addEventListener("click",()=>navigateApp(()=>{state.collectionStatsOpen=true}));
+    $("#openCollectionShare")?.addEventListener("click",openCollectionShare);
     $("#closeCollectionStats")?.addEventListener("click",()=>{
       if(history.state?.mialbumView?.collectionStatsOpen&&history.length>1)history.back();
       else{state.collectionStatsOpen=false;replaceAppHistory();renderShell();}
@@ -3009,6 +3016,155 @@ async function initSupabase(){
   return supabaseInitPromise;
 }
 
+
+async function preparePublicDeckShare(deck){
+  if(!state.user?.id||!state.sb)throw Error("Inicia sesión para crear un enlace público del mazo.");
+  if(!deck?.id||deck?.draftCompetitive)throw Error("Guarda primero el mazo en tu cuenta.");
+  const userId=state.user.id;
+  const synced=await syncDeck(deck);
+  if(!synced||state.user?.id!==userId)throw Error("No se pudo sincronizar el mazo antes de compartirlo.");
+  const payload={name:String(deck.name||"Mi mazo").slice(0,120),description:String(deck.description||"").slice(0,2000),
+    leader:deck.leader||"",cards:Object.fromEntries(Object.entries(deck.cards||{})
+      .filter(([id,n])=>card(id)&&Number.isSafeInteger(Number(n))&&Number(n)>0).map(([id,n])=>[id,Number(n)]))};
+  const existing=await state.sb.from("deck_shares").select("share_slug").eq("deck_id",deck.id).order("created_at",{ascending:true}).limit(1);
+  if(existing.error)throw Error("No se pudo consultar el enlace del mazo.");
+  if(state.user?.id!==userId)throw Error("La sesión ha cambiado.");
+  let slug=existing.data?.[0]?.share_slug||"";
+  if(slug){
+    const saved=await state.sb.from("deck_shares").update({payload,updated_at:new Date().toISOString()})
+      .eq("deck_id",deck.id).eq("share_slug",slug).select("share_slug");
+    if(saved.error||!saved.data?.length)throw Error("No se pudo actualizar el enlace del mazo.");
+  }else{
+    slug=Array.from(crypto.getRandomValues(new Uint8Array(16)),b=>b.toString(16).padStart(2,"0")).join("");
+    const saved=await state.sb.from("deck_shares").insert({deck_id:deck.id,share_slug:slug,payload}).select("share_slug").single();
+    if(saved.error||!saved.data?.share_slug)throw Error("No se pudo publicar la lista de este mazo.");
+  }
+  if(state.user?.id!==userId)throw Error("La sesión ha cambiado.");
+  return AUTH_SITE_URL+"/deck/"+slug;
+}
+window.preparePublicDeckShare=preparePublicDeckShare;
+
+// The owner must explicitly opt in to make the exact card quantities public.
+async function openCollectionShare(){
+  if(!state.user?.id||!state.collectionReady||!state.sb)return notify("Inicia sesión y carga tu colección.");
+  document.querySelector(".collection-share-modal")?.remove();
+  const ownerId=state.user.id;
+  const modal=document.createElement("div");modal.className="modalback collection-share-modal";
+  modal.innerHTML='<div class="modal"><div class="sectionhead"><h2>Compartir mi colección</h2><button type="button" class="close" data-close-share aria-label="Cerrar">×</button></div>'+
+    '<p class="small">Solo quien tenga el enlace verá tus cartas, impresiones y cantidades actuales. No podrá añadir, borrar ni cambiar nada. El enlace es revocable.</p>'+
+    '<div id="collectionShareControls"><p class="notice">Consultando el estado del enlace…</p></div></div>';
+  document.body.appendChild(modal);
+  const close=()=>modal.remove();
+  modal.querySelector("[data-close-share]").onclick=close;
+  modal.addEventListener("click",e=>{if(e.target===modal)close()});
+  const area=modal.querySelector("#collectionShareControls");
+  const showError=msg=>{if(area)area.innerHTML='<p class="notice">'+esc(msg)+'</p><button type="button" class="secondary btn" id="retryCollectionShare">Reintentar</button>';area?.querySelector("#retryCollectionShare")?.addEventListener("click",refresh)};
+  const setBusy=msg=>{area.innerHTML='<p class="notice">'+esc(msg)+'</p>'};
+  const refresh=async()=>{
+    if(state.user?.id!==ownerId)return close();
+    try{
+      const {data,error}=await state.sb.from("collection_share_links").select("share_slug").eq("user_id",ownerId).maybeSingle();
+      if(error)throw error;
+      if(!modal.isConnected||state.user?.id!==ownerId)return;
+      if(!data){
+        area.innerHTML='<p class="small">Tu colección es privada. Pulsa el botón para crear un enlace público de solo lectura.</p>'+
+          '<button type="button" class="primary btn" id="enableCollectionSharing">Crear enlace público</button>';
+        area.querySelector("#enableCollectionSharing").onclick=async()=>{
+          if(!confirm("¿Permitir que cualquier persona con el enlace vea todas las cartas y cantidades de tu colección, incluidos cambios futuros?"))return;
+          if(state.user?.id!==ownerId)return close();
+          setBusy("Creando enlace…");
+          try{
+            const slug=Array.from(crypto.getRandomValues(new Uint8Array(16)),x=>x.toString(16).padStart(2,"0")).join("");
+            const result=await state.sb.from("collection_share_links").insert({user_id:ownerId,share_slug:slug}).select("share_slug").single();
+            if(result.error)throw result.error;
+            await refresh();
+          }catch(e){showError("No se pudo activar el enlace: "+(e.message||"error"))}
+        };
+        return;
+      }
+      const url=AUTH_SITE_URL+"/collection/"+data.share_slug;
+      area.innerHTML='<label class="filter-label" for="collectionPublicUrl">Enlace público (solo lectura)</label>'+
+        '<input id="collectionPublicUrl" class="field" readonly value="'+esc(url)+'" style="width:100%;margin:8px 0">'+
+        '<div class="inline-actions"><button type="button" class="primary btn" id="copyCollectionUrl">Copiar enlace</button>'+
+        '<button type="button" class="secondary btn" id="sendCollectionUrl">Compartir</button>'+
+        '<button type="button" class="danger btn" id="revokeCollectionUrl">Desactivar enlace</button></div>'+
+        '<p class="small" style="margin-top:10px">La vista pública reflejará los cambios de tu colección. Desactivarlo hace que ese enlace deje de funcionar.</p>';
+      area.querySelector("#copyCollectionUrl").onclick=async()=>{
+        try{await navigator.clipboard.writeText(url);notify("Enlace copiado")}
+        catch{const inp=area.querySelector("#collectionPublicUrl");inp.focus();inp.select();document.execCommand?.("copy");notify("Enlace seleccionado para copiar")}
+      };
+      area.querySelector("#sendCollectionUrl").onclick=async()=>{
+        if(navigator.share){try{await navigator.share({title:"Mi colección One Piece",url});return}catch(e){if(e?.name==="AbortError")return}}
+        area.querySelector("#copyCollectionUrl").click();
+      };
+      area.querySelector("#revokeCollectionUrl").onclick=async()=>{
+        if(!confirm("¿Desactivar el enlace público? Quienes lo tengan dejarán de ver tu colección."))return;
+        if(state.user?.id!==ownerId)return close();
+        setBusy("Desactivando enlace…");
+        try{
+          const removed=await state.sb.from("collection_share_links").delete()
+            .eq("user_id",ownerId).eq("share_slug",data.share_slug).select("share_slug");
+          if(removed.error||!removed.data?.length)throw Error("No se pudo confirmar la desactivación");
+          await refresh();
+        }catch(e){showError("No se pudo desactivar el enlace: "+(e.message||"error"))}
+      };
+    }catch(e){showError("No se pudo consultar el enlace: "+(e.message||"error"))}
+  };
+  await refresh();
+}
+
+function publicCollectionView(){
+  return '<div class="wrap"><div class="hero"><div><h1>📚 Colección compartida</h1><p>Vista pública de solo lectura. No necesitas iniciar sesión.</p></div><a class="secondary btn" href="/">← MiAlbumOnePiece</a></div>'+
+   (state.publicCollection.error?'<div class="notice"><b>Enlace no disponible.</b> Puede haberse desactivado o no existir.</div>':
+   '<div class="stats" id="publicCollectionSummary"></div>'+
+   '<div class="catalog-controls" style="margin-top:16px"><input id="publicCollectionSearch" class="field" placeholder="🔎 Buscar por carta, nombre o expansión…" autocomplete="off">'+
+   '<div class="sort-controls"><label class="filter-label">Expansión <select id="publicCollectionSet" class="field"><option value="">Todas</option></select></label>'+
+   '<label class="filter-label">Ordenar por <select id="publicCollectionSort" class="field"><option value="id">Número de carta</option><option value="name">Nombre</option><option value="quantity">Cantidad</option><option value="price">Precio</option></select></label>'+
+   '<label class="filter-label">Orden <select id="publicCollectionDir" class="field"><option value="asc">Ascendente</option><option value="desc">Descendente</option></select></label></div></div>'+
+   '<div id="publicCollectionResults"></div>')+'</div>';
+}
+function bindPublicCollection(){
+  const data=state.publicCollection;if(!data||data.error)return;
+  const search=$("#publicCollectionSearch"),sets=$("#publicCollectionSet"),sort=$("#publicCollectionSort"),dir=$("#publicCollectionDir");
+  const cardsById=new Map(state.cards.map(c=>[c.id,c]));
+  const rows=data.cards.map(item=>({id:item.id,quantity:item.quantity,c:cardsById.get(item.id)}));
+  const distinct=rows.length,copies=rows.reduce((sum,x)=>sum+x.quantity,0);
+  $("#publicCollectionSummary").innerHTML='<div class="stat"><b>'+distinct.toLocaleString("es-ES")+'</b><span>Versiones distintas</span></div>'+
+    '<div class="stat"><b>'+copies.toLocaleString("es-ES")+'</b><span>Copias totales</span></div>';
+  const packs=[...new Set(rows.map(x=>x.c?.set||"").filter(Boolean))].sort((a,b)=>a.localeCompare(b,"es",{numeric:true}));
+  sets.innerHTML='<option value="">Todas las expansiones</option>'+packs.map(x=>'<option value="'+esc(x)+'">'+esc(x)+'</option>').join("");
+  let page=1,term="";
+  const render=()=>{
+    const q=norm(term.trim()),selected=sets.value;
+    const visible=rows.filter(row=>(!selected||row.c?.set===selected)&&
+      (!q||norm([row.id,row.c?.name,row.c?.set].join(" ")).includes(q)));
+    const attr=row=>sort.value==="quantity"?row.quantity:sort.value==="price"?(row.c?priceOf(row.c):null):sort.value==="name"?(row.c?.name||row.id):row.id;
+    visible.sort((a,b)=>{
+      const x=attr(a),y=attr(b),missingX=x==null,missingY=y==null;
+      if(missingX!==missingY)return missingX?1:-1;
+      const result=typeof x==="number"&&typeof y==="number"?x-y:String(x??"").localeCompare(String(y??""),"es",{numeric:true,sensitivity:"base"});
+      return result*(dir.value==="desc"?-1:1)||a.id.localeCompare(b.id,"es",{numeric:true});
+    });
+    const maxPages=Math.max(1,Math.ceil(visible.length/PAGE));page=Math.min(page,maxPages);
+    const current=visible.slice((page-1)*PAGE,page*PAGE);
+    $("#publicCollectionResults").innerHTML='<p class="notice">'+visible.length.toLocaleString("es-ES")+' versiones encontradas · no editable</p>'+
+      '<div class="grid">'+current.map(item=>'<article class="card">'+
+         (item.c?cardImg(item.c,"cardimg"):'<div class="cardimg" style="display:grid;place-items:center">Sin imagen</div>')+
+         '<div class="cardbody"><div class="name">'+esc(item.c?.name||item.id)+'</div>'+
+         '<div class="small">'+esc(item.id)+' · '+esc(item.c?.set||"Impresión no catalogada")+'</div>'+
+         '<div class="small"><b>×'+item.quantity+' copias</b> · '+(item.c&&priceOf(item.c)!==null?money(priceOf(item.c))+" por copia":"Precio —")+'</div></div></article>').join("")+'</div>'+
+      (maxPages>1?'<div class="inline-actions" style="justify-content:center;margin:15px 0">'+
+        '<button type="button" class="secondary btn" id="publicPrevPage" '+(page===1?"disabled":"")+'>← Anterior</button>'+
+        '<span class="small" style="align-self:center">Página '+page+' / '+maxPages+'</span>'+
+        '<button type="button" class="secondary btn" id="publicNextPage" '+(page===maxPages?"disabled":"")+'>Siguiente →</button></div>':"");
+    $("#publicPrevPage")?.addEventListener("click",()=>{page--;render();window.scrollTo({top:0,behavior:"smooth"})});
+    $("#publicNextPage")?.addEventListener("click",()=>{page++;render();window.scrollTo({top:0,behavior:"smooth"})});
+  };
+  search.addEventListener("input",()=>{term=search.value;page=1;render()});
+  [sets,sort,dir].forEach(input=>input.addEventListener("change",()=>{page=1;render()}));
+  render();
+}
+
 function shareDeck(){
   const d=state.decks.find(x=>x.id===state.deckId);
   if(!d)return notify("Abre un mazo para compartirlo");
@@ -3456,6 +3612,7 @@ window.addEventListener("popstate",e=>{
 <script src="/image-visibility.js"></script>
 <script src="/scanner.js"></script>
 <script src="/proxy-generator.js"></script>
+<script src="/qrcode-generator.js"></script>
 <script src="/deck-image-share.js"></script>
 <script src="/tournaments.js"></script>
 <script src="/meta.js"></script>
