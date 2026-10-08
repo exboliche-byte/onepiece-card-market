@@ -1,4 +1,4 @@
-const CACHE="mialbumonepiece-v10";
+const CACHE="mialbumonepiece-v11";
 const SHELL=["/","/index.html","/manifest.json","/icon.svg","/data/cards.json","/data/packs.json","/data/cardmarket-prices.json"];
 self.addEventListener("install",event=>{
   event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(SHELL).catch(()=>{})).then(()=>self.skipWaiting()));
@@ -13,6 +13,8 @@ self.addEventListener("fetch",event=>{
   if(event.request.method!=="GET")return;
   const url=new URL(event.request.url);
   if(url.origin!==location.origin)return;
+  // Evita que miles de imágenes de referencia llenen CacheStorage.
+  if(url.pathname.startsWith("/orb-image/")||url.pathname.startsWith("/orb-official/"))return;
   if(url.pathname==="/sw.js"){
     event.respondWith(fetch(event.request,{cache:"no-store"}));
     return;

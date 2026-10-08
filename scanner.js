@@ -1,12 +1,12 @@
 (()=>{
 "use strict";
-// Zero paid recognition calls: Tesseract's neural OCR model runs in the browser.
-// Never save an OCR guess automatically: each printing must be confirmed by the user.
-let camera=null,stream=null,track=null,worker=null,workerPromise=null,workerToken=0;
+// ORB local con indexación progresiva del catálogo y caché IndexedDB.
+let camera=null,stream=null,track=null;
+let orb=null,orbGeneration=0,orbReady=false,orbCount=0,orbFailed=0,lastFrameAt=0,orbScope="owned";
+let cvModulePromise=null;
 let running=false,locked=false,processing=false,scanTimer=null,session=0;
 let lastCode="",lastSeenAt=0,repeatCount=0,attempts=0,shot=null,activeHit=null;
 let torch=false,facing="environment",cameraStarting=false,resizeWatcher=null,wakeLock=null;
-const OCR_SRC="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js";
 const $=q=>document.querySelector("#scanPanel "+q);
 const panel=()=>document.querySelector("#scanPanel");
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&#39;","'":"&#39;"}[c]));
@@ -42,61 +42,62 @@ style.textContent=[
 ].join("");
 document.head.appendChild(style);
 
-function normalizeCode(raw){
-  const compact=norm(raw).replace(/[^A-Z0-9]/g,"").replace(/^0P/,"OP").replace(/^5T/,"ST").replace(/^E8/,"EB").replace(/^PR8/,"PRB");
-  // OCR often confuses I/l with 1 and O with zero in the numeric region.
-  const candidate=compact.match(/^(OP|ST|EB|PRB)([0-9OILSB]{2})([0-9OILSB]{3})$/);
-  if(candidate){
-    const digits=(candidate[2]+candidate[3]).replace(/[IL]/g,"1").replace(/O/g,"0").replace(/S/g,"5").replace(/B/g,"8");
-    if(/^\d{5}$/.test(digits))return candidate[1]+digits.slice(0,2)+"-"+digits.slice(2);
+function cardByCode(code){return state.cards.filter(c=>idBase(c.id)===code)}
+function orbCandidates(){
+  const cards=state.cards.filter(c=>c?.id&&c?.name&&!/_jp[0-9]+$/i.test(c.id));
+  let subset=cards;
+  if(orbScope==="owned"){
+    const owned=new Set(Object.entries(state.owned||{}).filter(x=>Number(x[1])>0).map(x=>x[0]));
+    subset=cards.filter(c=>owned.has(c.id));
+  }else if(orbScope.startsWith("set:")){
+    const chosen=orbScope.slice(4);
+    subset=cards.filter(c=>String(c.source_set||c.set||"")===chosen);
   }
-  const promo=compact.match(/^P([0-9OILSB]{3})$/);
-  if(promo){
-    const number=promo[1].replace(/[IL]/g,"1").replace(/O/g,"0").replace(/S/g,"5").replace(/B/g,"8");
-    if(/^\d{3}$/.test(number))return "P-"+number;
-  }
-  return "";
+  return [...new Map(subset.map(c=>[c.id,{id:c.id,baseId:idBase(c.id),
+    name:c.name,printSet:printSetOf(c)}])).values()];
 }
-function codeCandidates(text){
-  // Avoid fabricating an ID by concatenating different OCR lines.
-  const found=new Set();
-  for(const line of norm(text).split(/[\r\n]+/)){
-    const pattern=/(?:^|[^A-Z0-9])((?:OP|0P|ST|5T|EB|E8|PRB|PR8)[ .:_-]*[0-9OILSB]{2}[ .:_-]*[0-9OILSB]{3}|P[ .:_-]*[0-9OILSB]{3})(?=$|[^A-Z0-9])/g;
-    for(const match of line.matchAll(pattern)){
-      const code=normalizeCode(match[1]);
-      if(code)found.add(code);
+async function initializeOrb(){
+  const generation=++orbGeneration;
+  orbReady=false;orbCount=0;orbFailed=0;
+  status("Cargando módulo de visión OpenCV WebAssembly…");
+  try{
+    if(orb){orb.dispose();orb=null}
+    const mod=await import("/orb-engine.js");
+    if(!running||generation!==orbGeneration)return;
+    cvModulePromise ||= mod.loadCV();
+    const cv=await cvModulePromise;
+    if(!running||generation!==orbGeneration)return;
+    const engine=new mod.OrbEngine(cv);
+    orb=engine;
+    await engine.prepareCache();
+    if(!running||generation!==orbGeneration)return;
+    const cards=orbCandidates();
+    const progress=$("#scanIndex");
+    if(progress)progress.textContent="Indexando referencias: 0 / "+cards.length;
+    orbReady=true;
+    if(cards.length===0){status("Este filtro no contiene cartas. Cambia el ámbito del catálogo.");return}
+    status("Indexando imágenes ORB en el dispositivo. Puedes escanear mientras se cargan…");
+    for(const entry of cards){
+      if(!running||generation!==orbGeneration)break;
+      try{if(await engine.indexCard(entry))orbCount++;else orbFailed++}
+      catch(e){orbFailed++;console.warn("ORB reference",entry.id,e)}
+      if(progress&&(orbCount+orbFailed)%3===0)progress.textContent=
+        "Referencias ORB: "+orbCount+" / "+cards.length+(orbFailed?" · Sin imagen: "+orbFailed:"");
+      // Pausa entre referencias para que la cámara conserve respuesta en móviles.
+      if((orbCount+orbFailed)%2===0)await new Promise(r=>setTimeout(r,24));
     }
+    if(running&&generation===orbGeneration){
+      if(progress)progress.textContent="Referencias ORB: "+orbCount+" / "+cards.length+
+        (orbFailed?" · Sin imagen: "+orbFailed:"");
+      status(orbCount?"Reconocimiento ORB listo · "+orbCount+" impresiones indexadas.":
+        "No se pudo generar ninguna referencia. Revisa las imágenes del catálogo.");
+    }
+  }catch(e){
+    console.error("ORB initialization",e);
+    if(running&&generation===orbGeneration)status("Error cargando ORB: "+(e.message||e));
   }
-  return [...found];
 }
-function cardByCode(code){
-  if(!code)return [];
-  return state.cards.filter(c=>normalizeCode(idBase(c.id))===code);
-}
-function lookup(text){
-  for(const code of codeCandidates(text)){
-    const variants=cardByCode(code);
-    if(!variants.length)continue;
-    const main=variants.find(c=>normalizeCode(c.id)===code)||variants[0];
-    return {card:main,code,variants,source:"Número de carta leído",confidence:"high"};
-  }
-  return null; // No automatic guesses based solely on names.
-}
-function nameCandidates(text){
-  const lines=norm(text).split(/[\r\n]+/).map(line=>line.replace(/[^A-Z0-9]+/g," ").replace(/\s+/g," ").trim()).filter(line=>line.length>=5);
-  if(!lines.length)return null;
-  const matches=new Map();
-  for(const c of state.cards){
-    const name=norm(c.name).replace(/[^A-Z0-9]+/g," ").replace(/\s+/g," ").trim();
-    if(name.length<5||!lines.some(line=>line===name||line.endsWith(" "+name)||line.startsWith(name+" ")))continue;
-    const code=idBase(c.id);
-    if(!matches.has(code))matches.set(code,c);
-  }
-  if(!matches.size)return null;
-  const longest=Math.max(...[...matches.values()].map(c=>norm(c.name).length));
-  const cards=[...matches.values()].filter(c=>norm(c.name).length===longest).slice(0,80);
-  return cards.length?{cards,name:cards[0].name,code:"NAME:"+norm(cards[0].name),confidence:"name"}:null;
-}
+function setOrbScope(value){orbScope=value;orbGeneration++;orbReady=false;void initializeOrb()}
 function fitGuide(){
   const stage=$(".scanStage"),guide=$(".scanGuide");
   if(!stage||!guide)return;
@@ -112,7 +113,7 @@ function visibleVideoBounds(){
   const offsetX=(w*factor-r.width)/2,offsetY=(h*factor-r.height)/2;
   return {r,w,h,factor,offsetX,offsetY};
 }
-function snapshot(){
+function snapshot(freeze=false){
   const b=visibleVideoBounds(),guide=$(".scanGuide");
   if(!b||!guide)return null;
   const g=guide.getBoundingClientRect();
@@ -124,6 +125,7 @@ function snapshot(){
   crop.width=Math.min(900,Math.round(cropW*1.25));
   crop.height=Math.round(crop.width*cropH/cropW);
   crop.getContext("2d").drawImage(camera,left,top,cropW,cropH,0,0,crop.width,crop.height);
+  if(!freeze)return {card:crop,still:""};
   const still=document.createElement("canvas");
   still.width=Math.min(780,Math.round(b.r.width*1.5));
   still.height=Math.max(1,Math.round(still.width*b.r.height/b.r.width));
@@ -131,99 +133,47 @@ function snapshot(){
   still.getContext("2d").drawImage(camera,stillX,stillY,Math.min(b.w-stillX,b.r.width/b.factor),Math.min(b.h-stillY,b.r.height/b.factor),0,0,still.width,still.height);
   return {card:crop,still:still.toDataURL("image/jpeg",.79)};
 }
-function cropForCode(card){
-  // Magnify the tiny printed ID at the bottom-right edge.
-  const c=document.createElement("canvas"),w=card.width,h=card.height;
-  const left=w*.39,top=h*.82,partWidth=w-left,partHeight=h-top;
-  c.width=Math.min(1500,Math.round(partWidth*3));
-  c.height=Math.max(1,Math.round(c.width*partHeight/partWidth));
-  const g=c.getContext("2d");
-  g.imageSmoothingEnabled=true;g.imageSmoothingQuality="high";
-  if("filter" in g)g.filter="grayscale(1) contrast(1.9)";
-  g.drawImage(card,left,top,partWidth,partHeight,0,0,c.width,c.height);
-  return c;
+function plan(){
+  if(scanTimer)cancelAnimationFrame(scanTimer);
+  const tick=now=>{
+    if(!running||locked||document.hidden)return;
+    scanTimer=requestAnimationFrame(tick);
+    if(now-lastFrameAt<260||processing||!orbReady||!orb?.cards.length)return;
+    lastFrameAt=now;scan();
+  };
+  scanTimer=requestAnimationFrame(tick);
 }
-function plan(wait=260){
-  clearTimeout(scanTimer);
-  if(!running||locked||document.hidden)return;
-  scanTimer=setTimeout(scan,wait);
-}
-async function getWorker(turn){
-  if(worker)return worker;
-  if(workerPromise)return workerPromise;
-  workerPromise=(async()=>{
-    if(!window.Tesseract){
-      await new Promise((resolve,reject)=>{
-        const script=document.createElement("script");
-        script.src=OCR_SRC;script.async=true;script.onload=resolve;
-        script.onerror=()=>reject(Error("No se pudo cargar el OCR gratuito"));
-        document.head.appendChild(script);
-      });
-    }
-    if(turn!==session||!running)throw Error("Escáner cerrado");
-    const own=await window.Tesseract.createWorker("eng");
-    if(turn!==session||!running){await own.terminate();throw Error("Escáner cerrado")}
-    await own.setParameters({
-      tessedit_pageseg_mode:window.Tesseract.PSM?.SPARSE_TEXT||"11",
-      tessedit_char_whitelist:"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789- "
-    });
-    worker=own;return own;
-  })().catch(e=>{workerPromise=null;throw e});
-  return workerPromise;
-}
-async function recognizeCard(frame,turn){
-  const engine=await getWorker(turn);
-  if(turn!==session||!running||locked)return null;
-  // Automatically recognize only a physical printed card code.
-  const bottom=await engine.recognize(cropForCode(frame.card));
-  if(turn!==session||!running||locked)return null;
-  const codeHit=lookup(bottom?.data?.text||"");
-  if(codeHit)return codeHit;
-  // Periodically read the entire card if the corner is obscured.
-  if(attempts%2!==0)return null;
-  const full=await engine.recognize(frame.card);
-  if(turn!==session||!running||locked)return null;
-  const alternate=lookup(full?.data?.text||"");
-  if(alternate)return alternate;
-  return nameCandidates(full?.data?.text||"");
-}
-function remember(hit,frame){
-  const now=Date.now(),code=hit.code;
-  if(lastCode===code&&now-lastSeenAt<17000)repeatCount++;
-  else repeatCount=1;
-  lastCode=code;lastSeenAt=now;
-  if(repeatCount>=2){
-    shot=frame;activeHit=hit;
-    if(hit.confidence==="name")showNameChoices(hit);
-    else show(hit);
-    return true;
-  }
-  status(hit.confidence==="name"?"Nombre detectado: "+hit.name+" · buscando el número para distinguir la carta…":
-    "Posible "+hit.card.name+" ("+hit.code+") · verificando en otra imagen…");
-  return false;
-}
-async function scan(){
-  if(!running||locked||processing||document.hidden)return;
-  const turn=session;processing=true;attempts++;
-  const counter=$(".scanCounter");if(counter)counter.textContent="Intento "+attempts+" · OCR local";
+function scan(){
+  if(!running||locked||processing||document.hidden||!orb?.cards.length)return;
+  processing=true;attempts++;
   try{
-    const frame=snapshot();
-    if(!frame){status("Encuadra toda la carta dentro del recuadro");return}
-    status("Reconociendo carta… búsqueda continua activa");
-    const hit=await recognizeCard(frame,turn);
-    if(turn!==session||!running||locked)return;
-    if(hit){if(remember(hit,frame))return}
-    else status("Buscando… centra la carta, mantén el móvil quieto y evita reflejos");
-  }catch(e){
-    if(turn===session&&running&&!locked){
-      console.warn("Scanner local OCR",e);
-      status("OCR local no disponible: "+(e?.message||"error")+". Reintentando; puedes buscar manualmente.");
-      if(worker){try{await worker.terminate()}catch{}worker=null}workerPromise=null;
+    const frame=snapshot(false);
+    if(!frame)return;
+    const outcome=orb.scan(frame.card),best=outcome.best,second=outcome.second;
+    const counter=$(".scanCounter");
+    if(counter)counter.textContent="ORB · "+orbCount+" refs · "+(best?.good||0)+" coincidencias";
+    const enough=best&&best.good>=41&&best.cells>=5;
+    const ambiguous=enough&&second&&second.good>=41&&
+      (second.good>=best.good*.91||best.good-second.good<6);
+    if(!enough||ambiguous){
+      lastCode="";repeatCount=0;
+      if(attempts%6===0)status(ambiguous?"Varias impresiones se parecen; acércate o cambia el ángulo.":
+        "Buscando carta… "+(orbCount?"("+orbCount+" referencias)":"preparando catálogo"));
+      return;
     }
-  }finally{
-    processing=false;
-    if(running&&!locked)plan(350);
-  }
+    if(lastCode===best.card.id)repeatCount++;else{lastCode=best.card.id;repeatCount=1}
+    status("Coincidencia ORB: "+best.card.id+" · verificando "+repeatCount+" / 3");
+    if(repeatCount<3)return;
+    const matched=state.cards.find(c=>c.id===best.card.id);
+    if(!matched)return;
+    shot=snapshot(true);
+    activeHit={card:matched,code:idBase(matched.id),variants:cardByCode(idBase(matched.id)),
+      source:"Reconocimiento visual ORB ("+best.good+" coincidencias)",confidence:"high"};
+    show(activeHit);
+  }catch(e){
+    console.warn("ORB scan",e);
+    status("Error procesando imagen: "+(e.message||e));
+  }finally{processing=false}
 }
 function ownedCount(id){return Number(qty(id)||0)}
 function chooseVariant(variants,selected){
@@ -248,7 +198,7 @@ function chooseVariant(variants,selected){
 }
 function showNameChoices(hit){
   if(!running||!hit?.cards?.length)return;
-  locked=true;clearTimeout(scanTimer);
+  locked=true;cancelAnimationFrame(scanTimer);
   panel()?.classList.add("locked");
   const still=document.createElement("img");still.className="scanFreeze";still.src=shot?.still||"";
   $(".scanFreeze")?.remove();$(".scanStage").prepend(still);
@@ -272,7 +222,7 @@ function showNameChoices(hit){
 }
 function show(hit){
   if(!running||!hit?.card)return;
-  locked=true;clearTimeout(scanTimer);
+  locked=true;cancelAnimationFrame(scanTimer);
   const p=panel();p?.classList.add("locked");
   const videoStill=document.createElement("img");
   videoStill.className="scanFreeze";videoStill.src=shot?.still||"";
@@ -282,7 +232,7 @@ function show(hit){
   const owned=variants.reduce((total,c)=>total+ownedCount(c.id),0);
   const limit=playsetTarget(hit.card);
   const options='<option value="">Elige la impresión exacta…</option>'+variants.map(c=>
-    '<option value="'+esc(c.id)+'"'+(variants.length===1?' selected':'')+'>'+esc(c.id)+" · "+esc(variantKindOf(c))+" · "+esc(printSetOf(c))+'</option>'
+    '<option value="'+esc(c.id)+'"'+(c.id===hit.card.id?' selected':'')+'>'+esc(c.id)+" · "+esc(variantKindOf(c))+" · "+esc(printSetOf(c))+'</option>'
   ).join("");
   const area=$("#scanDecision");area.hidden=false;
   area.innerHTML='<div class="scanIdentity">'+
@@ -335,7 +285,7 @@ function resume(){
 }
 function manual(){
   if(!running)return;
-  session++;locked=true;clearTimeout(scanTimer);
+  session++;locked=true;cancelAnimationFrame(scanTimer);
   const area=$("#scanDecision");area.hidden=false;
   area.innerHTML='<b>Buscar carta manualmente</b><p class="small">Introduce el código o nombre para elegir una impresión.</p>'+
     '<input type="search" id="scanSearch" placeholder="Ej. OP06-043 o Shanks" autocomplete="off">'+
@@ -400,7 +350,7 @@ async function startCamera(turn){
     if(turn!==session||!running)return;
     updateCameraControls();fitGuide();
     status("Cámara activa · buscando cartas sin parar");
-    hint("Reconocimiento OCR en el dispositivo. La primera carga puede tardar un poco.");
+    hint("ORB + Hamming · sin ORB · vídeo procesado en este dispositivo.");
     plan(250);
     if(navigator.wakeLock?.request)navigator.wakeLock.request("screen").then(lock=>{if(running)wakeLock=lock;else lock.release()}).catch(()=>{});
   }catch(e){
@@ -411,7 +361,7 @@ async function switchCamera(){
   if(!running)return;
   session++;
   const turn=session;
-  clearTimeout(scanTimer);releaseFreeze();
+  cancelAnimationFrame(scanTimer);releaseFreeze();
   facing=facing==="environment"?"user":"environment";
   if(stream){stream.getTracks().forEach(t=>t.stop());stream=null}
   track=null;if(camera)camera.srcObject=null;
@@ -443,10 +393,14 @@ async function open(){
   p.innerHTML='<div class="scanLayout">'+
     '<div class="scanTop"><h2>Escáner gratuito · One Piece</h2><button id="scanClose">✕ Cerrar</button></div>'+
     '<div id="scanStatus" role="status" aria-live="polite">Preparando cámara…</div>'+
-    '<div id="scanHint">OCR local · sin servicios de pago</div>'+
+    '<div id="scanHint">Visión ORB local · sin servicios de pago</div>'+
+    '<div id="scanIndex" class="small">Preparando referencias ORB…</div>'+
     '<div class="scanStage"><video muted playsinline autoplay></video><div class="scanGuide"></div>'+
     '<div class="scanCounter">Escaneo continuo</div><div class="scanDecision" id="scanDecision" hidden></div></div>'+
-    '<div class="scanTools"><button id="scanTorch" hidden>Linterna</button>'+
+    '<div class="scanTools"><label>Buscar en <select id="scanScope" aria-label="Referencias a indexar">'+
+    '<option value="owned">Mi colección (rápido)</option><option value="all">Todo el catálogo (lento)</option>'+
+    state.packs.map(p=>'<option value="set:'+esc(p.code)+'">'+esc(p.code)+'</option>').join("")+
+    '</select></label><button id="scanTorch" hidden>Linterna</button>'+
     '<label id="scanZoomWrap" hidden>Zoom <input id="scanZoom" type="range" min="1" max="2" step=".1"></label>'+
     '<button id="scanFlip">Cambiar cámara</button></div>'+
     '<div class="scanActions"><button class="primary" id="scanResume">Continuar escaneando</button>'+
@@ -461,29 +415,31 @@ async function open(){
   $("#scanTorch").onclick=toggleTorch;
   $("#scanFlip").onclick=switchCamera;
   $("#scanZoom").oninput=e=>zoomCamera(e.target.value);
+  $("#scanScope").value=orbScope;
+  $("#scanScope").onchange=e=>setOrbScope(e.target.value);
   if("ResizeObserver" in window){
     resizeWatcher=new ResizeObserver(fitGuide);resizeWatcher.observe($(".scanStage"));
   }else window.addEventListener("resize",fitGuide);
-  fitGuide();await startCamera(turn);
+  fitGuide();void initializeOrb();await startCamera(turn);
 }
 function close(){
   if(!running&&!panel())return;
   running=false;locked=false;session++;
-  clearTimeout(scanTimer);scanTimer=null;
+  cancelAnimationFrame(scanTimer);scanTimer=null;
   if(resizeWatcher){resizeWatcher.disconnect();resizeWatcher=null}
   window.removeEventListener("resize",fitGuide);
   if(wakeLock){wakeLock.release().catch(()=>{});wakeLock=null}
   if(stream){stream.getTracks().forEach(t=>t.stop());stream=null}
   if(camera){camera.pause();camera.srcObject=null;camera=null}
   track=null;shot=null;activeHit=null;
-  const oldWorker=worker;worker=null;workerPromise=null;
-  if(oldWorker)oldWorker.terminate().catch(()=>{});
+  orbGeneration++;orbReady=false;cvModulePromise=null;
+  if(orb){orb.dispose();orb=null}
   panel()?.remove();
 }
 document.addEventListener("visibilitychange",()=>{
   if(!running||locked)return;
-  if(document.hidden)clearTimeout(scanTimer);
-  else{camera?.play()?.catch(()=>{});plan(250)}
+  if(document.hidden)cancelAnimationFrame(scanTimer);
+  else{camera?.play()?.catch(()=>{});plan()}
 });
 function init(){
   if(document.querySelector("#scanLaunch"))return;

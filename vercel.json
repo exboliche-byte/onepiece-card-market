@@ -2,6 +2,14 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
     {
+      "source": "/orb-image/:id",
+      "destination": "https://optcg-api.arjunbansal-ai.workers.dev/images/:id"
+    },
+    {
+      "source": "/orb-official/:id",
+      "destination": "https://en.onepiece-cardgame.com/images/cardlist/card/:id.png"
+    },
+    {
       "source": "/card/:id",
       "destination": "/index.html"
     },
@@ -47,6 +55,24 @@
         {
           "key": "Cache-Control",
           "value": "no-cache, max-age=0"
+        }
+      ]
+    },
+    {
+      "source": "/orb-image/:id",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=86400"
+        }
+      ]
+    },
+    {
+      "source": "/orb-official/:id",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=86400"
         }
       ]
     }
