@@ -1,0 +1,48 @@
+name: Build One Piece visual fingerprint index
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/build-vision-index.yml"
+      - "scripts/build-vision-index.py"
+      - "data/cards.json"
+  schedule:
+    - cron: "35 5 * * 2"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: onepiece-vision-index
+  cancel-in-progress: false
+
+jobs:
+  index:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: true
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.11"
+      - name: Install fingerprint dependencies
+        run: pip install pillow==11.3.0 aiohttp==3.12.15
+      - name: Index missing images without keeping artwork
+        run: python scripts/build-vision-index.py
+      - name: Commit compact fingerprint index
+        run: |
+          set -euo pipefail
+          git config user.name "MiAlbumOnePiece Vision Index"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/vision-index.json
+          if git diff --cached --quiet; then
+            echo "No index changes"
+            exit 0
+          fi
+          git commit -m "data: refresh card-art recognition fingerprints"
+          git fetch origin main
+          git rebase origin/main
+          git push origin HEAD:main
