@@ -979,11 +979,26 @@ function bindCompetitiveLeaderButtons(){
     bindCompetitiveLeaderButtons();
   });
 }
-// When adapting an external decklist, prefer the actual printings in the
-// signed-in user's cloud collection; never change collection quantities.
+// Match playability by printed card number, not by the print suffix.
+function deckPrintedCode(input){
+ const raw=typeof input==="string"?input:input?.id;
+ const id=String(raw||"").trim().toUpperCase();
+ const match=id.match(/^((?:OP|ST|EB|PRB)\d{2}-\d{3}|P-\d{3}|DON-?\d{3})(?=$|[_-])/);
+ return match?match[1]:baseId(id).toUpperCase();
+}
+function deckOwnedCopies(c){
+  if(!state.user||!state.collectionReady)return 0;
+  const code=deckPrintedCode(c);
+  return Object.entries(state.owned).reduce((total,[id,n])=>
+    total+(deckPrintedCode(id)===code?Math.max(0,Number(n)||0):0),0);
+}
+// When adapting an external decklist, prefer the exact owned printings
+// from Supabase. Never add or change collection quantities here.
 function ownedDeckPrintings(c){
   if(!c||!state.user||!state.collectionReady)return [];
-  return state.cards.filter(v=>groupKey(v)===groupKey(c)&&qty(v.id)>0)
+  const code=deckPrintedCode(c);
+  return Object.keys(state.owned).filter(id=>qty(id)>0&&deckPrintedCode(id)===code)
+    .map(id=>card(id)).filter(Boolean)
     .sort((a,b)=>qty(b.id)-qty(a.id)||(a.id===c.id?-1:b.id===c.id?1:String(a.id).localeCompare(String(b.id),"es",{numeric:true})));
 }
 function preferredOwnedDeckPrinting(c){
@@ -998,7 +1013,7 @@ function competitiveDeckPreviewCards(result){
     if(!requested)continue;
     const cc=resolveDeckImportCard(id);
     if(!cc||cc.category==="Leader"){unresolved+=requested;continue}
-    const group=groupKey(cc),limit=deckCopyLimit(cc);
+    const group=deckPrintedCode(cc),limit=deckCopyLimit(cc);
     const allowed=Math.max(0,Math.min(requested,limit-(groupCounts.get(group)||0)));
     groupCounts.set(group,(groupCounts.get(group)||0)+allowed);
     if(!allowed)continue;
@@ -1018,13 +1033,13 @@ function competitiveDeckOwnedStats(result){
   let owned=0,missing=0,cost=0;
   const leader=resolveDeckImportCard(result?.leaderId);
   if(leader){
-    const have=logicalQty(leader),got=Math.min(1,have);owned+=got;missing+=1-got;
+    const have=deckOwnedCopies(leader),got=Math.min(1,have);owned+=got;missing+=1-got;
     if(got<1)cost+=Number(priceOf(leader)||0);
   }else missing+=1;
   for(const [id,qRaw] of Object.entries(result?.cards||{})){
     const need=Math.max(0,Number(qRaw)||0),cc=resolveDeckImportCard(id);
     if(!cc){missing+=need;continue}
-    const got=Math.min(need,logicalQty(cc));owned+=got;
+    const got=Math.min(need,deckOwnedCopies(cc));owned+=got;
     const miss=need-got;missing+=miss;
     if(miss>0)cost+=miss*Number(priceOf(cc)||0);
   }
@@ -1083,6 +1098,9 @@ function competitiveDraftName(result){
 }
 function openCompetitiveDeckPreview(index){
   const result=state.deckDiscoverResults[Number(index)];if(!result)return;
+  // A refreshed session can have owned print IDs not yet present in the
+  // catalog. Recreate their display entries without writing to Supabase.
+  if(state.user&&state.collectionReady)ensureOwnedCardsInCatalog();
   const leaderCard=preferredOwnedDeckPrinting(resolveDeckImportCard(result.leaderId));
   if(!leaderCard||leaderCard.category!=="Leader")return notify("No encuentro ese líder en el catálogo actual");
   const {cards,unresolved}=competitiveDeckPreviewCards(result);
@@ -1206,7 +1224,8 @@ function exportDeckFile(){
 function resolveDeckImportCard(id){
   const raw=String(id||"").trim(),exact=card(raw)||state.cards.find(cc=>norm(cc.id)===norm(raw));if(exact)return exact;
   const base=baseId(raw),g=state.groups.find(g=>g.versions.some(v=>norm(baseId(v.id))===norm(base)));
-  return g?.versions.find(v=>v.id===base)||g?.card||null;
+  return g?.versions.find(v=>v.id===base)||g?.card||
+    state.cards.find(c=>deckPrintedCode(c)===deckPrintedCode(raw))||null;
 }
 function parseDeckListLine(line){
   const raw=String(line||"").trim();if(!raw)return null;
