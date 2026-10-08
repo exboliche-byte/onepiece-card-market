@@ -46,7 +46,7 @@ function normalizeCode(raw){
   // OCR often confuses I/l with 1 and O with zero in the numeric region.
   const candidate=compact.match(/^(OP|ST|EB|PRB)([0-9OILSB]{2})([0-9OILSB]{3})$/);
   if(candidate){
-    const digits=(candidate[2]+candidate[3]).replace(/[OI L]/g,"1").replace(/O/g,"0").replace(/S/g,"5").replace(/B/g,"8");
+    const digits=(candidate[2]+candidate[3]).replace(/[IL]/g,"1").replace(/O/g,"0").replace(/S/g,"5").replace(/B/g,"8");
     if(/^\d{5}$/.test(digits))return candidate[1]+digits.slice(0,2)+"-"+digits.slice(2);
   }
   const promo=compact.match(/^P([0-9OILSB]{3})$/);
@@ -213,7 +213,7 @@ async function scan(){
     }
   }finally{
     processing=false;
-    if(turn===session&&running&&!locked)plan(350);
+    if(running&&!locked)plan(350);
   }
 }
 function ownedCount(id){return Number(qty(id)||0)}
@@ -289,7 +289,7 @@ function resume(){
   if(!running)return;
   session++;lastCode="";repeatCount=0;lastSeenAt=0;shot=null;activeHit=null;
   releaseFreeze();
-  status("Buscando de forma continua…");plan(250);
+  status("Buscando de forma continua…");if(!processing)plan(250);
 }
 function manual(){
   if(!running)return;
