@@ -173,3 +173,33 @@ test("scanner updates selected and persistent copy counts after confirmed collec
   refresh();
   assert.match(nodes["#scanOwnedLive"].textContent,/OP01-001 · Tienes 1 copia$/);
 });
+
+test("quantity ordering remains stable during edits and resets for explicit sort or filter changes",()=>{
+  const html=read("index.html");
+  const block=between(html,"const quantityOrderSnapshots=","function filteredCards(mode){");
+  const state={
+    user:{id:"tester"},cards:[{},{},{}],
+    collection:{sort:"quantity",dir:"desc",quantity:"Todas",page:1,filtersOpen:false},
+    catalog:{sort:"quantity",dir:"desc",ownership:"Todas",page:1,filtersOpen:false}
+  };
+  const preserve=new Function("state",block+"\nreturn preserveQuantitySort;")(state);
+  const ids=x=>x.id||x.key;
+  assert.deepEqual(preserve("collection",[{id:"A"},{id:"B"},{id:"C"}],ids).map(ids),["A","B","C"]);
+  state.collection.page=2;
+  state.collection.filtersOpen=true;
+  assert.deepEqual(preserve("collection",[{id:"C"},{id:"A"},{id:"B"}],ids).map(ids),["A","B","C"],
+    "Editing counts or changing page must not reorder cards");
+  assert.deepEqual(preserve("catalog",[{key:"A"},{key:"B"}],ids).map(ids),["A","B"]);
+  assert.deepEqual(preserve("catalog",[{key:"B"},{key:"A"}],ids).map(ids),["A","B"],
+    "Grouped catalog also retains quantity order");
+  state.collection.quantity="3";
+  assert.deepEqual(preserve("collection",[{id:"C"},{id:"A"}],ids).map(ids),["C","A"],
+    "An explicit filter change must trigger a fresh sort");
+  state.collection.sort="name";
+  assert.deepEqual(preserve("collection",[{id:"A"},{id:"C"}],ids).map(ids),["A","C"]);
+  state.collection.sort="quantity";
+  assert.deepEqual(preserve("collection",[{id:"C"},{id:"A"}],ids).map(ids),["C","A"],
+    "Returning to quantity sort must reflect updated counts");
+  assert.match(html,/mode==="collection"\?preserveQuantitySort\("collection"/);
+  assert.match(html,/return preserveQuantitySort\("catalog",groups/);
+});
