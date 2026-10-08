@@ -1937,10 +1937,14 @@ async function loadCollectionFromCloud(userId){
   }
 }
 let cloudSyncQueue=Promise.resolve();
+const cloudSyncInFlight=new Map();
 function syncCloud(){
   if(!state.sb||!state.user)return Promise.resolve(false);
   const userId=state.user.id;
-  const operation=cloudSyncQueue.catch(()=>{}).then(()=>syncCloudInternal(userId));
+  if(cloudSyncInFlight.has(userId))return cloudSyncInFlight.get(userId);
+  const operation=cloudSyncQueue.catch(()=>{}).then(()=>syncCloudInternal(userId))
+    .finally(()=>cloudSyncInFlight.delete(userId));
+  cloudSyncInFlight.set(userId,operation);
   cloudSyncQueue=operation.catch(()=>{});
   return operation;
 }
@@ -2076,8 +2080,17 @@ async function initSupabase(){
         const returnedType=new URLSearchParams(location.hash.replace(/^#/,"")).get("type")||new URL(location.href).searchParams.get("type");
         if(event==="PASSWORD_RECOVERY"||returnedType==="recovery"||location.pathname==="/auth/reset"){state.authRecovery=true;state.authNotice="Enlace válido. Elige una nueva contraseña.";state.tab="account"}
         else if(state.user&&location.pathname.startsWith("/auth/")&&!state.authRecovery)history.replaceState(null,"","/");
-        if(state.user){loadAccountLocal({migrateLegacy:true});await syncCloud()}
-        else if(previous){state.deckId=null;state.deckLibrary=true;loadAccountLocal()}
+        const next=state.user?.id||null;
+        if(previous!==next){
+          // Account transitions discard all in-memory ownership; only the new
+          // account's server rows may populate the collection.
+          collectionLoadId++;
+          state.owned={};state.collectionReady=false;
+          if(state.user){loadAccountLocal({migrateLegacy:true});await syncCloud()}
+          else{state.deckId=null;state.deckLibrary=true;loadAccountLocal()}
+        }else if(next&&!state.collectionReady){
+          await syncCloud();
+        }
         state.authReady=true;renderShell();
       },0));
       return state.sb;
