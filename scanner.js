@@ -14,6 +14,8 @@ let scannerHistoryActive=false;
 let lastCode="",lastSeenAt=0,repeatCount=0,attempts=0,shot=null,activeHit=null;
 let torch=false,facing="environment",cameraStarting=false,resizeWatcher=null,wakeLock=null;
 let preferredCameraId="",availableCameras=[];
+let autoAddEnabled=false,autoAddTimer=null,autoAddTicker=null,autoAddCandidate=null;
+let autoWaitForChange="",autoMissingFrames=0;
 const $=q=>document.querySelector("#scanPanel "+q);
 const panel=()=>document.querySelector("#scanPanel");
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&#39;","'":"&#39;"}[c]));
@@ -30,6 +32,51 @@ const status=msg=>{
   e.setAttribute("aria-live",error?"assertive":"off");
 };
 const hint=(msg)=>{const e=$("#scanHint");if(e)e.textContent=msg};
+function cancelAutoCountdown(){
+  if(autoAddTimer!==null){clearTimeout(autoAddTimer);autoAddTimer=null}
+  if(autoAddTicker!==null){clearInterval(autoAddTicker);autoAddTicker=null}
+  const countdown=$("#scanAutoCountdown");
+  if(countdown){countdown.hidden=true;countdown.textContent=""}
+}
+function updateAutoControls(){
+  const toggle=$("#scanAutoToggle"),stop=$("#scanAutoStop");
+  if(toggle)toggle.checked=autoAddEnabled;
+  if(stop)stop.hidden=!autoAddEnabled;
+}
+function stopAutoAdding(){
+  autoAddEnabled=false;
+  autoAddCandidate=null;
+  cancelAutoCountdown();
+  updateAutoControls();
+}
+function startAutoCountdown(){
+  cancelAutoCountdown();
+  const candidate=autoAddCandidate;
+  if(!autoAddEnabled||!candidate||!running||!locked||document.hidden||session!==candidate.session)return;
+  const target=$("#scanVariant"),countdown=$("#scanAutoCountdown");
+  if(!target||!countdown||target.value!==candidate.printId)return;
+  const end=Date.now()+5000;
+  countdown.hidden=false;
+  const update=()=>{
+    const remaining=Math.max(0,Math.ceil((end-Date.now())/1000));
+    countdown.textContent="Añadiendo 1 copia de "+candidate.printId+" en "+remaining+" s…";
+  };
+  update();
+  autoAddTicker=setInterval(update,200);
+  autoAddTimer=setTimeout(()=>{
+    cancelAutoCountdown();
+    if(!autoAddEnabled||autoAddCandidate!==candidate||!running||!locked||
+       document.hidden||session!==candidate.session||$("#scanVariant")?.value!==candidate.printId)return;
+    autoAddCandidate=null; // Un fallo de red no provoca reintentos automáticos.
+    void candidate.save();
+  },5000);
+}
+function setAutoAdding(value){
+  autoAddEnabled=!!value;
+  if(!autoAddEnabled){autoAddCandidate=null;cancelAutoCountdown()}
+  updateAutoControls();
+  if(autoAddEnabled)startAutoCountdown();
+}
 const style=document.createElement("style");style.id="scanStyles";
 style.textContent=[
 "#scanLaunch{display:none;position:fixed;right:14px;bottom:80px;z-index:25;background:#ffd447;color:#171717;font-weight:850;padding:13px 15px;border:0;border-radius:30px;box-shadow:0 4px 15px #0008;cursor:pointer}",
@@ -49,7 +96,14 @@ style.textContent=[
 "#scanPanel .scanCounter{position:absolute;z-index:2;left:8px;top:8px;border:1px solid #fff4;border-radius:7px;background:#09111ae8;padding:6px 9px;font-size:11px;color:#e8eefb}",
 "#scanPanel .scanActions{position:absolute;bottom:calc(env(safe-area-inset-bottom,0px) + 10px);left:10px;right:10px;z-index:5;display:flex;gap:7px;flex-wrap:wrap;justify-content:center;background:#080b11b8;border-radius:12px;padding:6px}#scanPanel .scanActions button{flex:1;min-width:100px}",
 "#scanPanel .scanTools{position:absolute;bottom:calc(env(safe-area-inset-bottom,0px) + 72px);left:10px;right:10px;z-index:5;display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:center;background:#080b11b8;border-radius:12px;padding:6px}#scanPanel .scanTools button{padding:8px 10px;font-size:12px}#scanPanel .scanTools label{font-size:12px;color:#ccd5e2;display:flex;align-items:center;gap:5px}#scanPanel .scanTools input{width:95px}#scanPanel #scanCameraSelect{width:auto;max-width:190px;min-width:130px;padding:6px;font-size:12px}",
-"#scanPanel .scanDecision{position:absolute;z-index:10;left:10px;right:10px;bottom:calc(env(safe-area-inset-bottom,0px) + 10px);max-height:calc(100% - env(safe-area-inset-top,0px) - 72px);overflow-y:auto;overscroll-behavior:contain;background:#0d1522fc;border:1px solid #ffd447;border-radius:13px;padding:13px 12px 18px;box-shadow:0 8px 28px #000d;touch-action:pan-y}",
+"#scanPanel .scanDecision{position:absolute;z-index:10;left:10px;right:10px;bottom:calc(env(safe-area-inset-bottom,0px) + 10px);max-height:calc(100% - env(safe-area-inset-top,0px) - 158px);overflow-y:auto;overscroll-behavior:contain;background:#0d1522fc;border:1px solid #ffd447;border-radius:13px;padding:13px 12px 18px;box-shadow:0 8px 28px #000d;touch-action:pan-y}",
+"#scanPanel .scanAutoBar{position:absolute;z-index:12;top:calc(env(safe-area-inset-top,0px) + 62px);left:10px;right:10px;display:flex;flex-direction:column;gap:5px;align-items:stretch;padding:7px 10px;background:#080b11e8;border-radius:11px;border:1px solid #526279}",
+"#scanPanel .scanAutoBar label{display:flex;align-items:center;justify-content:center;gap:9px;font-weight:700;font-size:13px;cursor:pointer}",
+"#scanPanel #scanAutoToggle{width:19px;height:19px;accent-color:#ffd447;flex:none}",
+"#scanPanel #scanAutoStop{display:block;width:100%;min-height:54px;font-size:18px;font-weight:900;background:#c52332;border:2px solid #ff7b87;color:#fff;letter-spacing:.02em}",
+"#scanPanel #scanAutoStop[hidden]{display:none}",
+"#scanPanel .scanAutoCountdown{font-size:16px;font-weight:850;padding:10px;margin:10px 0;color:#161616;background:#ffd447;border-radius:9px;text-align:center}",
+"#scanPanel .scanAutoCountdown[hidden]{display:none}",
 "#scanPanel.locked .scanActions,#scanPanel.locked .scanTools{display:none}",
 "#scanPanel .scanDecision .scanChoiceButtons button{min-height:46px;touch-action:manipulation}",
 "#scanPanel .scanDecision[hidden]{display:none}#scanPanel .scanIdentity{display:flex;align-items:flex-start;gap:9px}#scanPanel .scanIdentity img{width:72px;aspect-ratio:.716;object-fit:contain;border-radius:5px}",
@@ -254,6 +308,18 @@ function handleVisualResults(ranked){
   const id=best&&best.score<=104&&best.art<=110?best.id:null;
   recentVisualMatches.push(id);
   if(recentVisualMatches.length>10)recentVisualMatches.shift();
+  // Una misma carta que sigue bajo la cámara no se contabiliza de nuevo.
+  // Rearmar tras otra carta o 12 fotogramas sin ninguna coincidencia válida.
+  if(autoWaitForChange){
+    if(!id){
+      if(++autoMissingFrames>=12){
+        autoWaitForChange="";autoMissingFrames=0;recentVisualMatches=[];
+      }
+    }else{
+      autoMissingFrames=0;
+      if(id===autoWaitForChange)return;
+    }
+  }
   if(!id){
     if(attempts%4===0)status("Buscando ilustración. Alinea los cuatro bordes y evita reflejos.");
     return;
@@ -262,6 +328,9 @@ function handleVisualResults(ranked){
   if(found>=3){
     const card=known.get(id),code=idBase(id);
     if(!card)return;
+    if(autoWaitForChange&&id!==autoWaitForChange){
+      autoWaitForChange="";autoMissingFrames=0;
+    }
     shot=snapshot(true);
     show({card,code,variants:cardByCode(code),
       source:"Coincidencia visual (3 de las últimas 10 capturas)",confidence:"visual"});
@@ -310,6 +379,7 @@ async function scanOCR(){
 }
 function showVisualChoices(heading="Posibles cartas según la ilustración"){
   if(!running||!visualResults.length)return;
+  autoAddCandidate=null;cancelAutoCountdown();
   locked=true;cancelAnimationFrame(scanTimer);
   shot=snapshot(true);
   panel()?.classList.add("locked");
@@ -360,6 +430,7 @@ function chooseVariant(variants,selected){
 }
 function showNameChoices(hit){
   if(!running||!hit?.cards?.length)return;
+  autoAddCandidate=null;cancelAutoCountdown();
   locked=true;cancelAnimationFrame(scanTimer);
   panel()?.classList.add("locked");
   const still=document.createElement("img");still.className="scanFreeze";still.src=shot?.still||"";
@@ -384,6 +455,7 @@ function showNameChoices(hit){
 }
 function show(hit){
   if(!running||!hit?.card)return;
+  autoAddCandidate=null;cancelAutoCountdown();
   // La búsqueda manual respeta la versión elegida expresamente;
   // todos los reconocimientos automáticos y candidatos visuales van a BASE.
   const isManualSearch=hit.source==="Búsqueda manual";
@@ -407,15 +479,22 @@ function show(hit){
     '<div><strong>'+esc(hit.card.name)+'</strong><div class="small">'+esc(hit.code)+' · '+esc(hit.source)+'</div>'+
     '<div class="small">Tienes '+owned+' copias de esta carta · '+Math.max(0,limit-owned)+' para el playset</div></div></div>'+
     '<p class="small">Confirma la impresión. Las paralelas y reimpresiones comparten código y no son intercambiables.</p>'+
+    '<div id="scanAutoCountdown" class="scanAutoCountdown" hidden aria-live="polite"></div>'+
     '<select id="scanVariant">'+options+'</select><div id="scanExactCount" class="small"></div>'+
     '<div class="scanChoiceButtons"><button class="primary" id="scanAddOne">+1 y continuar</button>'+
     '<input type="number" min="1" max="99" value="2" id="scanQuantity" aria-label="Número de copias">'+
     '<button class="primary" id="scanAddMany">Añadir y continuar</button></div>'+
     '<div class="scanChoiceButtons"><button id="scanDiscard">Descartar y seguir</button><button id="scanSearchAgain">Buscar otra carta</button></div>';
   const selected=()=>variants.find(c=>c.id===$("#scanVariant")?.value);
-  $("#scanVariant").onchange=()=>chooseVariant(variants);
+  $("#scanVariant").onchange=()=>{
+    autoAddCandidate=null;cancelAutoCountdown(); // Cambiar impresión exige confirmación manual.
+    chooseVariant(variants);
+  };
   chooseVariant(variants);
-  const save=async howMany=>{
+  let saving=false;
+  const save=async (howMany,automatic=false)=>{
+    if(saving)return;
+    autoAddCandidate=null;cancelAutoCountdown();
     if(!state.user||!state.collectionReady||!state.sb){
       status("Inicia sesión para guardar en la colección.");return;
     }
@@ -424,22 +503,33 @@ function show(hit){
     if(!Number.isInteger(amount)||amount<1||amount>99){status("Introduce entre 1 y 99 copias.");return}
     const before=ownedCount(card.id),after=Math.min(99,before+amount);
     if(after===before){status("Has alcanzado el límite de copias.");return}
+    saving=true;
     const one=$("#scanAddOne"),many=$("#scanAddMany");one.disabled=many.disabled=true;
     status("Guardando la impresión exacta en Supabase…");
-    const ok=await setQty(card.id,after);
+    let ok=false;
+    try{ok=await setQty(card.id,after)}
+    catch(error){console.warn("Error guardando desde el escáner",error)}
+    finally{saving=false}
     if(!running||!panel())return;
     one.disabled=many.disabled=false;
     if(!ok){status("No se ha confirmado el guardado en Supabase. No se ha añadido.");return}
+    if(automatic){autoWaitForChange=idBase(card.id);autoMissingFrames=0}
     resume();
     status("Guardadas "+(after-before)+" copia(s) de "+card.id+". Escaneando de nuevo.");
   };
-  $("#scanAddOne").onclick=()=>save(1);
-  $("#scanAddMany").onclick=()=>save($("#scanQuantity").value);
+  $("#scanAddOne").onclick=()=>void save(1);
+  $("#scanAddMany").onclick=()=>void save($("#scanQuantity").value);
   $("#scanDiscard").onclick=resume;
   $("#scanSearchAgain").onclick=manual;
+  // Solo coincidencias visuales, nunca una búsqueda manual, OCR dudoso o paralela adivinada.
+  if(hit.confidence==="visual"&&variants.some(c=>c.id===hit.selectedId)){
+    autoAddCandidate={printId:hit.selectedId,session,save:()=>save(1,true)};
+    startAutoCountdown();
+  }
   status("Carta detectada. Comprueba la versión antes de guardar.");
 }
 function releaseFreeze(){
+  autoAddCandidate=null;cancelAutoCountdown();
   locked=false;panel()?.classList.remove("locked");
   $(".scanFreeze")?.remove();if(camera)camera.style.visibility="";
   const area=$("#scanDecision");if(area){area.hidden=true;area.replaceChildren()}
@@ -453,6 +543,7 @@ function resume(){
 }
 function manual(){
   if(!running)return;
+  autoAddCandidate=null;cancelAutoCountdown();
   session++;locked=true;cancelAnimationFrame(scanTimer);
   const area=$("#scanDecision");area.hidden=false;
   area.innerHTML='<b>Buscar carta manualmente</b><p class="small">Introduce el código o nombre para elegir una impresión.</p>'+
@@ -642,10 +733,13 @@ async function open(){
   }
   if(!state.cards?.length){alert("El catálogo aún no ha terminado de cargar.");return}
   running=true;locked=false;processing=false;attempts=0;lastCode="";repeatCount=0;session++;
+  stopAutoAdding();autoWaitForChange="";autoMissingFrames=0;
   const turn=session;
   const p=document.createElement("section");p.id="scanPanel";
   p.innerHTML='<div class="scanLayout">'+
     '<div class="scanTop"><h2>Escáner visual · One Piece</h2><button id="scanClose">✕ Cerrar</button></div>'+
+    '<div class="scanAutoBar"><label><input type="checkbox" id="scanAutoToggle"> Añadir 1 copia automáticamente tras 5 s</label>'+
+    '<button type="button" id="scanAutoStop" hidden>⏹ PARAR AÑADIDO AUTOMÁTICO</button></div>'+
     '<div id="scanStatus" role="status" aria-live="off"></div>'+
     '<div id="scanHint">Ilustraciones + OCR auxiliar · sin servicios de pago</div>'+
     '<div id="scanIndex" class="small">Cargando índice visual…</div>'+
@@ -663,6 +757,9 @@ async function open(){
   document.body.appendChild(p);
   camera=$(".scanStage video");
   $("#scanClose").onclick=()=>close();
+  $("#scanAutoToggle").onchange=e=>setAutoAdding(e.target.checked);
+  $("#scanAutoStop").onclick=stopAutoAdding;
+  updateAutoControls();
   $("#scanResume").onclick=resume;
   $("#scanCandidates").onclick=()=>showVisualChoices();
   $("#scanRetry").onclick=()=>{if(running)void startRecognition()};
@@ -693,6 +790,7 @@ function close({fromHistory=false}={}){
     return;
   }
   scannerHistoryActive=false;
+  stopAutoAdding();autoWaitForChange="";autoMissingFrames=0;
   running=false;locked=false;session++;
   cancelAnimationFrame(scanTimer);scanTimer=null;
   if(resizeWatcher){resizeWatcher.disconnect();resizeWatcher=null}
@@ -711,9 +809,15 @@ window.addEventListener("popstate",event=>{
   close({fromHistory:true});
 },true);
 document.addEventListener("visibilitychange",()=>{
-  if(!running||locked)return;
-  if(document.hidden)cancelAnimationFrame(scanTimer);
-  else{camera?.play()?.catch(()=>{});plan()}
+  if(!running)return;
+  if(document.hidden){
+    cancelAutoCountdown();
+    if(!locked)cancelAnimationFrame(scanTimer);
+  }else if(locked){
+    startAutoCountdown(); // Volver a disponer de 5 s tras regresar a la pestaña.
+  }else{
+    camera?.play()?.catch(()=>{});plan();
+  }
 });
 window.openOnePieceScanner=open;
 function init(){
