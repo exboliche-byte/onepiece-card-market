@@ -13,6 +13,7 @@ let running=false,locked=false,processing=false,scanTimer=null,session=0;
 let scannerHistoryActive=false;
 let lastCode="",lastSeenAt=0,repeatCount=0,attempts=0,shot=null,activeHit=null;
 let torch=false,facing="environment",cameraStarting=false,resizeWatcher=null,wakeLock=null;
+let preferredCameraId="",availableCameras=[];
 const $=q=>document.querySelector("#scanPanel "+q);
 const panel=()=>document.querySelector("#scanPanel");
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&#39;","'":"&#39;"}[c]));
@@ -47,7 +48,7 @@ style.textContent=[
 "#scanPanel .scanGuide:before,#scanPanel .scanGuide:after{content:'';position:absolute;left:10%;right:10%;height:1px;background:#ffd44777}#scanPanel .scanGuide:before{top:24%}#scanPanel .scanGuide:after{bottom:18%}",
 "#scanPanel .scanCounter{position:absolute;z-index:2;left:8px;top:8px;border:1px solid #fff4;border-radius:7px;background:#09111ae8;padding:6px 9px;font-size:11px;color:#e8eefb}",
 "#scanPanel .scanActions{position:absolute;bottom:calc(env(safe-area-inset-bottom,0px) + 10px);left:10px;right:10px;z-index:5;display:flex;gap:7px;flex-wrap:wrap;justify-content:center;background:#080b11b8;border-radius:12px;padding:6px}#scanPanel .scanActions button{flex:1;min-width:100px}",
-"#scanPanel .scanTools{position:absolute;bottom:calc(env(safe-area-inset-bottom,0px) + 72px);left:10px;right:10px;z-index:5;display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:center;background:#080b11b8;border-radius:12px;padding:6px}#scanPanel .scanTools button{padding:8px 10px;font-size:12px}#scanPanel .scanTools label{font-size:12px;color:#ccd5e2;display:flex;align-items:center;gap:5px}#scanPanel .scanTools input{width:95px}",
+"#scanPanel .scanTools{position:absolute;bottom:calc(env(safe-area-inset-bottom,0px) + 72px);left:10px;right:10px;z-index:5;display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:center;background:#080b11b8;border-radius:12px;padding:6px}#scanPanel .scanTools button{padding:8px 10px;font-size:12px}#scanPanel .scanTools label{font-size:12px;color:#ccd5e2;display:flex;align-items:center;gap:5px}#scanPanel .scanTools input{width:95px}#scanPanel #scanCameraSelect{width:auto;max-width:190px;min-width:130px;padding:6px;font-size:12px}",
 "#scanPanel .scanDecision{position:absolute;z-index:10;left:10px;right:10px;bottom:calc(env(safe-area-inset-bottom,0px) + 10px);max-height:calc(100% - env(safe-area-inset-top,0px) - 72px);overflow-y:auto;overscroll-behavior:contain;background:#0d1522fc;border:1px solid #ffd447;border-radius:13px;padding:13px 12px 18px;box-shadow:0 8px 28px #000d;touch-action:pan-y}",
 "#scanPanel.locked .scanActions,#scanPanel.locked .scanTools{display:none}",
 "#scanPanel .scanDecision .scanChoiceButtons button{min-height:46px;touch-action:manipulation}",
@@ -492,21 +493,89 @@ async function updateCameraControls(){
     if(zoomControl)zoomControl.value=String(t.getSettings?.().zoom??cap.zoom.min);
   }
 }
+// Device labels are available only after camera permission. Prefer a real rear
+// wide-angle device over a telephoto/macro lens when the browser exposes one.
+const frontLabel=label=>/(?:front|frontal|selfie|facetime|user facing)/i.test(label);
+const rearLabel=label=>/(?:back|rear|environment|trasera|posterior|gran angular|wide|macro|telephoto)/i.test(label);
+function cameraPriority(device){
+  const label=String(device.label||"");
+  if(frontLabel(label))return -1000;
+  if(/(?:macro|telephoto|teleobjetivo|tele\b|telefoto|\bzoom\b)/i.test(label))return -100;
+  if(/(?:ultra[ -]?wide|ultra[ -]?gran angular|0[.,]5\s*x)/i.test(label))return 150;
+  if(/(?:wide|gran angular|0[.,]6\s*x)/i.test(label))return 90;
+  return rearLabel(label)?25:0;
+}
+function camerasForFacing(devices){
+  const videos=devices.filter(d=>d.kind==="videoinput"&&d.deviceId);
+  if(facing==="user")return videos.filter(d=>frontLabel(d.label));
+  const rear=videos.filter(d=>rearLabel(d.label)&&!frontLabel(d.label));
+  return rear.length?rear:videos.filter(d=>!frontLabel(d.label));
+}
+function showCameraOptions(activeId){
+  const wrap=$("#scanCameraWrap"),select=$("#scanCameraSelect");
+  if(!wrap||!select)return;
+  select.replaceChildren();
+  availableCameras.forEach((device,i)=>{
+    const option=document.createElement("option");
+    option.value=device.deviceId;
+    const isWide=cameraPriority(device)>=90;
+    option.textContent=(isWide?"Gran angular · ":"")+(device.label||"Cámara "+(i+1));
+    select.appendChild(option);
+  });
+  wrap.hidden=availableCameras.length<2;
+  const current=availableCameras.find(d=>d.deviceId===activeId);
+  if(current)select.value=current.deviceId;
+}
+async function restartCamera(turn){
+  cancelAnimationFrame(scanTimer);releaseFreeze();
+  if(stream){stream.getTracks().forEach(t=>t.stop());stream=null}
+  track=null;if(camera)camera.srcObject=null;
+  await startCamera(turn);
+}
 async function startCamera(turn){
   if(cameraStarting)return;
   cameraStarting=true;
   status("Abriendo cámara…");
   try{
     if(!navigator.mediaDevices?.getUserMedia)throw Error("Tu navegador no permite acceder a la cámara");
+    const videoSettings={width:{ideal:1280},height:{ideal:1920},frameRate:{ideal:24}};
+    const initialVideo=preferredCameraId
+      ?{...videoSettings,deviceId:{exact:preferredCameraId}}
+      :{...videoSettings,facingMode:{ideal:facing}};
     let media;
     try{
-      media=await navigator.mediaDevices.getUserMedia({audio:false,video:{
-        facingMode:{ideal:facing},width:{ideal:1280},height:{ideal:1920},frameRate:{ideal:24},zoom:{ideal:1}
-      }});
+      media=await navigator.mediaDevices.getUserMedia({audio:false,video:initialVideo});
     }catch(e){
-      if(e.name==="OverconstrainedError"||e.name==="NotFoundError"){
-        media=await navigator.mediaDevices.getUserMedia({audio:false,video:true});
+      if(preferredCameraId||e.name==="OverconstrainedError"||e.name==="NotFoundError"){
+        preferredCameraId="";
+        media=await navigator.mediaDevices.getUserMedia({audio:false,video:{...videoSettings,facingMode:{ideal:facing}}})
+          .catch(()=>navigator.mediaDevices.getUserMedia({audio:false,video:true}));
       }else throw e;
+    }
+    if(turn!==session||!running){media.getTracks().forEach(t=>t.stop());return}
+    try{
+      const devices=await navigator.mediaDevices.enumerateDevices();
+      if(turn!==session||!running){media.getTracks().forEach(t=>t.stop());return}
+      availableCameras=camerasForFacing(devices);
+      // Only auto-switch to an explicitly identified wide-angle camera.
+      const wide=availableCameras.slice().sort((a,b)=>cameraPriority(b)-cameraPriority(a))[0];
+      const activeId=media.getVideoTracks()[0]?.getSettings?.().deviceId;
+      const targetId=preferredCameraId||(facing==="environment"&&wide&&cameraPriority(wide)>=90?wide.deviceId:"");
+      if(targetId&&targetId!==activeId){
+        media.getTracks().forEach(t=>t.stop());
+        try{
+          media=await navigator.mediaDevices.getUserMedia({audio:false,video:{...videoSettings,deviceId:{exact:targetId}}});
+        }catch(error){
+          console.warn("No se pudo seleccionar la cámara gran angular",error);
+          preferredCameraId="";
+          media=await navigator.mediaDevices.getUserMedia({audio:false,video:{...videoSettings,facingMode:{ideal:facing}}})
+            .catch(()=>navigator.mediaDevices.getUserMedia({audio:false,video:true}));
+        }
+      }
+    }catch(error){
+      // Some browsers do not expose physical camera enumeration.
+      console.warn("No se pudieron enumerar las cámaras",error);
+      availableCameras=[];
     }
     if(turn!==session||!running){media.getTracks().forEach(t=>t.stop());return}
     stream=media;track=media.getVideoTracks()[0]||null;
@@ -514,6 +583,7 @@ async function startCamera(turn){
     camera.muted=true;camera.setAttribute("playsinline","");
     await camera.play();
     if(turn!==session||!running)return;
+    showCameraOptions(track?.getSettings?.().deviceId||"");
     await updateCameraControls();
     if(turn!==session||!running)return;
     fitGuide();
@@ -527,13 +597,15 @@ async function startCamera(turn){
 }
 async function switchCamera(){
   if(!running)return;
-  session++;
-  const turn=session;
-  cancelAnimationFrame(scanTimer);releaseFreeze();
+  const turn=++session;
   facing=facing==="environment"?"user":"environment";
-  if(stream){stream.getTracks().forEach(t=>t.stop());stream=null}
-  track=null;if(camera)camera.srcObject=null;
-  await startCamera(turn);
+  preferredCameraId="";availableCameras=[];
+  await restartCamera(turn);
+}
+async function selectCamera(deviceId){
+  if(!running||!deviceId||deviceId===track?.getSettings?.().deviceId)return;
+  preferredCameraId=deviceId;
+  await restartCamera(++session);
 }
 async function toggleTorch(){
   if(!track||!running)return;
@@ -574,6 +646,7 @@ async function open(){
     '<div class="scanCounter">Escaneo continuo</div><div class="scanDecision" id="scanDecision" hidden></div></div>'+
     '<div class="scanTools"><button id="scanTorch" hidden>Linterna</button>'+
     '<label id="scanZoomWrap" hidden>Zoom <input id="scanZoom" type="range" min="1" max="2" step=".1"></label>'+
+    '<label id="scanCameraWrap" hidden>Cámara <select id="scanCameraSelect" aria-label="Elegir lente de cámara"></select></label>'+
     '<button id="scanFlip">Cambiar cámara</button></div>'+
     '<div class="scanActions">'+
     '<button id="scanCandidates" hidden disabled>Ver posibles cartas</button><button id="scanRetry">Reiniciar motores</button><button id="scanResume">Continuar</button>'+
@@ -589,6 +662,7 @@ async function open(){
   $("#scanManual").onclick=manual;
   $("#scanTorch").onclick=toggleTorch;
   $("#scanFlip").onclick=switchCamera;
+  $("#scanCameraSelect").onchange=e=>selectCamera(e.target.value);
   $("#scanZoom").oninput=e=>zoomCamera(e.target.value);
   if("ResizeObserver" in window){
     resizeWatcher=new ResizeObserver(fitGuide);resizeWatcher.observe($(".scanStage"));
