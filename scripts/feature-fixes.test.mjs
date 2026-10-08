@@ -96,3 +96,44 @@ test("scanner buttons show copies of the exact selected printing",()=>{
   refresh(null);
   assert.equal(buttons["#scanAutoStop"].textContent,"⏹ PARAR AÑADIDO AUTOMÁTICO");
 });
+
+test("scanner shows price for the exact selected printing, never a sibling",async()=>{
+  const block=between(scanner,"async function updateScannerPrice(card){","function chooseVariant(");
+  const priceNode={textContent:""},selection={value:"OP01-001_p1"};
+  const current={"OP01-001":0.40,"OP01-001_p1":7.25};
+  const update=new Function("priceOf","money","ensurePrices","$","console","running",
+    block+"\nreturn updateScannerPrice;")(
+    c=>current[c.id]??null,
+    n=>n.toFixed(2)+" €",
+    async()=>{},
+    selector=>selector==="#scanCardPrice"?priceNode:selector==="#scanVariant"?selection:null,
+    console,true
+  );
+  await update({id:"OP01-001_p1"});
+  assert.equal(priceNode.textContent,"Precio de esta impresión: 7.25 €");
+  selection.value="OP01-001";
+  await update({id:"OP01-001"});
+  assert.equal(priceNode.textContent,"Precio de esta impresión: 0.40 €");
+  let completeLookup;
+  const missing=new Function("priceOf","money","ensurePrices","$","console","running",
+    block+"\nreturn updateScannerPrice;")(
+    c=>current[c.id]??null,
+    n=>n.toFixed(2)+" €",
+    ()=>new Promise(resolve=>{completeLookup=resolve}),
+    selector=>selector==="#scanCardPrice"?priceNode:selector==="#scanVariant"?selection:null,
+    console,true
+  );
+  selection.value="OP01-002";
+  const pending=missing({id:"OP01-002"});
+  assert.equal(priceNode.textContent,"Consultando precio de esta impresión…");
+  selection.value="OP01-001_p1";
+  completeLookup();
+  await pending;
+  assert.equal(priceNode.textContent,"Consultando precio de esta impresión…",
+    "A delayed lookup must not overwrite the next selected printing");
+  selection.value="OP01-002";
+  await update({id:"OP01-002"});
+  assert.equal(priceNode.textContent,"Precio de esta impresión: no disponible");
+  assert.match(scanner,/void updateScannerPrice\(current\)/);
+  assert.match(scanner,/id="scanCardPrice"/);
+});
