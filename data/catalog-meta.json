@@ -1,11 +1,13 @@
 {
   "updatedAt": "2026-10-08T18:50:59.720Z",
-  "cardCount": 5315,
+  "cardCount": 5488,
   "packCount": 63,
   "source": "hugoprudente/optcgjson",
   "integrity": {
     "preservedPrints": 0,
     "preservedPacks": 0,
     "newSets": []
-  }
+  },
+  "limitlessPrintsAdded": 173,
+  "lastLimitlessPrintSync": "2026-10-08T21:11:23.036Z"
 }
