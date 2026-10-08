@@ -47,6 +47,28 @@ function resolveAmbiguousPrintLinks(outputCards,catalogCards,exactPrintOracle){
     const card=source.get(id);
     if(card){row.expansion=String(card.set_name||card.source_set||card.set||"");row.printSet=String(card.source_set||card.set||"")}
   }
-  return {ambiguousPrints:conflicts.size,ambiguousProducts:[...byProduct.values()].filter(ids=>ids.length>1).length};
+  // A second pass is essential: independently selected oracle URLs may
+  // reintroduce the same Cardmarket link after resolving product conflicts.
+  const finalLinks=new Map();
+  for(const [id,row] of Object.entries(outputCards)){
+    const link=exactUrl(row?.url);
+    if(!link)continue;
+    const key=cardBase(id)+"|"+link;
+    if(!finalLinks.has(key))finalLinks.set(key,[]);
+    finalLinks.get(key).push(id);
+  }
+  let finalAmbiguousURLs=0;
+  for(const ids of finalLinks.values()){
+    if(ids.length<2)continue;
+    finalAmbiguousURLs++;
+    for(const id of ids){
+      const row=outputCards[id],oracle=exactPrintOracle?.priceByPrint?.get(id);
+      row.eur=meaningfulPrice(oracle)?Number(oracle):null;
+      row.trend=null;row.low=null;row.avg=null;row.avg1=null;row.avg7=null;row.avg30=null;
+      row.cardmarketId=null;row.expansionId=null;row.url=null;row.stalePrice=false;
+      row.source="Unverified shared product link withheld; exact oracle price only";
+    }
+  }
+  return {ambiguousPrints:conflicts.size,ambiguousProducts:[...byProduct.values()].filter(ids=>ids.length>1).length,finalAmbiguousURLs};
 }
 module.exports={resolveAmbiguousPrintLinks};
