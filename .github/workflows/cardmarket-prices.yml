@@ -20,7 +20,9 @@ concurrency:
 
 jobs:
   update:
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/audit/full-site-2026-10-08'
+    if: >-
+      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/audit/full-site-2026-10-08') &&
+      !(github.event_name == 'push' && startsWith(github.event.head_commit.message, 'data: update Cardmarket prices'))
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -50,9 +52,9 @@ jobs:
             echo "No price changes"
           else
             git commit -m "data: update Cardmarket prices $(date -u +%Y-%m-%d)"
-            git fetch origin main
-            git rebase origin/main
-            git push
+            git fetch origin "${GITHUB_REF_NAME}"
+            git rebase "origin/${GITHUB_REF_NAME}"
+            git push origin "HEAD:${GITHUB_REF_NAME}"
           fi
 
 # Keep the updater workflow active when its matching script changes.
