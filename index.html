@@ -156,7 +156,7 @@ const LEADER_PLAYSET=1;
 const PAGE=60;
 const state={
   cards:[],packs:[],groups:[],groupByKey:new Map(),prices:{},priceDate:null,importedCards:{},
-  collection:{},decks:[],wishlist:{},user:null,sb:null,
+  collection:{},decks:[],tournaments:[],tournamentId:null,tournamentDraft:null,tournamentRoundDraft:null,wishlist:{},user:null,sb:null,
   tab:"catalog",set:"",query:"",detail:null,deckId:null,
   proxyQuery:"",proxySelection:{},
   catalog:{set:"Todas",category:"Todos",color:"Todos",rarity:"Todos",type:"Todos",attribute:"Todos",ownership:"Todas",sort:"id",dir:"asc",page:1,grouped:true,minCost:"",maxCost:"",minPower:"",maxPower:"",minPrice:"",maxPrice:"",query:"",filtersOpen:false},
@@ -497,6 +497,7 @@ function loadDecksForAccount({migrateLegacy=false}={}){
 function loadAccountLocal({migrateLegacy=false}={}){
   loadCollectionForAccount({migrateLegacy});
   loadDecksForAccount({migrateLegacy});
+  window.tournamentsLoadForAccount?.();
 }
 function saveLocal(){
   localStorage.setItem(deckStorageKey(),JSON.stringify(state.decks.filter(d=>!d?.draftCompetitive)));
@@ -2117,6 +2118,7 @@ function navIcon(id){
     collection:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7.5h14v12H5z"/><path d="M7 4.5h10M8.5 2.5h7"/><path d="M9 12h6M9 15.5h4"/></svg>',
     album:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5c3.2-1 5.8-.4 8 1.4v12c-2.2-1.8-4.8-2.4-8-1.4z"/><path d="M20 5.5c-3.2-1-5.8-.4-8 1.4v12c2.2-1.8 4.8-2.4 8-1.4z"/></svg>',
     decks:'<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="4" width="12" height="16" rx="2"/><path d="M9 8h6M9 11h6M9 14h4"/></svg>',
+    tournaments:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4h8v8a4 4 0 0 1-8 0zM8 6H4v3a4 4 0 0 0 4 4M16 6h4v3a4 4 0 0 1-4 4M12 16v4M8 20h8"/></svg>',
     proxies:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9V3h12v6M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 15h12v6H6zM17 12h1"/></svg>',
     scanner:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M3 16v3a2 2 0 0 0 2 2h3M21 16v3a2 2 0 0 1-2 2h-3"/><path d="M5 12h14M10 9l-2 3 2 3M14 9l2 3-2 3"/></svg>',
     more:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>',
@@ -2128,16 +2130,16 @@ function navIcon(id){
 let sidebarCollapsed=false;
 try{sidebarCollapsed=localStorage.getItem("mialbumonepiece_sidebar_collapsed")==="1"}catch{}
 function nav(){
-  const items=[["catalog","Catálogo"],["collection","Colección"],["album","Expansiones"],["decks","Mazos"],["proxies","Proxies"],["account","Cuenta"]];
+  const items=[["catalog","Catálogo"],["collection","Colección"],["album","Expansiones"],["decks","Mazos"],["tournaments","Torneos"],["proxies","Proxies"],["account","Cuenta"]];
   const tabButton=([id,label],side)=>'<button type="button" class="'+(state.tab===id?"active":"")+'" data-tab="'+id+'" aria-label="'+label+'"'+(state.tab===id?' aria-current="page"':'')+'>'+navIcon(id)+'<span'+(side?' class="side-label"':'')+'>'+label+'</span></button>';
   const scanButton='<button type="button" data-scan-open aria-label="Abrir escáner de cartas">'+navIcon("scanner")+'<span class="side-label">Escáner</span></button>';
-  const side='<aside class="desktop-side" aria-label="Menú principal"><div class="side-head"><span class="side-brand">ONE PIECE</span><button type="button" id="sidebarToggle" class="side-toggle" aria-label="Plegar o desplegar menú" aria-expanded="'+(!sidebarCollapsed)+'">'+navIcon("collapse")+'</button></div><nav class="side-items" aria-label="Secciones">'+items.slice(0,5).map(item=>tabButton(item,true)).join("")+scanButton+tabButton(items[5],true)+'</nav></aside>';
-  const moreActive=state.tab==="proxies"||state.tab==="account";
+  const side='<aside class="desktop-side" aria-label="Menú principal"><div class="side-head"><span class="side-brand">ONE PIECE</span><button type="button" id="sidebarToggle" class="side-toggle" aria-label="Plegar o desplegar menú" aria-expanded="'+(!sidebarCollapsed)+'">'+navIcon("collapse")+'</button></div><nav class="side-items" aria-label="Secciones">'+items.slice(0,6).map(item=>tabButton(item,true)).join("")+scanButton+tabButton(items[6],true)+'</nav></aside>';
+  const moreActive=state.tab==="tournaments"||state.tab==="proxies"||state.tab==="account";
   const mobile='<nav class="nav mobile-nav" aria-label="Secciones principales">'+items.slice(0,4).map(item=>tabButton(item,false)).join("")+'<button type="button" id="mobileMoreToggle" class="'+(moreActive?"active":"")+'" aria-label="Más opciones" aria-expanded="false" aria-controls="mobileMorePanel">'+navIcon("more")+'<span>Más</span></button><div id="mobileMorePanel" class="mobile-more" hidden>'+items.slice(4).map(item=>tabButton(item,false)).join("")+'<button type="button" data-scan-open aria-label="Abrir escáner de cartas">'+navIcon("scanner")+'<span>Escáner</span></button></div></nav>';
   return side+mobile;
 }
 function renderShell(){
-  let main=state.shared?sharedDeckView():(state.tab==="home"?homeView():state.tab==="catalog"?catalogView():state.tab==="collection"?collectionView():state.tab==="album"?albumView():state.tab==="decks"?decksView():state.tab==="proxies"?proxyView():accountView());
+  let main=state.shared?sharedDeckView():(state.tab==="home"?homeView():state.tab==="catalog"?catalogView():state.tab==="collection"?collectionView():state.tab==="album"?albumView():state.tab==="decks"?decksView():state.tab==="tournaments"?(window.tournamentsView?.()||""):state.tab==="proxies"?proxyView():accountView());
   const account='<button class="account" id="accountBtn">'+(state.user?esc(accountDisplayName()||"Cuenta"):"Cuenta")+'</button>';
   document.body.dataset.currentTab=state.tab;
   $("#app").innerHTML='<div class="app'+(sidebarCollapsed?' sidebar-collapsed':'')+'"><header class="top"><div class="brand"><b>ONE PIECE</b><span>MiAlbumOnePiece</span></div>'+account+'</header>'+main+nav()+(state.detail?detailView(state.detail):"")+(state.auth?authModal():"")+(state.newDeck?newDeckModal():"")+'</div>';
@@ -2213,7 +2215,7 @@ function readReloadView(){
 function restoreReloadView(saved){
   if(!saved||state.shared||state.authRecovery)return;
   const {view}=saved;
-  const allowedTabs=new Set(["home","catalog","collection","album","decks","proxies","account"]);
+  const allowedTabs=new Set(["home","catalog","collection","album","decks","tournaments","proxies","account"]);
   if(!allowedTabs.has(view.tab))return;
   const restoreFields=(target,data)=>{
     if(!data||typeof data!=="object"||Array.isArray(data))return;
@@ -2231,6 +2233,7 @@ function restoreReloadView(saved){
   state.deckLibrary=view.deckLibrary!==false;
   state.deckId=state.user&&state.decks.some(d=>d.id===view.deckId)?view.deckId:null;
   if(state.tab==="decks"&&!state.deckId)state.deckLibrary=true;
+  state.tournamentId=state.user&&state.tournaments.some(t=>t.id===view.tournamentId)?view.tournamentId:null;
   state.deckQuery=typeof saved.deckQuery==="string"?saved.deckQuery:"";
   state.deckPage=Math.max(1,Number(saved.deckPage)||1);
   state.deckChoosingLeader=!!saved.deckChoosingLeader;
@@ -2251,7 +2254,7 @@ function restoreReloadView(saved){
 }
 
 function appViewSnapshot(){
-  return {tab:state.tab,albumSet:state.album.set||"",deckLibrary:state.deckLibrary!==false,deckId:state.deckId||null};
+  return {tab:state.tab,albumSet:state.album.set||"",deckLibrary:state.deckLibrary!==false,deckId:state.deckId||null,tournamentId:state.tournamentId||null};
 }
 function replaceAppHistory(){
   const current=history.state&&typeof history.state==="object"?history.state:{};
@@ -2267,6 +2270,8 @@ function restoreAppView(view){
   state.album.set=view.albumSet||"";
   state.deckLibrary=view.deckLibrary!==false;
   state.deckId=view.deckId||null;
+  state.tournamentId=state.user&&state.tournaments.some(t=>t.id===view.tournamentId)?view.tournamentId:null;
+  state.tournamentDraft=null;state.tournamentRoundDraft=null;
   renderShell();
   window.scrollTo({top:0,behavior:"auto"});
   return true;
@@ -2298,7 +2303,7 @@ function bindShell(){
     if(next===state.tab&&!state.detail)return;
     if(state.detail&&detailHistoryActive)history.replaceState({mialbumView:appViewSnapshot()},"",location.href);
     detailHistoryActive=false;state.detail=null;
-    navigateApp(()=>{state.tab=next;state.shared=false});
+    navigateApp(()=>{state.tab=next;state.shared=false;if(next!=="tournaments"){state.tournamentDraft=null;state.tournamentRoundDraft=null}});
   });
   $("#retryCollectionLoad")?.addEventListener("click",async()=>{if(!state.user)return;const id=state.user.id;await loadCollectionFromCloud(id);if(state.user?.id===id)renderShell()});
   $("#accountBtn")?.addEventListener("click",()=>{if(state.tab!=="account")navigateApp(()=>{state.tab="account";state.shared=false})});
@@ -2419,6 +2424,7 @@ function bindShell(){
     $("#clearDeckFilters")?.addEventListener("click",()=>{Object.assign(state.deckFilters,{set:"Todas",category:"Todos",color:"Todos",rarity:"Todos",type:"Todos",attribute:"Todos",ownership:"Todas"});state.deckPage=1;renderShell()});
   }
   if(state.tab==="account"){bindAccount()}
+  if(state.tab==="tournaments")window.tournamentsBind?.();
   if(state.auth){
     $("#login2")?.addEventListener("click",()=>loginFrom("#authLogin2","#authPassword2"));
     $("#register2")?.addEventListener("click",()=>registerFrom("#registerUser2","#registerEmail2","#registerPassword2a","#registerPassword2b"));
@@ -2596,6 +2602,7 @@ async function deleteAccount(){
     if(!res.ok)throw Error(data?.error||"No se pudo eliminar la cuenta");
     localStorage.removeItem(collectionStorageKey(userId));
     localStorage.removeItem(deckStorageKey(userId));
+    localStorage.removeItem("mialbumonepiece_tournaments_"+userId);
     if(localStorage.getItem("mialbumonepiece_collection_legacy_owner")===userId)localStorage.removeItem("mialbumonepiece_collection_legacy_owner");
     if(localStorage.getItem("mialbumonepiece_decks_legacy_owner")===userId)localStorage.removeItem("mialbumonepiece_decks_legacy_owner");
     try{await sb.auth.signOut()}catch{}
@@ -3316,5 +3323,6 @@ window.addEventListener("popstate",e=>{
 <script src="/scanner.js"></script>
 <script src="/proxy-generator.js"></script>
 <script src="/deck-image-share.js"></script>
+<script src="/tournaments.js"></script>
 </body>
 </html>
