@@ -464,10 +464,14 @@ async function loadLimitlessPrintMappings(cards) {
   for (const [base, group] of groups) {
     const hasVariants = group.some(card => String(card?.id || "").toUpperCase() !== base);
     const isPromo = /^P-\d{3}$/i.test(base);
-    if (hasVariants || isPromo) needed.push([base, group]);
+    // Scan all already-variant cards daily. Rotate through the remaining
+    // base-only cards: every possible card is revisited at least every 5 days.
+    const slot=Math.floor(Date.now()/86400000)%5;
+    const hash=[...base].reduce((n,ch)=>(n*31+ch.charCodeAt(0))%5,0);
+    if (hasVariants || isPromo || hash===slot) needed.push([base, group]);
   }
 
-  const result = new Map();
+  const result = new Map(),discovered=new Map();
   let cursor = 0;
 
   const fetchHtml = async (url) => {
@@ -489,17 +493,26 @@ async function loadLimitlessPrintMappings(cards) {
     }
   };
 
-  const assignPage = (map, localIds, page, limitlessVersion) => {
-    const printId = String(page?.printId || "").toUpperCase();
-    if (!printId || !localIds.has(printId)) return;
-    if (!page.cardmarketUrl && page.eur === null) return;
-    map.set(printId, {
-      eur: page.eur,
-      url: page.cardmarketUrl ? page.cardmarketUrl.replace("/en/OnePiece/", "/es/OnePiece/") : null,
-      expansion: page.expansion || null,
-      limitlessUrl: page.requestedUrl,
+  const assignPage = (map, localIds, base, page, limitlessVersion) => {
+    const key=String(page?.printId||"").toUpperCase();
+    if(!key||baseId(key).toUpperCase()!==base)return;
+    if(!/^(?:P-\d{3}|(?:OP|EB|ST|PRB)\d{2,3}-\d{3})(?:_[PRC]\d+)?$/.test(key))return;
+    if(!page?.imageUrl)return; // Exact image filename is required as proof.
+    const info={
+      eur:page.eur,
+      url:page.cardmarketUrl?page.cardmarketUrl.replace("/en/OnePiece/","/es/OnePiece/"):null,
+      expansion:page.expansion||null,
+      image:page.imageUrl,
+      limitlessUrl:page.requestedUrl,
       limitlessVersion
-    });
+    };
+    if(localIds.has(key)){
+      map.set(key,info);
+    }else if(/_[PRC]\d+$/.test(key)){
+      const canonical=key.replace(/_([PRC])(\d+)$/,(_,kind,n)=>"_"+kind.toLowerCase()+n);
+      discovered.set(canonical,{id:canonical,...info});
+      map.set(key,info);
+    }
   };
 
   const worker = async () => {
@@ -516,7 +529,7 @@ async function loadLimitlessPrintMappings(cards) {
 
         // The un-versioned Limitless page is the exact base print.
         if (localIds.has(base)) {
-          assignPage(result, localIds, basePage, null);
+          assignPage(result, localIds, base, basePage, null);
         }
 
         // Every versioned Limitless page carries the official image filename,
@@ -530,7 +543,7 @@ async function loadLimitlessPrintMappings(cards) {
             const html = await fetchHtml(url);
             if (!html) return;
             const page = parseLimitlessPage(html, url);
-            assignPage(result, localIds, page, version);
+            assignPage(result, localIds, base, page, version);
           } catch (error) {
             console.warn("Limitless version mapping failed:", base, version, error?.message || error);
           }
@@ -542,7 +555,8 @@ async function loadLimitlessPrintMappings(cards) {
   };
 
   await Promise.all(Array.from({length:4}, () => worker()));
-  return result;
+  console.log("Limitless verified new printing candidates:",discovered.size,"scanned:",needed.length);
+  return {mapped:result,discovered};
 }
 
 function externalExpansionSlug(url) {
@@ -927,7 +941,36 @@ async function main() {
   const cards = normalizeCardCatalog(JSON.parse(localCardsRaw)).map(card => ({
     ...card, set_name: String(card.set_name || dynamicSetNames.get(card.set) || "")
   })).filter(card => !isJapaneseCard(card));
-  const limitlessPrintMappings = await loadLimitlessPrintMappings(cards);
+  const limitlessResults = await loadLimitlessPrintMappings(cards);
+  const limitlessPrintMappings=limitlessResults.mapped;
+  const knownPrints=new Set(cards.map(c=>String(c.id).toUpperCase()));
+  const addedFromLimitless=[];
+  for(const print of limitlessResults.discovered.values()){
+    if(knownPrints.has(print.id.toUpperCase()))continue;
+    const base=cards.find(c=>baseId(c.id).toUpperCase()===baseId(print.id).toUpperCase());
+    if(!base)continue;
+    const expansion=String(print.expansion||"").trim();
+    const physicalMatches=packs.filter(pack=>expansionMatches(String(pack.code||"").toUpperCase(),expansion,String(pack.name||"")));
+    let source=physicalMatches.length===1?String(physicalMatches[0].code):
+      expansionMatches(sourceSetCode(base),expansion,base.set_name)?String(base.source_set||base.set):
+      /premium card collection|limited product/i.test(expansion)?"LIMITEDPRODUCTCARD":
+      /tournament|promo|event pack|winner/i.test(expansion)?"PROMOTIONCARD":"OTHER-PRODUCT-CARD";
+    if(!packs.some(pack=>String(pack.code).toUpperCase()===source.toUpperCase()))source=String(base.source_set||base.set);
+    const card={
+      ...base,
+      id:print.id,
+      set:source,
+      source_set:source,
+      origin_set:String(base.origin_set||base.set),
+      set_name:expansion||String(base.set_name||source),
+      pack_name:expansion||source,
+      image:print.image,
+      isParallel:/_[pc]\\d+$/i.test(print.id),
+      catalogSource:"Limitless exact English print verified by image filename"
+    };
+    cards.push(card);knownPrints.add(print.id.toUpperCase());addedFromLimitless.push(print.id);
+  }
+  if(addedFromLimitless.length)console.log("NEW_LIMITLESS_PRINTS",addedFromLimitless.length,JSON.stringify(addedFromLimitless.slice(0,120)));
 
   const allProducts = readProducts(productsRaw);
   const products = allProducts.filter(product => isEnglishProduct(product, languageMap.japaneseExpansionIds));
@@ -1213,6 +1256,14 @@ async function main() {
     return;
   }
 
+  if(addedFromLimitless.length){
+    await fs.writeFile(new URL("../data/cards.json",import.meta.url),JSON.stringify(cards,null,2)+"\\n","utf8");
+    const meta=JSON.parse(await fs.readFile(new URL("../data/catalog-meta.json",import.meta.url),"utf8"));
+    meta.cardCount=cards.length;
+    meta.limitlessPrintsAdded=(Number(meta.limitlessPrintsAdded)||0)+addedFromLimitless.length;
+    meta.lastLimitlessPrintSync=new Date().toISOString();
+    await fs.writeFile(new URL("../data/catalog-meta.json",import.meta.url),JSON.stringify(meta,null,2)+"\\n","utf8");
+  }
   await fs.writeFile(
     new URL("../data/cardmarket-prices.json", import.meta.url),
     JSON.stringify(payload, null, 2) + "\n",
