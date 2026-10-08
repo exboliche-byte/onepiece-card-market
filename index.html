@@ -979,6 +979,41 @@ function bindCompetitiveLeaderButtons(){
     bindCompetitiveLeaderButtons();
   });
 }
+// When adapting an external decklist, prefer the actual printings in the
+// signed-in user's cloud collection; never change collection quantities.
+function ownedDeckPrintings(c){
+  if(!c||!state.user||!state.collectionReady)return [];
+  return state.cards.filter(v=>groupKey(v)===groupKey(c)&&qty(v.id)>0)
+    .sort((a,b)=>qty(b.id)-qty(a.id)||(a.id===c.id?-1:b.id===c.id?1:String(a.id).localeCompare(String(b.id),"es",{numeric:true})));
+}
+function preferredOwnedDeckPrinting(c){
+  if(!c)return null;
+  return qty(c.id)>0?c:ownedDeckPrintings(c)[0]||c;
+}
+function competitiveDeckPreviewCards(result){
+  const cards={},groupCounts=new Map();
+  let unresolved=0;
+  for(const [id,qRaw] of Object.entries(result?.cards||{})){
+    const requested=Math.max(0,Math.floor(Number(qRaw)||0));
+    if(!requested)continue;
+    const cc=resolveDeckImportCard(id);
+    if(!cc||cc.category==="Leader"){unresolved+=requested;continue}
+    const group=groupKey(cc),limit=deckCopyLimit(cc);
+    const allowed=Math.max(0,Math.min(requested,limit-(groupCounts.get(group)||0)));
+    groupCounts.set(group,(groupCounts.get(group)||0)+allowed);
+    if(!allowed)continue;
+    let remaining=allowed;
+    for(const ownedCard of ownedDeckPrintings(cc)){
+      const count=Math.min(remaining,Math.max(0,qty(ownedCard.id)-(cards[ownedCard.id]||0)));
+      if(count){cards[ownedCard.id]=(cards[ownedCard.id]||0)+count;remaining-=count}
+      if(!remaining)break;
+    }
+    // Keep any unowned remainder under the original external card ID.
+    // This makes only genuinely missing copies appear in grey.
+    if(remaining)cards[cc.id]=(cards[cc.id]||0)+remaining;
+  }
+  return {cards,unresolved};
+}
 function competitiveDeckOwnedStats(result){
   let owned=0,missing=0,cost=0;
   const leader=resolveDeckImportCard(result?.leaderId);
@@ -996,7 +1031,7 @@ function competitiveDeckOwnedStats(result){
   return {owned,missing,cost,total:1+Number(result?.mainCount||0)};
 }
 function competitiveResultHtml(result,index){
-  const stats=competitiveDeckOwnedStats(result),rec=result.record||{},leader=resolveDeckImportCard(result.leaderId);
+  const stats=competitiveDeckOwnedStats(result),rec=result.record||{},leader=preferredOwnedDeckPrinting(resolveDeckImportCard(result.leaderId));
   const date=result.date?new Date(result.date).toLocaleDateString("es-ES"):"Fecha —";
   const record=Number(rec.wins||0)+'-'+Number(rec.losses||0)+'-'+Number(rec.ties||0);
   const place=Number(result.placing||0)?Number(result.placing)+'.º':'—';
@@ -1048,15 +1083,9 @@ function competitiveDraftName(result){
 }
 function openCompetitiveDeckPreview(index){
   const result=state.deckDiscoverResults[Number(index)];if(!result)return;
-  const leaderCard=resolveDeckImportCard(result.leaderId);
+  const leaderCard=preferredOwnedDeckPrinting(resolveDeckImportCard(result.leaderId));
   if(!leaderCard||leaderCard.category!=="Leader")return notify("No encuentro ese líder en el catálogo actual");
-  const cards={};let unresolved=0;
-  for(const [id,qRaw] of Object.entries(result.cards||{})){
-    const cc=resolveDeckImportCard(id),q=Math.max(0,Number(qRaw)||0);
-    if(!cc||cc.category==="Leader"){unresolved+=q;continue}
-    const limit=deckCopyLimit(cc);
-    cards[cc.id]=Math.min(limit,(cards[cc.id]||0)+q);
-  }
+  const {cards,unresolved}=competitiveDeckPreviewCards(result);
   state.decks=state.decks.filter(d=>!d?.draftCompetitive);
   const date=result.date?new Date(result.date).toLocaleDateString("es-ES"):"";
   const draft={
