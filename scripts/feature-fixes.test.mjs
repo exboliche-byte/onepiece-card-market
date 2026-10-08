@@ -137,3 +137,39 @@ test("scanner shows price for the exact selected printing, never a sibling",asyn
   assert.match(scanner,/void updateScannerPrice\(current\)/);
   assert.match(scanner,/id="scanCardPrice"/);
 });
+
+test("scanner updates selected and persistent copy counts after confirmed collection writes",()=>{
+  const html=read("index.html");
+  assert.match(html,/window\.dispatchEvent\(new CustomEvent\("mialbum:collection-updated"/);
+  assert.match(scanner,/window\.addEventListener\("mialbum:collection-updated"/);
+  const local=between(scanner,"function ownedCount(id){","async function updateScannerPrice(card){");
+  const cards=[{id:"OP01-001",name:"Carta 1"},{id:"OP01-001_p1",name:"Carta 1"}];
+  const values={"OP01-001":1,"OP01-001_p1":2};
+  const nodes={
+    "#scanVariant":{value:"OP01-001_p1"},
+    "#scanAddOne":{textContent:""},
+    "#scanAutoStop":{textContent:""},
+    "#scanExactCount":{textContent:""},
+    "#scanGroupCount":{textContent:""},
+    "#scanOwnedLive":{hidden:true,textContent:""}
+  };
+  const refresh=new Function("qty","$","running","panel","state","cardByCode","idBase","playsetTarget","lastScannedPrintId",
+    local+"\nreturn refreshScannerCopies;")(
+    id=>values[id]||0,selector=>nodes[selector]||null,true,()=>true,{cards},
+    ()=>cards,()=> "OP01-001",()=>4,"OP01-001_p1"
+  );
+  refresh();
+  assert.match(nodes["#scanOwnedLive"].textContent,/OP01-001_p1 · Tienes 2 copias/);
+  assert.match(nodes["#scanAddOne"].textContent,/Ya tienes 2$/);
+  assert.match(nodes["#scanGroupCount"].textContent,/Tienes 3 copias de esta carta/);
+  values["OP01-001_p1"]=3;
+  refresh("OP01-001_p1");
+  assert.match(nodes["#scanOwnedLive"].textContent,/Tienes 3 copias/);
+  assert.match(nodes["#scanAddOne"].textContent,/Ya tienes 3$/);
+  assert.match(nodes["#scanGroupCount"].textContent,/Tienes 4 copias de esta carta/);
+  refresh("OP01-002");
+  assert.match(nodes["#scanAddOne"].textContent,/Ya tienes 3$/);
+  nodes["#scanVariant"].value="OP01-001";
+  refresh();
+  assert.match(nodes["#scanOwnedLive"].textContent,/OP01-001 · Tienes 1 copia$/);
+});
