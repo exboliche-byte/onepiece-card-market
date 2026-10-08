@@ -1062,7 +1062,7 @@ function collectionView(){
   if(!state.collectionReady)return '<div class="wrap"><div class="hero"><h1>Mi colección</h1></div><div class="notice">Cargando la colección desde Supabase…</div><button class="secondary btn" id="retryCollectionLoad">Reintentar carga</button></div>';
   if(state.collectionStatsOpen)return collectionStatisticsView();
   return '<div class="wrap"><div class="hero"><div><h1>Mi colección</h1><p>Todas mis cartas, todos los sets, filtrables y ordenables.</p></div></div>'+
-    '<button type="button" class="secondary btn collection-stats-entry" id="openCollectionStats" style="width:100%;padding:16px;margin:0 0 15px;text-align:left;display:flex;justify-content:space-between;align-items:center;gap:12px"><span><b>📊 Estadísticas de mi colección</b><span style="display:block;font-size:12px;margin-top:4px;color:var(--muted)">Valor, progreso, gráfica histórica y subidas/bajadas</span></span><span>Ver estadísticas →</span></button>'+
+    '<button type="button" class="secondary btn collection-stats-entry" id="openCollectionStats" style="padding:9px 13px;margin:0 0 12px;font-size:13px;font-weight:750;display:inline-flex;align-items:center;gap:8px">📊 Estadísticas de mi colección <span aria-hidden="true">→</span></button>'+
     collectionToolbar()+'<div id="collectionResults"></div></div>';
 }
 function collectionStatisticsBreakdowns(){
@@ -1682,6 +1682,35 @@ async function importAllDecksFile(file){
   }finally{decksBackupBusy=false}
 }
 
+async function clearAllDecks(){
+  if(decksBackupBusy)return notify("Termina antes la importación de mazos.");
+  if(!state.user||!state.sb)return notify("Inicia sesión para borrar tus mazos.");
+  const userId=state.user.id;
+  const amount=state.decks.filter(d=>!d.draftCompetitive).length;
+  if(!confirm("¿Borrar TODOS tus "+amount+" mazos de Supabase? También se eliminarán sus cartas guardadas y enlaces compartidos. No se borrarán la colección ni los torneos. Esta acción es irreversible."))return;
+  if(prompt('Escribe BORRAR para eliminar definitivamente TODOS tus mazos:')!=="BORRAR"){
+    notify("Borrado cancelado");return;
+  }
+  if(state.user?.id!==userId)return;
+  decksBackupBusy=true;
+  const button=$("#deleteAllDecks");if(button){button.disabled=true;button.textContent="Eliminando mazos…"}
+  try{
+    const result=await state.sb.from("decks").delete().eq("user_id",userId);
+    if(result.error)throw result.error;
+    const check=await state.sb.from("decks").select("id").eq("user_id",userId).limit(1);
+    if(check.error)throw check.error;
+    if(check.data?.length)throw Error("Aún quedan mazos en Supabase.");
+    if(state.user?.id!==userId)return;
+    state.decks=[];state.deckId=null;state.deckLibrary=true;state.deckChoosingLeader=false;
+    saveLocal();renderShell();
+    notify("Todos tus mazos han sido eliminados de Supabase.");
+  }catch(error){
+    console.warn("Error al borrar todos los mazos",error);
+    if(state.user?.id===userId){
+      notify("No se pudo confirmar el borrado; recarga para consultar el estado real.");
+    }
+  }finally{decksBackupBusy=false}
+}
 function exportDeckFile(){
   const d=state.decks.find(x=>x.id===state.deckId);if(!d)return notify("Abre un mazo para exportarlo");
   closeDeckListModal();
@@ -2062,7 +2091,8 @@ function accountView(){
     '<div><h3>Todos los mazos</h3><p class="small">Guarda todos los mazos en un archivo JSON o añade los de una copia de seguridad sin borrar los actuales.</p>'+
     '<div class="inline-actions"><button class="secondary btn" id="exportAllDecks">Exportar todos los mazos</button>'+
     '<button class="secondary btn" id="importAllDecks">Importar todos los mazos</button>'+
-    '<input id="decksBackupFile" type="file" class="fileinput" accept=".json,application/json"></div></div>'+
+    '<input id="decksBackupFile" type="file" class="fileinput" accept=".json,application/json">'+
+    '<button class="danger btn" id="deleteAllDecks">Borrar todos mis mazos</button></div></div>'+
     '<div><h3>Mis torneos</h3><p class="small">Los torneos se guardan en este navegador por cuenta. Exporta JSON para conservarlos; importa copias sin sobrescribir torneos existentes.</p>'+
     '<div class="inline-actions"><button class="secondary btn" id="exportTournamentsBackup">Exportar torneos (JSON)</button>'+
     '<button class="secondary btn" id="importTournamentsBackup">Importar torneos (JSON)</button>'+
@@ -2545,6 +2575,7 @@ function bindAccount(){
     if(file)await file.text().then(previewImport).catch(error=>alert("Error leyendo CSV: "+error.message));
   });
   $("#deletePersonalCollection")?.addEventListener("click",clearCollection);
+  $("#deleteAllDecks")?.addEventListener("click",clearAllDecks);
   $("#exportAllDecks")?.addEventListener("click",exportAllDecksFile);
   $("#importAllDecks")?.addEventListener("click",()=>$("#decksBackupFile")?.click());
   $("#decksBackupFile")?.addEventListener("change",async e=>{
