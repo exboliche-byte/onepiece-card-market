@@ -54,6 +54,19 @@
 .deck-stats-content .stats{margin-bottom:8px}
 .deck-stats-content .validation{margin-bottom:0}
 @media(max-width:500px){.deck-compact-hero{align-items:center}.deck-compact-title h1{font-size:clamp(24px,7vw,32px)}.deck-action-menu>summary{padding:9px 10px;font-size:13px}.deck-stats-badge{font-size:11px}.deck-stats-expand{font-size:11px}}
+
+.account-data-panel>summary{cursor:pointer;list-style:none;font-size:17px;font-weight:800}
+.account-data-panel>summary::-webkit-details-marker{display:none}
+.account-data-panel>summary::after{content:" ▾";float:right;color:var(--muted)}
+.account-data-panel[open]>summary::after{content:" ▴"}
+.account-backup-sections{display:grid;gap:15px;margin-top:15px}
+.account-backup-sections>div+div{border-top:1px solid var(--line);padding-top:12px}
+.account-backup-sections h3,.collection-expensive h3{margin:0 0 6px;font-size:15px}
+.account-backup-sections .inline-actions{display:flex;gap:8px;flex-wrap:wrap}
+.account-backup-sections .btn{font-size:12px}
+.collection-expensive{border-top:1px solid var(--line);padding-top:12px}
+.collection-expensive .listrow{justify-content:flex-start}
+.collection-expensive .thumb{width:56px;height:78px}
 </style>
 </head>
 <body>
@@ -437,12 +450,18 @@ function collectionStats(){
   const incomplete=state.cards.filter(c=>qty(c.id)>0&&qty(c.id)<playsetTarget(c)).length;
   const distinctTotal=state.cards.length;
   const completePct=distinctTotal?distinct/distinctTotal*100:0;
-  let value=0;
+  let value=0,mostExpensive=null;
   for(const c of state.cards){
     const q=qty(c.id);
-    if(q>0)value+=q*(collectionPriceOf(c)??0);
+    if(q<=0)continue;
+    const unit=collectionPriceOf(c);
+    if(unit!==null&&Number.isFinite(unit)&&unit>=0){
+      value+=q*unit;
+      if(!mostExpensive||unit>mostExpensive.unit)
+        mostExpensive={card:c,unit,quantity:q};
+    }
   }
-  return {distinct,copies,playsets,incomplete,distinctTotal,completePct,value};
+  return {distinct,copies,playsets,incomplete,distinctTotal,completePct,value,mostExpensive};
 }
 function option(values,current){return values.map(v=>'<option value="'+esc(v)+'" '+(String(v)===String(current)?"selected":"")+'>'+esc(v)+'</option>').join("")}
 function values(key,from=state.cards){return uniqueSorted(from.flatMap(c=>Array.isArray(c[key])?c[key]:[c[key]]))}
@@ -940,7 +959,7 @@ function collectionToolbar(){
     '</div>'+
     '<button class="secondary btn filter-toggle" id="collectionFilterToggle" type="button" aria-expanded="'+(f.filtersOpen?"true":"false")+'">🔽 FILTRO'+(n?' ('+n+')':'')+'</button>'+
   '</div>'+collectionFilterPanel()+
-  '<div class="row" style="margin-bottom:10px"><span class="hint">Aquí solo aparecen las cartas que tienes.</span><details class="io-details"><summary>Gestionar datos</summary><div class="inline-actions" style="margin-top:8px"><button class="secondary btn" id="exportCsv">Exportar CSV</button><button class="secondary btn" id="importCsv">Importar CSV</button><input id="csvFile" type="file" class="fileinput" accept=".csv,text/csv"></div></details></div>';
+  '<p class="hint">Aquí aparecen las cartas que tienes. Importar y exportar está en Cuenta → Datos y copias de seguridad.</p>';
 }
 
 async function renderCollectionResults(){
@@ -954,7 +973,7 @@ async function renderCollectionResults(){
   const list=filteredCards("collection"),pages=Math.max(1,Math.ceil(list.length/PAGE));state.collection.page=Math.min(state.collection.page,pages);
   const start=(state.collection.page-1)*PAGE,visible=list.slice(start,start+PAGE),active=collectionActiveFilterCount();
   const stats=collectionStats(),empty=list.length===0&&stats.copies>0;
-  host.innerHTML='<div class="notice">'+list.length.toLocaleString("es-ES")+' cartas en tu colección · '+stats.copies.toLocaleString("es-ES")+' copias totales.'+(active?' Filtros activos: '+active+'.':'')+'</div>'+(empty?'<div class="section center"><b>Tu colección tiene cartas, pero no hay resultados visibles.</b><p class="muted">Limpia los filtros para volver a mostrarlas.</p><button class="secondary btn" id="collectionResetVisible">Limpiar filtros</button></div>':'<div class="grid">'+visible.map(c=>cardTile(c)).join("")+'</div>'+pagination(list.length,state.collection.page,"collection"));
+  host.innerHTML='<div class="notice">'+list.length.toLocaleString("es-ES")+' resultados.'+(active?' Filtros activos: '+active+'.':'')+'</div>'+(empty?'<div class="section center"><b>Tu colección tiene cartas, pero no hay resultados visibles.</b><p class="muted">Limpia los filtros para volver a mostrarlas.</p><button class="secondary btn" id="collectionResetVisible">Limpiar filtros</button></div>':'<div class="grid">'+visible.map(c=>cardTile(c)).join("")+'</div>'+pagination(list.length,state.collection.page,"collection"));
   bindResultEvents(host);
   $("#collectionResetVisible")?.addEventListener("click",()=>{Object.assign(state.collection,{query:"",set:"Todas",category:"Todos",color:"Todos",rarity:"Todos",type:"Todos",attribute:"Todos",quantity:"Todas",playset:"Todas",page:1});renderShell()});
   if(state.collection.sort!=="price"){
@@ -968,12 +987,31 @@ function collectionView(){
   if(!state.user)return '<div class="wrap"><div class="hero"><h1>Mi colección</h1></div><div class="section center"><h2>Inicia sesión para ver tu colección</h2><p class="muted">Solo se guarda y consulta desde tu cuenta de Supabase.</p><button class="primary btn" data-tab="account">Iniciar sesión</button></div></div>';
   if(!state.collectionReady)return '<div class="wrap"><div class="hero"><h1>Mi colección</h1></div><div class="notice">Cargando la colección desde Supabase…</div><button class="secondary btn" id="retryCollectionLoad">Reintentar carga</button></div>';
   const s=collectionStats();
-  return '<div class="wrap"><div class="hero"><div><h1>Mi colección</h1><p>Todas mis cartas, todos los sets, filtrables y ordenables.</p></div><button class="danger btn" id="deletePersonalCollection" type="button">Borrar mi colección</button></div>'+
-    '<div class="stats"><div class="stat"><b id="collectionValue">'+money(s.value)+'</b><span>Valor de mis cartas</span></div></div>'+collectionToolbar()+'<div id="collectionResults"></div></div>';
+  return '<div class="wrap"><div class="hero"><div><h1>Mi colección</h1><p>Todas mis cartas, todos los sets, filtrables y ordenables.</p></div></div>'+
+    '<details class="deck-stats-toggle collection-stats-toggle"><summary><b>📊 Estadísticas de mi colección</b><span class="deck-stats-expand">Ver detalles</span></summary>'+
+    '<div class="deck-stats-content" id="collectionStatsContent">'+collectionStatsDetails(s)+'</div></details>'+
+    collectionToolbar()+'<div id="collectionResults"></div></div>';
+}
+function collectionStatsDetails(s){
+  const expensive=s.mostExpensive;
+  return '<div class="stats">'+
+    '<div class="stat"><b>'+money(s.value)+'</b><span>Valor estimado</span></div>'+
+    '<div class="stat"><b>'+s.distinct.toLocaleString("es-ES")+'</b><span>Versiones distintas</span></div>'+
+    '<div class="stat"><b>'+s.copies.toLocaleString("es-ES")+'</b><span>Copias totales</span></div>'+
+    '<div class="stat"><b>'+s.playsets.toLocaleString("es-ES")+'</b><span>Playsets completos</span></div>'+
+    '<div class="stat"><b>'+s.incomplete.toLocaleString("es-ES")+'</b><span>Playsets incompletos</span></div>'+
+    '<div class="stat"><b>'+s.completePct.toFixed(1)+'%</b><span>Versiones del catálogo conseguidas</span></div></div>'+
+    '<div class="collection-expensive"><h3>Carta más cara</h3>'+
+    (expensive?'<div class="listrow">'+cardImg(expensive.card,"thumb")+
+      '<div class="grow"><b>'+esc(expensive.card.name||expensive.card.id)+'</b>'+
+      '<div class="small">'+esc(expensive.card.id)+' · '+esc(cardPrintLabel(expensive.card))+'</div>'+
+      '<div><b>'+money(expensive.unit)+'</b><span class="small"> por copia · '+expensive.quantity+' en colección ('+money(expensive.unit*expensive.quantity)+' en total)</span></div></div></div>'
+      :'<p class="small">No hay cartas con precio disponible en tu colección.</p></div>')+
+    '<p class="hint">Valores de referencia según el precio actual de cada impresión.</p>';
 }
 function updateCollectionValue(){
-  const el=$("#collectionValue");
-  if(el)el.textContent=money(collectionStats().value);
+  const el=$("#collectionStatsContent");
+  if(el)el.innerHTML=collectionStatsDetails(collectionStats());
 }
 function albumView(){
   const f=state.album;
@@ -1356,6 +1394,96 @@ function openDeckImportDialog(){
   $("#importDeckListConfirm").onclick=()=>{const text=$("#deckListInput")?.value||"";if(!text.trim())return notify("Pega una lista de cartas");const name=$("#deckListName")?.value?.trim()||"Mazo importado";if(importDeckText(text,name))closeDeckListModal()};
   setTimeout(()=>$("#deckListInput")?.focus(),0);
 }
+
+const ALL_DECKS_BACKUP_FORMAT="mialbumonepiece-decks";
+let decksBackupBusy=false;
+function deckBackupContent(d){
+  return {name:String(d.name||""),description:String(d.description||""),
+    leader:String(d.leader||""),cards:{...(d.cards||{})},
+    colors:Array.isArray(d.colors)?d.colors.slice():[]};
+}
+function deckBackupFingerprint(d){
+  const b=deckBackupContent(d);
+  return JSON.stringify([b.name,b.description,b.leader,
+    Object.entries(b.cards).sort(([a],[b])=>a.localeCompare(b)),b.colors]);
+}
+function exportAllDecksFile(){
+  if(!state.user)return notify("Inicia sesión para exportar mazos.");
+  const decks=state.decks.filter(d=>!d.draftCompetitive).map(deckBackupContent);
+  const data={format:ALL_DECKS_BACKUP_FORMAT,version:1,exportedAt:new Date().toISOString(),decks};
+  const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});
+  const url=URL.createObjectURL(blob),link=document.createElement("a");
+  link.href=url;link.download="mialbumonepiece-mazos-"+new Date().toISOString().slice(0,10)+".json";
+  document.body.appendChild(link);link.click();link.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),60000);
+  notify("Exportados "+decks.length+" mazos en un archivo.");
+}
+function validateDeckBackup(raw){
+  if(!raw||raw.format!==ALL_DECKS_BACKUP_FORMAT||raw.version!==1||!Array.isArray(raw.decks))
+    throw Error("Archivo no compatible. Selecciona un JSON exportado desde «Todos los mazos».");
+  if(raw.decks.length>500)throw Error("El archivo contiene demasiados mazos.");
+  return raw.decks.map((d,i)=>{
+    if(!d||typeof d!=="object"||Array.isArray(d))throw Error("Mazo "+(i+1)+" inválido.");
+    const {name,description="",leader="",colors=[],cards={}}=d;
+    if(typeof name!=="string"||!name.trim()||name.length>120||
+      typeof description!=="string"||description.length>2000||
+      typeof leader!=="string"||leader.length>128||
+      !Array.isArray(colors)||colors.length>8||colors.some(c=>typeof c!=="string"||c.length>60)||
+      !cards||typeof cards!=="object"||Array.isArray(cards))
+      throw Error("Datos incorrectos en el mazo "+(i+1)+".");
+    const rows=Object.entries(cards),copyCounts=Object.create(null);
+    if(rows.length>50)throw Error("Demasiadas cartas distintas en el mazo "+(i+1)+".");
+    let total=0;
+    for(const [id,q] of rows){
+      if(!id||id.length>128||["__proto__","prototype","constructor"].includes(id)||
+        !Number.isSafeInteger(q)||q<=0||q>50)
+        throw Error("Carta o cantidad incorrecta en el mazo "+(i+1)+".");
+      copyCounts[id]=q;total+=q;
+    }
+    if(total>50)throw Error("El mazo "+(i+1)+" supera las 50 cartas.");
+    return {name:name.trim(),description,leader,colors:colors.slice(),cards:copyCounts};
+  });
+}
+async function importAllDecksFile(file){
+  if(decksBackupBusy)return notify("Ya se está importando un archivo.");
+  if(!state.user||!state.sb)return notify("Inicia sesión para importar mazos.");
+  if(file.size>5*1024*1024)return alert("El archivo supera 5 MB.");
+  let parsed;
+  try{parsed=validateDeckBackup(JSON.parse(await file.text()))}
+  catch(e){return alert("No se pudo importar: "+e.message)}
+  const seen=new Set(state.decks.filter(d=>!d.draftCompetitive).map(deckBackupFingerprint)),newDecks=[];
+  for(const d of parsed){
+    const fingerprint=deckBackupFingerprint(d);
+    if(seen.has(fingerprint))continue;
+    seen.add(fingerprint);
+    newDecks.push({...d,id:crypto.randomUUID(),owner_id:state.user.id,updatedAt:new Date().toISOString()});
+  }
+  if(!newDecks.length)return notify("Todos los mazos del archivo ya están guardados.");
+  if(!confirm("Se añadirán "+newDecks.length+" mazos nuevos de "+parsed.length+" en el archivo."+
+    "\nLos mazos idénticos se omitirán. No se borrará ni sustituirá ninguno de los actuales.\n\n¿Continuar?"))return;
+  decksBackupBusy=true;
+  const userId=state.user.id,saved=[];
+  try{
+    for(const d of newDecks){
+      if(state.user?.id!==userId)throw Error("La sesión ha cambiado.");
+      if(!await syncDeck(d)){
+        await syncDeckDelete(d.id);
+        throw Error("No se pudo sincronizar «"+d.name+"».");
+      }
+      saved.push(d);
+    }
+    if(state.user?.id!==userId)throw Error("La sesión ha cambiado.");
+    state.decks.push(...saved);saveLocal();renderShell();
+    notify("Importados "+saved.length+" mazos sin borrar los anteriores.");
+  }catch(e){
+    if(state.user?.id===userId&&saved.length){
+      state.decks.push(...saved);saveLocal();renderShell();
+    }
+    alert("Importación detenida: "+e.message+"\nAñadidos "+saved.length+" de "+newDecks.length+
+      ". Puedes importar de nuevo; se omitirán los idénticos.");
+  }finally{decksBackupBusy=false}
+}
+
 function exportDeckFile(){
   const d=state.decks.find(x=>x.id===state.deckId);if(!d)return notify("Abre un mazo para exportarlo");
   closeDeckListModal();
@@ -1703,6 +1831,18 @@ function accountView(){
   const name=accountDisplayName();
   return '<div class="wrap"><div class="hero"><div><h1>Cuenta</h1><p>'+(state.user?("Sesión: "+esc(name)):"Crea tu cuenta con usuario, email y contraseña.")+'</p></div></div>'+status+recovery+
   (state.user?'<div class="section"><h2>Sincronización activa</h2><p class="muted">Tu colección y tus mazos están asociados a <b>'+esc(name)+'</b>.</p><button class="secondary btn" id="logout" type="button">Cerrar sesión</button></div>'+
+    '<details class="section account-data-panel"><summary>Datos y copias de seguridad</summary>'+
+    '<div class="account-backup-sections">'+
+    '<div><h3>Colección</h3><p class="small">Exporta o importa cantidades y versiones exactas (CSV). La importación sustituye la colección actual tras tu confirmación.</p>'+
+    '<div class="inline-actions"><button type="button" class="secondary btn" id="exportCsv">Exportar colección (CSV)</button>'+
+    '<button type="button" class="secondary btn" id="importCsv">Importar colección (CSV)</button>'+
+    '<input id="csvFile" type="file" class="fileinput" accept=".csv,text/csv">'+
+    '<button type="button" class="danger btn" id="deletePersonalCollection">Borrar mi colección</button></div></div>'+
+    '<div><h3>Todos los mazos</h3><p class="small">Guarda todos tus mazos en un archivo JSON o añade los de una copia de seguridad sin borrar los actuales. Se conservan las versiones exactas.</p>'+
+    '<div class="inline-actions"><button type="button" class="secondary btn" id="exportAllDecks">Exportar todos los mazos</button>'+
+    '<button type="button" class="secondary btn" id="importAllDecks">Importar todos los mazos</button>'+
+    '<input id="decksBackupFile" type="file" class="fileinput" accept=".json,application/json"></div></div>'+
+    '</div></details>'+
     '<div class="section"><h2>Seguridad</h2><input id="changePassword" class="field" type="password" placeholder="Nueva contraseña (mín. 6 caracteres)" autocomplete="new-password"><input id="changePassword2" class="field" type="password" style="margin-top:8px" placeholder="Repite la nueva contraseña" autocomplete="new-password"><button class="primary btn" id="changePasswordBtn" type="button" style="margin-top:8px">Cambiar contraseña</button></div>'+
     '<div class="section" style="border-color:#713441"><h2>Eliminar cuenta</h2><p class="muted">Elimina permanentemente la cuenta y los datos sincronizados de colección y mazos.</p><button class="danger btn" id="deleteAccount" type="button">Eliminar mi cuenta</button></div>'
     :'<div class="section"><h2>Entrar</h2><input id="authLogin" class="field" type="text" placeholder="Usuario o email" autocomplete="username" autocapitalize="off" spellcheck="false"><input id="authPassword" class="field" type="password" style="margin-top:8px" placeholder="Contraseña" autocomplete="current-password"><button class="linkbtn" id="forgotPassword" type="button" style="margin-top:10px">He olvidado la contraseña</button><div class="inline-actions" style="margin-top:10px"><button class="primary btn" id="login" type="button" '+(state.authBusy?"disabled":"")+'>Entrar</button></div></div>'+
@@ -1949,7 +2089,6 @@ function bindShell(){
   });
   document.querySelectorAll("[data-quick-edit-deck]").forEach(b=>b.addEventListener("click",()=>{state.deckId=b.dataset.quickEditDeck;state.deckLibrary=false;renderShell();const editor=$("#deckMetaEditor");if(editor){editor.hidden=false;$("#editDeckName")?.focus()}}));
   $("#retryCollectionLoad")?.addEventListener("click",async()=>{if(!state.user)return;const id=state.user.id;await loadCollectionFromCloud(id);if(state.user?.id===id)renderShell()});
-  $("#deletePersonalCollection")?.addEventListener("click",clearCollection);
   $("#accountBtn")?.addEventListener("click",()=>{if(state.tab!=="account")navigateApp(()=>{state.tab="account";state.shared=false})});
   document.querySelectorAll("[data-close]").forEach(b=>b.onclick=()=>{state.newDeck=false;renderShell()});
   document.querySelectorAll("[data-close-auth]").forEach(b=>b.onclick=()=>{state.auth=false;renderShell()});
@@ -1998,9 +2137,6 @@ function bindShell(){
     $("#closeCollectionFilters")?.addEventListener("click",()=>{state.collection.filtersOpen=false;renderShell()});
     $("#clearCollectionFilters")?.addEventListener("click",()=>{Object.assign(state.collection,{set:"Todas",category:"Todos",color:"Todos",rarity:"Todos",type:"Todos",attribute:"Todos",quantity:"Todas",playset:"Todas",page:1});renderShell()});
     $("#collectionResetVisible")?.addEventListener("click",()=>{Object.assign(state.collection,{query:"",set:"Todas",category:"Todos",color:"Todos",rarity:"Todos",type:"Todos",attribute:"Todos",quantity:"Todas",playset:"Todas",page:1});renderShell()});
-    $("#exportCsv")?.addEventListener("click",exportCollectionCSV);
-    $("#importCsv")?.addEventListener("click",()=>$("#csvFile").click());
-    $("#csvFile")?.addEventListener("change",e=>{const f=e.target.files?.[0];if(f)f.text().then(t=>previewImport(t))});
   }
   if(state.tab==="album"&&!state.album.set){
     bindSearch("#expansionSearch",v=>{state.expansions.query=v;renderShell()});
@@ -2094,6 +2230,19 @@ function bindAccount(){
   $("#forgotPassword2")?.addEventListener("click",forgotPasswordPrompt);
   $("#changePasswordBtn")?.addEventListener("click",()=>changePassword($("#changePassword")?.value,$("#changePassword2")?.value));
   $("#saveRecoveredPassword")?.addEventListener("click",()=>changePassword($("#newPassword")?.value,$("#newPassword2")?.value,{recovery:true}));
+  $("#exportCsv")?.addEventListener("click",exportCollectionCSV);
+  $("#importCsv")?.addEventListener("click",()=>$("#csvFile")?.click());
+  $("#csvFile")?.addEventListener("change",async e=>{
+    const file=e.target.files?.[0];e.target.value="";
+    if(file)await file.text().then(previewImport).catch(error=>alert("Error leyendo CSV: "+error.message));
+  });
+  $("#deletePersonalCollection")?.addEventListener("click",clearCollection);
+  $("#exportAllDecks")?.addEventListener("click",exportAllDecksFile);
+  $("#importAllDecks")?.addEventListener("click",()=>$("#decksBackupFile")?.click());
+  $("#decksBackupFile")?.addEventListener("change",async e=>{
+    const file=e.target.files?.[0];e.target.value="";
+    if(file)await importAllDecksFile(file);
+  });
   $("#deleteAccount")?.addEventListener("click",deleteAccount);
   $("#logout")?.addEventListener("click",async()=>{try{await state.sb?.auth.signOut()}catch{}state.user=null;state.authRecovery=false;state.deckId=null;state.deckLibrary=true;loadAccountLocal();notify("Sesión cerrada");renderShell()});
 }
