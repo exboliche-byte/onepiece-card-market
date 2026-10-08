@@ -123,6 +123,9 @@ async def build():
                 if seen % 200 == 0:
                     print(f"Images tried: {seen}/{len(missing)}, indexed: {len(old)}", flush=True)
     rows = [[cid, *old[cid]] for cid in sorted(ids) if cid in old]
+    # If a source unexpectedly drops old prints, keep the last known-good index.
+    if len(old) >= 750 and len(rows) < int(len(old) * .98):
+        raise RuntimeError(f"Visual index regression: {len(rows)} of {len(old)} previous fingerprints remain")
     # A tiny partial index would mislead users into believing the entire catalog
     # has image coverage. Fail rather than publish an unusable file.
     if len(rows) < 750:
