@@ -29,3 +29,17 @@ test("special OP14 and OP15 aliases remain compatible",()=>{
  assert.equal(canonicalPrintSet("OP14-EB04"),canonicalPrintSet("OP-14"));
  assert.equal(canonicalPrintSet("OP15"),canonicalPrintSet("OP-15"));
 });
+
+test("many Limitless-verified variants survive a subsequent upstream refresh",()=>{
+ const prior=Array.from({length:500},(_,i)=>card("OP19-"+String(i).padStart(3,"0")));
+ const additions=Array.from({length:173},(_,i)=>({
+   ...card("OP19-"+String(i).padStart(3,"0")+"_p2"),
+   catalogSource:"Limitless exact English print verified by image filename"
+ }));
+ const current=prior.slice();
+ const packs=[{code:"OP-19"}];
+ const result=protectCatalog(current,packs,[...prior,...additions],packs);
+ assert.equal(result.preservedPrints,173);
+ assert.equal(current.length,673);
+ assert.ok(current.some(c=>c.id==="OP19-000_p2"));
+});
