@@ -357,7 +357,7 @@ function show(hit){
    if(x&&pic){pic.dataset.imageRecovery="0";pic.dataset.imageStep="";pic.dataset.imageOfficial=officialImageUrl(x);pic.dataset.imageFallback=fallbackImageUrl(x);pic.src=imageCdnUrl(x);}
  };
  $("#scanVariant").onchange=display;display();
- const add=async count=>{
+ const add=async (count,event)=>{
    if(!state.user||!state.collectionReady){say("Debes iniciar sesión y cargar tu colección antes de añadir.");return}
    const c=selected(),n=Number(count);
    if(!c){say("Selecciona primero la impresión exacta.");return}
@@ -367,14 +367,14 @@ function show(hit){
    const buttons=["#scanAdd","#scanAddMore"].map(id=>$(id)).filter(Boolean);
    buttons.forEach(button=>button.disabled=true);
    say("Guardando la carta en Supabase…");
-   const saved=await setQty(c.id,next);
+   const saved=await setQty(c.id,next,{source:"scanner",trustedClick:event?.isTrusted===true});
    if(!valid())return;
    buttons.forEach(button=>button.disabled=false);
    if(!saved){say("No se pudo guardar la carta en la nube. La imagen sigue congelada.");return}
    resume();say("Guardadas "+(next-current)+" copia(s) de "+c.id+" en Supabase. Continúa escaneando.");
  };
- $("#scanAdd").onclick=()=>add(1);
- $("#scanAddMore").onclick=()=>add($("#scanCount").value);
+ $("#scanAdd").onclick=event=>add(1,event);
+ $("#scanAddMore").onclick=event=>add($("#scanCount").value,event);
  $("#scanSkip").onclick=resume;
  $("#scanManualResult").onclick=manual;
  host.querySelectorAll("[data-scan-alt]").forEach(btn=>btn.onclick=()=>show({...hit,c:card(btn.dataset.scanAlt)}));
