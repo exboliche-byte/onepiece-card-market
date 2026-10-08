@@ -1369,6 +1369,7 @@ function createDeck(){
 function changeQty(id,d){
   const n=Math.max(0,Math.min(99,qty(id)+Number(d||0)));
   if(n===0)delete state.owned[id];else state.owned[id]=n;
+  queueCollectionQty(id,n);
   saveLocal();syncOne(id,n);updateLiveCollectionCount();
   const needsRerender=(state.tab==="collection")||(state.tab==="album")||(state.tab==="catalog"&&state.catalog.ownership!=="Todas");
   if(needsRerender)renderVisibleOnly();
@@ -1383,23 +1384,16 @@ function changeQty(id,d){
 async function clearCollection(){
   if(!confirm("¿Borrar TODA tu colección?\n\nSe eliminarán todas las cantidades guardadas en este dispositivo y, si tienes sesión iniciada, también de la nube.\n\nEsta acción no se puede deshacer."))return;
   state.owned={};
+  queueCollectionReplacement();
   saveLocal();
-  if(state.user&&state.sb){
-    try{
-      const r=await state.sb.from("collection_items").delete().eq("user_id",state.user.id);
-      if(r.error)throw r.error;
-    }catch(e){
-      notify("Colección local borrada, pero no se pudo borrar la nube");
-      console.warn("clear collection cloud",e);
-      renderShell();
-      return;
-    }
-  }
   state.collection.page=1;
   renderShell();
-  notify("Colección borrada");
+  if(state.user){
+    const ok=await syncCloud();
+    notify(ok?"Colección borrada y sincronizada":"Colección borrada aquí. Eliminación en la nube pendiente de sincronizar.");
+  }else notify("Colección borrada");
 }
-function setQty(id,n){n=Math.max(0,Math.min(99,Number(n)||0));if(n===0)delete state.owned[id];else state.owned[id]=n;saveLocal();syncOne(id,n);renderVisibleOnly()}
+function setQty(id,n){n=Math.max(0,Math.min(99,Number(n)||0));if(n===0)delete state.owned[id];else state.owned[id]=n;queueCollectionQty(id,n);saveLocal();syncOne(id,n);renderVisibleOnly()}
 function deckCardTotal(d){return Object.values(d?.cards||{}).reduce((s,n)=>s+Number(n||0),0)}
 function changeDeckQty(id,delta){
   const d=state.decks.find(x=>x.id===state.deckId);if(!d)return;
@@ -2374,6 +2368,7 @@ function previewImport(text){
       "\n\nCada cantidad se guardará en su impresión exacta. No se sustituirá una reimpresión/paralela por la carta base.";
     if(confirm(msg+"\n\nAceptar = importar. Cancelar = no cambiar nada.")){
       state.owned={};
+      queueCollectionReplacement();
       state.importedCards={...state.importedCards,...created,...importMeta};
       for(const [id,q] of imported)if(q>0)state.owned[id]=q;
       saveLocal();
