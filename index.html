@@ -711,7 +711,7 @@ function cardTile(c,extra=""){
     '<div class="cardbody"><div class="name">'+esc(c.name||c.id)+'</div><div class="small">'+esc(c.id)+' · '+esc(cardExpansionCode(c)||"—")+' · '+esc(c.rarity||"—")+'</div>'+
     '<div class="chips">'+(c.colors||[]).map(x=>'<span class="chip">'+esc(x)+'</span>').join("")+'</div>'+
     '<div class="row"><span>'+(p!==null?money(p):"Precio —")+'</span><span class="small">'+q+'/'+target+'</span></div>'+
-    '<div class="quick"><button class="secondary" data-qty="'+esc(c.id)+'" data-d="-1">−</button><div class="qty">'+q+'</div><button class="primary" data-qty="'+esc(c.id)+'" data-d="1">+</button></div>'+
+    (state.user&&state.collectionReady?'<div class="quick"><button class="secondary" data-qty="'+esc(c.id)+'" data-d="-1">−</button><div class="qty">'+q+'</div><button class="primary" data-qty="'+esc(c.id)+'" data-d="1">+</button></div>':'')+
     extra+'</div></article>';
 }
 function groupedTile(g){
@@ -726,7 +726,7 @@ function groupedTile(g){
     '<div class="cardbody"><div class="name">'+esc(c.name)+'</div><div class="small">'+esc(c.id)+'</div><div class="small">'+esc(c.category||"")+' · '+g.versions.length+' versión(es)</div>'+
     '<div class="chips">'+g.sets.slice(0,5).map(x=>'<span class="chip">'+esc(x)+'</span>').join("")+(g.sets.length>5?'<span class="chip">+'+(g.sets.length-5)+'</span>':"")+'</div>'+
     '<div class="row"><span>'+priceLabel+'</span><span class="small">'+q+' copias</span></div>'+
-    '<div class="quick"><button class="secondary" data-qty="'+esc(c.id)+'" data-d="-1">−</button><div class="qty">'+q+'</div><button class="primary" data-qty="'+esc(c.id)+'" data-d="1">+</button></div><button class="secondary btn" style="width:100%;margin-top:8px" data-group="'+esc(c.id)+'">Ver versiones</button></div></article>';
+    (state.user&&state.collectionReady?'<div class="quick"><button class="secondary" data-qty="'+esc(c.id)+'" data-d="-1">−</button><div class="qty">'+q+'</div><button class="primary" data-qty="'+esc(c.id)+'" data-d="1">+</button></div>':'')+'<button class="secondary btn" style="width:100%;margin-top:8px" data-group="'+esc(c.id)+'">Ver versiones</button></div></article>';
 }
 function pagination(total,page,key){
   const pages=Math.max(1,Math.ceil(total/PAGE));page=Math.min(page,pages);
@@ -807,7 +807,7 @@ async function renderCatalogResults(){
   }
 }
 function catalogView(){
-  return '<div class="wrap"><div class="hero"><div><h1>Catálogo</h1><p>Todas las cartas disponibles. Busca por nombre, ID o expansión; usa FILTRO para acotar resultados.</p></div></div><div id="liveCollectionCount" class="notice">Mi colección: '+collectionStats().distinct.toLocaleString("es-ES")+' cartas · '+collectionStats().copies.toLocaleString("es-ES")+' copias</div>'+catalogToolbar()+'<div id="catalogResults"></div></div>';
+  return '<div class="wrap"><div class="hero"><div><h1>Catálogo</h1><p>Todas las cartas disponibles. Busca por nombre, ID o expansión; usa FILTRO para acotar resultados.</p></div></div><div id="liveCollectionCount" class="notice">'+(!state.user?'Inicia sesión para consultar tu colección':!state.collectionReady?'Cargando colección desde Supabase…':'Mi colección: '+collectionStats().distinct.toLocaleString("es-ES")+' cartas · '+collectionStats().copies.toLocaleString("es-ES")+' copias')+'</div>'+catalogToolbar()+'<div id="catalogResults"></div></div>';
 }
 function collectionActiveFilterCount(){
   const f=state.collection;let n=0;
@@ -874,6 +874,8 @@ async function renderCollectionResults(){
   }
 }
 function collectionView(){
+  if(!state.user)return '<div class="wrap"><div class="hero"><h1>Mi colección</h1></div><div class="section center"><h2>Inicia sesión para ver tu colección</h2><p class="muted">Solo se guarda y consulta desde tu cuenta de Supabase.</p><button class="primary btn" data-tab="account">Iniciar sesión</button></div></div>';
+  if(!state.collectionReady)return '<div class="wrap"><div class="hero"><h1>Mi colección</h1></div><div class="notice">Cargando la colección desde Supabase…</div><button class="secondary btn" id="retryCollectionLoad">Reintentar carga</button></div>';
   const s=collectionStats();
   return '<div class="wrap"><div class="hero"><div><h1>Mi colección</h1><p>Todas mis cartas, todos los sets, filtrables y ordenables.</p></div></div>'+
     '<div class="stats"><div class="stat"><b id="collectionValue">'+money(s.value)+'</b><span>Valor de mis cartas</span></div></div>'+collectionToolbar()+'<div id="collectionResults"></div></div>';
@@ -1429,7 +1431,7 @@ function detailView(c){
       '<div class="small">Coste '+esc(c.cost??"—")+' · Poder '+esc(c.power??"—")+' · Counter '+esc(c.counter??"—")+'</div>'+
       '<div class="row" style="margin-top:10px"><b>Mi colección: '+q+'</b><b>'+(priceOf(c)!==null?money(priceOf(c)):"Precio —")+'</b></div>'+
       '<div class="small" style="margin-top:5px">Precio de salida (referencia): '+(priceMeta(c)?.launchPrice!==null&&priceMeta(c)?.launchPrice!==undefined?money(priceMeta(c).launchPrice):"—")+'</div>'+
-      (deckMode?(c.category==="Leader"?'<div class="quick"><button class="secondary" data-removeleader="'+esc(c.id)+'">−</button><div class="qty">'+(state.decks.find(d=>d.id===state.deckId)?.leader===c.id?1:0)+'</div><button class="primary" data-setleader="'+esc(c.id)+'">+</button></div>':'<div class="quick"><button class="secondary" data-deckqty="'+esc(c.id)+'" data-d="-1">−</button><div class="qty">'+Number(state.decks.find(d=>d.id===state.deckId)?.cards?.[c.id]||0)+'</div><button class="primary" data-adddeck="'+esc(c.id)+'">+</button></div>'):'<div class="quick"><button class="secondary" data-qty="'+esc(c.id)+'" data-d="-1">−</button><div class="qty">'+q+'</div><button class="primary" data-qty="'+esc(c.id)+'" data-d="1">+</button></div>')+
+      (deckMode?(c.category==="Leader"?'<div class="quick"><button class="secondary" data-removeleader="'+esc(c.id)+'">−</button><div class="qty">'+(state.decks.find(d=>d.id===state.deckId)?.leader===c.id?1:0)+'</div><button class="primary" data-setleader="'+esc(c.id)+'">+</button></div>':'<div class="quick"><button class="secondary" data-deckqty="'+esc(c.id)+'" data-d="-1">−</button><div class="qty">'+Number(state.decks.find(d=>d.id===state.deckId)?.cards?.[c.id]||0)+'</div><button class="primary" data-adddeck="'+esc(c.id)+'">+</button></div>'):(state.user&&state.collectionReady?'<div class="quick"><button class="secondary" data-qty="'+esc(c.id)+'" data-d="-1">−</button><div class="qty">'+q+'</div><button class="primary" data-qty="'+esc(c.id)+'" data-d="1">+</button></div>':'<p class="small">Inicia sesión para gestionar esta carta</p>'))+
       (cmUrl?'<a class="secondary btn" style="display:block;text-align:center;margin-top:8px;text-decoration:none" target="_blank" rel="noopener" href="'+esc(cmUrl)+'">Cardmarket ↗</a>':'<div class="small" style="margin-top:8px">Enlace exacto de Cardmarket no disponible</div>')+
       '<h3 style="margin-top:18px">Versiones / reimpresiones</h3>'+(deckMode?'<p class="small">Toca una versión para verla y añadir o quitar esa impresión.</p>':'')+'<div class="version-list">'+versions.map(v=>'<button class="version secondary" data-detail="'+esc(v.id)+'">'+cardImg(v,"versionImg")+'<small>'+esc(cardPrintLabel(v))+' · '+(priceOf(v)!==null?money(priceOf(v)):"Precio —")+' · ×'+qty(v.id)+'</small></button>').join("")+'</div>'+
       renderCardmarketCollections(c)+
@@ -1473,7 +1475,7 @@ function renderShell(){
   if(state.tab==="decks")renderDeckResults();
   renderToast();
 }
-function updateLiveCollectionCount(){const el=$("#liveCollectionCount");if(!el)return;const s=collectionStats();el.textContent="Mi colección: "+s.distinct.toLocaleString("es-ES")+" cartas · "+s.copies.toLocaleString("es-ES")+" copias";}
+function updateLiveCollectionCount(){const el=$("#liveCollectionCount");if(!el)return;if(!state.user){el.textContent="Inicia sesión para consultar tu colección";return}if(!state.collectionReady){el.textContent="Cargando colección desde Supabase…";return}const s=collectionStats();el.textContent="Mi colección: "+s.distinct.toLocaleString("es-ES")+" cartas · "+s.copies.toLocaleString("es-ES")+" copias";}
 function renderVisibleOnly(){
   if(state.tab==="catalog")renderCatalogResults();
   else if(state.tab==="collection")renderCollectionResults();
@@ -1535,6 +1537,7 @@ function bindShell(){
     navigateApp(()=>{state.tab=next;state.shared=false});
   });
   document.querySelectorAll("[data-quick-edit-deck]").forEach(b=>b.addEventListener("click",()=>{state.deckId=b.dataset.quickEditDeck;state.deckLibrary=false;renderShell();const editor=$("#deckMetaEditor");if(editor){editor.hidden=false;$("#editDeckName")?.focus()}}));
+  $("#retryCollectionLoad")?.addEventListener("click",async()=>{if(!state.user)return;const id=state.user.id;await loadCollectionFromCloud(id);if(state.user?.id===id)renderShell()});
   $("#accountBtn")?.addEventListener("click",()=>{if(state.tab!=="account")navigateApp(()=>{state.tab="account";state.shared=false})});
   document.querySelectorAll("[data-close]").forEach(b=>b.onclick=()=>{state.newDeck=false;renderShell()});
   document.querySelectorAll("[data-close-auth]").forEach(b=>b.onclick=()=>{state.auth=false;renderShell()});
