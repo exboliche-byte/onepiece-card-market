@@ -146,7 +146,7 @@ function matchLiveCard(m){
   };
   const values=[entry.cardNumber,entry.collectorNumber,entry.number,entry.code,entry.printedNumber,print.cardNumber,print.code,print.number,entry.id];
   const candidates=values.map(groupId).filter(Boolean);
-  const setRaw=entry.set?.code||entry.setCode||entry.set?.id||"";
+  const setRaw=entry.set?.code||entry.setCode||entry.set?.id||(typeof entry.set==="string"?entry.set:"");
   const setMatch=normalize(setRaw).replace(/[^A-Z0-9]/g,"").match(/^(OP|ST|EB|PRB)\d{2}$/);
   if(setMatch)for(const val of values){
     const digits=String(val||"").trim().match(/^\d{1,3}$/);
@@ -157,6 +157,9 @@ function matchLiveCard(m){
     same=state.cards.filter(c=>groupId(baseId(c.id))===code);
     if(same.length)break;
   }
+  // If an actual printed code is present but absent from our catalog, never
+  // replace it silently with a different card that happens to share the name.
+  if(!same.length&&candidates.length)return null;
   if(!same.length&&entry.name){
     const byName=state.cards.filter(c=>normalize(c.name)===normalize(entry.name));
     if(new Set(byName.map(c=>baseId(c.id))).size===1)same=byName;
