@@ -40,3 +40,8 @@ for(const id of Object.keys(prices))if(!ids.has(id))problems.strayPrices.push(id
 console.log("AUDIT_SUMMARY "+JSON.stringify({schema:data.schemaVersion,updatedAt:data.updatedAt,stats:data.stats,counts}));
 console.log("AUDIT_SETS "+JSON.stringify([...pricesBySet].map(([set,o])=>({set,...o})).sort((a,b)=>a.set.localeCompare(b.set)).filter(x=>x.total>=10)));
 for(const [k,v] of Object.entries(problems))console.log("AUDIT_PROBLEM "+k+" "+v.length+" sample="+JSON.stringify(v.slice(0,22)));
+
+const sampleIds=["OP12-063_p2","OP12-063_p3","ST05-002_r1","ST05-002_p2","ST01-001_p1","ST01-002_r1","P-030","P-030_p2","P-072","P-072_c1","OP06-118_r1","OP13-043_p1","OP13-043_p2","OP13-043"];
+for(const id of sampleIds){
+ const card=ids.get(id),price=prices[id];console.log("AUDIT_DETAIL "+JSON.stringify({id,card:card&&{set:card.set,source_set:card.source_set,set_name:card.set_name,name:card.name,origin_set:card.origin_set},price:price&&{eur:price.eur,cardmarketId:price.cardmarketId,expansion:price.expansion,printSet:price.printSet,version:price.version,variantKind:price.variantKind,url:price.url,source:price.source}}))
+}
