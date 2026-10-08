@@ -965,7 +965,7 @@ async function main() {
       set_name:expansion||String(base.set_name||source),
       pack_name:expansion||source,
       image:print.image,
-      isParallel:/_[pc]\\d+$/i.test(print.id),
+      isParallel:/_[pc]\d+$/i.test(print.id),
       catalogSource:"Limitless exact English print verified by image filename"
     };
     cards.push(card);knownPrints.add(print.id.toUpperCase());addedFromLimitless.push(print.id);
@@ -1257,12 +1257,12 @@ async function main() {
   }
 
   if(addedFromLimitless.length){
-    await fs.writeFile(new URL("../data/cards.json",import.meta.url),JSON.stringify(cards,null,2)+"\\n","utf8");
+    await fs.writeFile(new URL("../data/cards.json",import.meta.url),JSON.stringify(cards,null,2)+"\n","utf8");
     const meta=JSON.parse(await fs.readFile(new URL("../data/catalog-meta.json",import.meta.url),"utf8"));
     meta.cardCount=cards.length;
     meta.limitlessPrintsAdded=(Number(meta.limitlessPrintsAdded)||0)+addedFromLimitless.length;
     meta.lastLimitlessPrintSync=new Date().toISOString();
-    await fs.writeFile(new URL("../data/catalog-meta.json",import.meta.url),JSON.stringify(meta,null,2)+"\\n","utf8");
+    await fs.writeFile(new URL("../data/catalog-meta.json",import.meta.url),JSON.stringify(meta,null,2)+"\n","utf8");
   }
   await fs.writeFile(
     new URL("../data/cardmarket-prices.json", import.meta.url),
