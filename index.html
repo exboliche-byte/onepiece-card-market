@@ -30,7 +30,7 @@ const state={
   collection:{},decks:[],wishlist:{},user:null,sb:null,
   tab:"catalog",set:"",query:"",detail:null,deckId:null,
   catalog:{set:"Todas",category:"Todos",color:"Todos",rarity:"Todos",type:"Todos",attribute:"Todos",ownership:"Todas",sort:"id",dir:"asc",page:1,grouped:true,minCost:"",maxCost:"",minPower:"",maxPower:"",minPrice:"",maxPrice:"",query:"",filtersOpen:false},
-  owned:{},collection:{query:"",set:"Todas",category:"Todos",color:"Todos",rarity:"Todos",type:"Todos",attribute:"Todos",quantity:"Todas",playset:"Todas",sort:"id",dir:"asc",page:1,filtersOpen:false},
+  owned:{},collectionReady:false,collection:{query:"",set:"Todas",category:"Todos",color:"Todos",rarity:"Todos",type:"Todos",attribute:"Todos",quantity:"Todas",playset:"Todas",sort:"id",dir:"asc",page:1,filtersOpen:false},
   album:{set:"",query:"",ownership:"Todas",sort:"id",dir:"asc",page:1},expansions:{query:"",type:"Todos",sort:"set",dir:"asc"},
   deckQuery:"",deckPage:1,deckLibrary:true,deckChoosingLeader:false,deckDiscover:false,deckDiscoverLeader:"",deckDiscoverLeaderQuery:"",deckDiscoverResults:[],deckDiscoverLoading:false,deckDiscoverError:"",deckDiscoverDays:90,deckDiscoverMinPlayers:32,deckDiscoverMeta:null,deckFilters:{set:"Todas",category:"Todos",color:"Todos",rarity:"Todos",type:"Todos",attribute:"Todos",ownership:"Todas",sort:"id",dir:"asc",filtersOpen:false},auth:false,authReady:false,authBusy:false,authError:"",authNotice:"",authRecovery:false,toast:"",loading:true
 };
@@ -340,78 +340,9 @@ async function fetchJson(url,timeout=15000){
 function accountStorageSuffix(userId=state.user?.id){return userId||"guest"}
 function collectionStorageKey(userId=state.user?.id){return "mialbumonepiece_collection_"+accountStorageSuffix(userId)}
 function deckStorageKey(userId=state.user?.id){return "mialbumonepiece_decks_"+accountStorageSuffix(userId)}
-function mergeOwnedCollections(...sources){
-  const out={};
-  for(const source of sources){
-    for(const [id,q] of Object.entries(source||{})){
-      const n=Math.max(0,Number(q)||0);
-      if(n>0)out[id]=Math.max(Number(out[id]||0),n);
-    }
-  }
-  return out;
-}
-function parseStoredObject(raw){
-  try{const x=JSON.parse(raw||"{}");return x&&typeof x==="object"&&!Array.isArray(x)?x:{}}catch{return {}}
-}
-// A per-account journal preserves explicit deletions (quantity 0) until the cloud confirms them.
-// It also makes CSV replacements atomic from the client's point of view.
-let collectionMutationCounter=0;
-const collectionTouched=new Map();
-function collectionPendingKey(userId=state.user?.id){
-  return "mialbumonepiece_collection_pending_"+String(userId||"guest");
-}
-function readCollectionPending(userId=state.user?.id){
-  const saved=parseStoredObject(localStorage.getItem(collectionPendingKey(userId)));
-  return {changes:saved.changes&&typeof saved.changes==="object"?saved.changes:{},replace:saved.replace||null};
-}
-function writeCollectionPending(pending,userId=state.user?.id){
-  localStorage.setItem(collectionPendingKey(userId),JSON.stringify(pending));
-}
-function nextCollectionMutationToken(){
-  return Date.now()+"-"+(++collectionMutationCounter);
-}
-function queueCollectionQty(id,quantity){
-  if(!state.user)return;
-  const n=Math.max(0,Math.min(99,Number(quantity)||0));
-  collectionTouched.set(state.user.id+'|'+id,n);
-  const pending=readCollectionPending();
-  pending.changes[id]={quantity:n,token:nextCollectionMutationToken()};
-  writeCollectionPending(pending);
-}
-function queueCollectionReplacement(){
-  if(!state.user)return;
-  const pending=readCollectionPending();
-  pending.replace={token:nextCollectionMutationToken()};
-  pending.changes={};
-  for(const key of collectionTouched.keys())if(key.startsWith(state.user.id+'|'))collectionTouched.delete(key);
-  writeCollectionPending(pending);
-}
-function loadCollectionForAccount({migrateLegacy=false}={}){
-  const key=collectionStorageKey(),stored=localStorage.getItem(key);
-  if(!state.user){
-    // After the guest storage has been created, never re-import legacy snapshots.
-    const guest=stored===null?parseStoredObject(localStorage.getItem("mialbumonepiece_collection")):parseStoredObject(stored);
-    state.owned=guest;
-    if(stored===null)localStorage.setItem(key,JSON.stringify(guest));
-    return;
-  }
-  const scoped=parseStoredObject(stored);
-  if(stored!==null||!migrateLegacy){
-    state.owned=scoped;
-    return;
-  }
-  // Import legacy / guest data only ONCE for an account, never on every login.
-  const legacyOwner=localStorage.getItem("mialbumonepiece_collection_legacy_owner");
-  const canMigrate=!legacyOwner||legacyOwner===state.user.id;
-  const guest=canMigrate?parseStoredObject(localStorage.getItem(collectionStorageKey(null))):{};
-  const legacy=canMigrate?parseStoredObject(localStorage.getItem("mialbumonepiece_collection")):{};
-  state.owned=mergeOwnedCollections(legacy,guest);
-  localStorage.setItem(key,JSON.stringify(state.owned)); // {} is significant: cleared or never owned.
-  if(canMigrate){
-    localStorage.setItem("mialbumonepiece_collection_legacy_owner",state.user.id);
-    for(const [id,n] of Object.entries(state.owned))if(Number(n)>0)queueCollectionQty(id,n);
-  }
-}
+// Collection quantities are owned exclusively by Supabase for authenticated users.
+function loadCollectionForAccount(){state.owned={};state.collectionReady=false;}
+function parseStoredObject(raw){try{const o=JSON.parse(raw||"{}");return o&&typeof o==="object"&&!Array.isArray(o)?o:{}}catch{return {}}}
 function loadDecksForAccount({migrateLegacy=false}={}){
   const drafts=state.decks.filter(d=>d?.draftCompetitive);
   const key=deckStorageKey(),raw=localStorage.getItem(key);
@@ -437,13 +368,13 @@ function loadAccountLocal({migrateLegacy=false}={}){
   loadDecksForAccount({migrateLegacy});
 }
 function saveLocal(){
-  localStorage.setItem(collectionStorageKey(),JSON.stringify(state.owned));
   localStorage.setItem(deckStorageKey(),JSON.stringify(state.decks.filter(d=>!d?.draftCompetitive)));
   localStorage.setItem("mialbumonepiece_wishlist",JSON.stringify(state.wishlist));
   localStorage.setItem("mialbumonepiece_imported_cards",JSON.stringify(state.importedCards||{}));
 }
 function loadLocal(){
-  loadAccountLocal();
+  state.owned={};state.collectionReady=false;
+  loadDecksForAccount();
   try{state.wishlist=JSON.parse(localStorage.getItem("mialbumonepiece_wishlist")||"{}")}catch{}
   try{state.importedCards=JSON.parse(localStorage.getItem("mialbumonepiece_imported_cards")||"{}")}catch{state.importedCards={}}
 }
