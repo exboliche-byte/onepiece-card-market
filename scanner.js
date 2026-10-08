@@ -379,7 +379,7 @@ async function scanOCR(){
 }
 function showVisualChoices(heading="Posibles cartas según la ilustración"){
   if(!running||!visualResults.length)return;
-  autoAddCandidate=null;cancelAutoCountdown();
+  autoAddCandidate=null;cancelAutoCountdown();updateScanCopiesLabel(null);
   locked=true;cancelAnimationFrame(scanTimer);
   shot=snapshot(true);
   panel()?.classList.add("locked");
@@ -408,11 +408,21 @@ function showVisualChoices(heading="Posibles cartas según la ilustración"){
   status("Selecciona la impresión que se corresponde con tu carta.");
 }
 function ownedCount(id){return Number(qty(id)||0)}
+function updateScanCopiesLabel(card){
+  const count=card?ownedCount(card.id):null;
+  const add=$("#scanAddOne"),stop=$("#scanAutoStop");
+  if(add)add.textContent=card?"+1 y continuar · Ya tienes "+count:" +1 y continuar";
+  if(stop){
+    stop.textContent=card?"⏹ PARAR AUTOMÁTICO · Tienes "+count+" copia(s) de "+card.id:
+      "⏹ PARAR AÑADIDO AUTOMÁTICO";
+  }
+}
 function chooseVariant(variants,selected){
   const selection=$("#scanVariant");
   if(!selection)return;
   const current=variants.find(c=>c.id===selection.value);
   const pic=$("#scanFoundImage"),count=$("#scanExactCount");
+  updateScanCopiesLabel(current);
   if(count)count.textContent=current?"Tienes "+ownedCount(current.id)+" copias de esta impresión.":"Selecciona una impresión exacta para guardarla.";
   if(pic&&current){
     pic.dataset.imageOfficial=officialImageUrl(current);
@@ -430,7 +440,7 @@ function chooseVariant(variants,selected){
 }
 function showNameChoices(hit){
   if(!running||!hit?.cards?.length)return;
-  autoAddCandidate=null;cancelAutoCountdown();
+  autoAddCandidate=null;cancelAutoCountdown();updateScanCopiesLabel(null);
   locked=true;cancelAnimationFrame(scanTimer);
   panel()?.classList.add("locked");
   const still=document.createElement("img");still.className="scanFreeze";still.src=shot?.still||"";
@@ -529,7 +539,7 @@ function show(hit){
   status("Carta detectada. Comprueba la versión antes de guardar.");
 }
 function releaseFreeze(){
-  autoAddCandidate=null;cancelAutoCountdown();
+  autoAddCandidate=null;cancelAutoCountdown();updateScanCopiesLabel(null);
   locked=false;panel()?.classList.remove("locked");
   $(".scanFreeze")?.remove();if(camera)camera.style.visibility="";
   const area=$("#scanDecision");if(area){area.hidden=true;area.replaceChildren()}
