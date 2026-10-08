@@ -77,5 +77,5 @@
       ]
     }
   ],
-  "buildCommand": "mkdir -p public && cp index.html scanner.js image-visibility.js public/"
+  "buildCommand": "mkdir -p public && cp index.html scanner.js orb-engine.js image-visibility.js public/"
 }
