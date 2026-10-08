@@ -28,6 +28,17 @@ const css=`
 .history-mover .change{flex:none;text-align:right}
 .history-up{color:var(--ok)}.history-down{color:var(--danger)}
 @media(max-width:630px){.history-movers{grid-template-columns:1fr}}
+.collection-statistics-view{max-width:1180px;margin:auto}
+.collection-statistics-view .hero{display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px}
+.collection-statistics-view .section{margin:14px 0}
+.collection-stat-breakdowns{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.collection-stat-panel{border:1px solid var(--line);border-radius:13px;padding:15px;min-width:0;background:var(--panel2)}
+.collection-stat-panel h3{margin:0 0 12px}
+.collection-stat-barline{display:grid;grid-template-columns:1fr auto;gap:5px 9px;margin:12px 0;font-size:12px}
+.collection-stat-track{grid-column:1/-1;background:var(--panel);height:8px;border-radius:8px;overflow:hidden}
+.collection-stat-track i{display:block;height:100%;background:var(--accent);border-radius:8px}
+.collection-statistics-view .history-chart{max-height:275px}
+@media(max-width:650px){.collection-stat-breakdowns{grid-template-columns:1fr}}
 `;
 const style=document.createElement("style");style.textContent=css;document.head.appendChild(style);
 function inventoryKey(){
@@ -46,12 +57,13 @@ function graph(points){
  const vs=points.map(p=>p.v),min=Math.min(...vs),max=Math.max(...vs);
  const pad=(max-min)*.1||Math.max(1,max*.03),bottom=Math.max(0,min-pad),top=max+pad;
  const dates=points.map(p=>Date.parse(p.day+"T12:00:00Z")),first=dates[0],last=dates.at(-1);
+ const single=points.length===1;
  const xy=points.map((p,i)=>{
-  const x=l+(dates[i]-first)/Math.max(1,last-first)*(r-l);
+  const x=single?(l+r)/2:l+(dates[i]-first)/Math.max(1,last-first)*(r-l);
   const y=b-(p.v-bottom)/Math.max(.01,top-bottom)*(b-t);
   return x.toFixed(1)+","+y.toFixed(1);
  }).join(" ");
- return `<svg class="history-chart" role="img" aria-label="Evolución del precio de las cartas que tienes" viewBox="0 0 ${w} ${h}"><line class="history-axis" x1="${l}" x2="${r}" y1="${b}" y2="${b}"/><polyline class="history-line" points="${xy}"/></svg>`+
+ return `<svg class="history-chart" role="img" aria-label="Evolución del precio de las cartas que tienes" viewBox="0 0 ${w} ${h}"><line class="history-axis" x1="${l}" x2="${r}" y1="${b}" y2="${b}"/>${single?'<circle cx="'+((l+r)/2)+'" cy="'+(xy.split(",")[1])+'" r="7" fill="var(--accent)" stroke="var(--panel)" stroke-width="2"/>':'<polyline class="history-line" points="'+xy+'"/>'}</svg>`+
  `<div class="history-dates"><span>${esc(dateLabel(points[0].day))} · ${fmt(points[0].v)}</span><span>${esc(dateLabel(points.at(-1).day))} · ${fmt(points.at(-1).v)}</span></div>`;
 }
 function moverList(rows,up){
@@ -64,7 +76,7 @@ function moverList(rows,up){
 }
 function render(data){
  const root=document.getElementById("collectionHistoryBody");
- if(!root||!document.getElementById("collectionHistoryToggle")?.open)return;
+ if(!root||state.tab!=="collection"||!state.collectionStatsOpen)return;
  const points=(data.history||[]).map(r=>({day:String(r.price_day||""),v:Number(r.total_eur),
   coverage:Number(r.priced_versions),owned:Number(r.owned_versions)}))
  .filter(p=>/^\d{4}-\d{2}-\d{2}$/.test(p.day)&&Number.isFinite(p.v))
@@ -87,7 +99,7 @@ function render(data){
 }
 async function load(force=false){
  const root=document.getElementById("collectionHistoryBody");
- if(!root||!document.getElementById("collectionHistoryToggle")?.open)return;
+ if(!root||state.tab!=="collection"||!state.collectionStatsOpen)return;
  const id=inventoryKey();
  if(!id||!state.sb){root.innerHTML='<p class="history-note">Inicia sesión y carga tu colección para consultar su evolución.</p>';return;}
  if(id!==lastIdentity){revision++;cached.clear();lastIdentity=id;}
@@ -107,11 +119,12 @@ async function load(force=false){
   root.innerHTML=buttons()+'<p class="history-note">No se pudo cargar el histórico de precios.</p><button class="secondary btn" type="button" data-history-retry>Reintentar</button>';
  }
 }
-document.addEventListener("toggle",e=>{if(e.target?.id==="collectionHistoryToggle"&&e.target.open)load()},true);
+// The dashboard is a dedicated view, rather than a nested toggle.
+window.loadCollectionHistory=()=>load();
 document.addEventListener("click",e=>{
  const ctl=e.target.closest?.("[data-history-days]");
  if(ctl&&PERIODS.includes(Number(ctl.dataset.historyDays))){days=Number(ctl.dataset.historyDays);load()}
  if(e.target.closest?.("[data-history-retry]"))load(true);
 });
-window.refreshCollectionHistory=()=>{if(document.getElementById("collectionHistoryToggle")?.open&&inventoryKey()!==lastIdentity)load()};
+window.refreshCollectionHistory=()=>{if(document.getElementById("collectionHistoryBody")&&inventoryKey()!==lastIdentity)load()};
 })();
