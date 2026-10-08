@@ -67,6 +67,19 @@
 .collection-expensive{border-top:1px solid var(--line);padding-top:12px}
 .collection-expensive .listrow{justify-content:flex-start}
 .collection-expensive .thumb{width:56px;height:78px}
+
+.account-section>summary{display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer;list-style:none;font-size:16px;font-weight:800}
+.account-section>summary::-webkit-details-marker{display:none}
+.account-section>summary:after{content:"▾";color:var(--muted)}
+.account-section[open]>summary:after{content:"▴"}
+.account-section-content{padding-top:12px}
+.account-section-content>p:first-child{margin-top:0}
+.account-security-group+.account-security-group{border-top:1px solid var(--line);margin-top:15px;padding-top:14px}
+.account-security-group h3{margin:0 0 8px;font-size:14px}
+.account-security-group label{display:block;font-size:12px;color:var(--muted);margin:7px 0 5px}
+.account-signout{margin:16px 0 5px;padding-top:14px;border-top:1px solid var(--line)}
+.account-signout .btn{width:100%}
+.account-destructive{border-color:#713441}
 </style>
 </head>
 <body>
@@ -1288,7 +1301,7 @@ function deckLibraryView(){
       (state.deckDiscover?competitiveDeckSearchView():"")+
       '<div class="section center"><h2>Inicia sesión para gestionar tus mazos</h2><p class="muted">La búsqueda puede consultarse sin cuenta; para importar o guardar necesitas iniciar sesión.</p><button class="primary btn" id="deckAccountBtn2">Entrar o crear cuenta</button></div></div>';
   }
-  const savedDecks=state.decks.filter(d=>!d?.draftCompetitive);const tiles=savedDecks.map(d=>{const l=card(d.leader),v=deckValidate(d);return '<div class="setcard decktile"><button type="button" class="deck-tile-open" style="width:100%;background:transparent;border:0;color:inherit;text-align:left;cursor:pointer" data-open-deck="'+esc(d.id)+'">'+(l?cardImg(l,"deckleader"):'<div class="deckleader fallback" style="display:grid">Sin líder</div>')+'<div class="decktilebody"><b>'+esc(d.name)+'</b>'+(d.description?'<div class="small" style="white-space:pre-wrap;overflow-wrap:anywhere;margin:5px 0 7px">'+esc(d.description)+'</div>':'')+'<div class="small">'+v.total+'/50 cartas · '+deckUniqueCount(d)+' diferentes · '+(d.leader?"1 líder":"sin líder")+'</div><div class="small">'+(v.valid?"✓ Legal":"⚠ No legal")+' · Valor '+money(deckTotalValue(d))+' · te faltan '+money(deckMissingCost(d))+'</div></button><button type="button" class="secondary btn" data-quick-edit-deck="'+esc(d.id)+'" style="margin:8px;width:calc(100% - 16px)">Editar nombre y descripción</button></div>'}).join("");
+  const savedDecks=state.decks.filter(d=>!d?.draftCompetitive);const tiles=savedDecks.map(d=>{const l=card(d.leader),v=deckValidate(d);return '<div class="setcard decktile"><button type="button" class="deck-tile-open" style="width:100%;background:transparent;border:0;color:inherit;text-align:left;cursor:pointer" data-open-deck="'+esc(d.id)+'">'+(l?cardImg(l,"deckleader"):'<div class="deckleader fallback" style="display:grid">Sin líder</div>')+'<div class="decktilebody"><b>'+esc(d.name)+'</b>'+(d.description?'<div class="small" style="white-space:pre-wrap;overflow-wrap:anywhere;margin:5px 0 7px">'+esc(d.description)+'</div>':'')+'<div class="small">'+v.total+'/50 cartas · '+deckUniqueCount(d)+' diferentes · '+(d.leader?"1 líder":"sin líder")+'</div><div class="small">'+(v.valid?"✓ Legal":"⚠ No legal")+' · Valor '+money(deckTotalValue(d))+' · te faltan '+money(deckMissingCost(d))+'</div></button></div>'}).join("");
   return '<div class="wrap"><div class="hero"><div><h1>Mazos</h1><p>Tus mazos sincronizados con '+esc(state.user.email||"tu cuenta")+'.</p></div><button class="secondary btn" id="importDeckBtn">Importar lista</button></div>'+
     '<div class="deck-actions"><button class="deck-action" id="newDeck"><b>＋ Crear mazo</b><span>Construye un mazo desde cero eligiendo líder y cartas.</span></button><button class="deck-action" id="findCompetitiveDecks"><b>🏆 Buscar mazos</b><span>Busca listas con buenos resultados por líder e impórtalas directamente.</span></button></div>'+
     (state.deckDiscover?competitiveDeckSearchView():"")+
@@ -1826,31 +1839,71 @@ function detailView(c){
       renderCardmarketCollections(c)+
     '</div></div></div></div>';
 }
-function accountView(){
-  const status=state.authError?'<div class="notice">'+esc(state.authError)+'</div>':(state.authNotice?'<div class="validation ok"><b>'+esc(state.authNotice)+'</b></div>':(!state.authReady?'<div class="notice">Conectando con la cuenta…</div>':""));
-  const recovery=state.authRecovery?'<div class="section"><h2>Crear nueva contraseña</h2><p class="muted">Escribe la nueva contraseña para terminar la recuperación.</p><input id="newPassword" class="field" type="password" placeholder="Nueva contraseña (mín. 6 caracteres)" autocomplete="new-password"><input id="newPassword2" class="field" type="password" style="margin-top:8px" placeholder="Confirmar nueva contraseña" autocomplete="new-password"><button class="primary btn" id="saveRecoveredPassword" type="button" style="margin-top:8px">Guardar nueva contraseña</button></div>':"";
-  const name=accountDisplayName();
-  return '<div class="wrap"><div class="hero"><div><h1>Cuenta</h1><p>'+(state.user?("Sesión: "+esc(name)):"Crea tu cuenta con usuario, email y contraseña.")+'</p></div></div>'+status+recovery+
-  (state.user?'<div class="section"><h2>Sincronización activa</h2><p class="muted">Tu colección y tus mazos están asociados a <b>'+esc(name)+'</b>.</p><button class="secondary btn" id="logout" type="button">Cerrar sesión</button></div>'+
-    '<details class="section account-data-panel"><summary>Datos y copias de seguridad</summary>'+
-    '<div class="account-backup-sections">'+
-    '<div><h3>Colección</h3><p class="small">Exporta o importa cantidades y versiones exactas (CSV). La importación sustituye la colección actual tras tu confirmación.</p>'+
-    '<div class="inline-actions"><button type="button" class="secondary btn" id="exportCsv">Exportar colección (CSV)</button>'+
-    '<button type="button" class="secondary btn" id="importCsv">Importar colección (CSV)</button>'+
-    '<input id="csvFile" type="file" class="fileinput" accept=".csv,text/csv">'+
-    '<button type="button" class="danger btn" id="deletePersonalCollection">Borrar mi colección</button></div></div>'+
-    '<div><h3>Todos los mazos</h3><p class="small">Guarda todos tus mazos en un archivo JSON o añade los de una copia de seguridad sin borrar los actuales. Se conservan las versiones exactas.</p>'+
-    '<div class="inline-actions"><button type="button" class="secondary btn" id="exportAllDecks">Exportar todos los mazos</button>'+
-    '<button type="button" class="secondary btn" id="importAllDecks">Importar todos los mazos</button>'+
-    '<input id="decksBackupFile" type="file" class="fileinput" accept=".json,application/json"></div></div>'+
-    '</div></details>'+
-    '<div class="section"><h2>Seguridad</h2><input id="changePassword" class="field" type="password" placeholder="Nueva contraseña (mín. 6 caracteres)" autocomplete="new-password"><input id="changePassword2" class="field" type="password" style="margin-top:8px" placeholder="Repite la nueva contraseña" autocomplete="new-password"><button class="primary btn" id="changePasswordBtn" type="button" style="margin-top:8px">Cambiar contraseña</button></div>'+
-    '<div class="section" style="border-color:#713441"><h2>Eliminar cuenta</h2><p class="muted">Elimina permanentemente la cuenta y los datos sincronizados de colección y mazos.</p><button class="danger btn" id="deleteAccount" type="button">Eliminar mi cuenta</button></div>'
-    :'<div class="section"><h2>Entrar</h2><input id="authLogin" class="field" type="text" placeholder="Usuario o email" autocomplete="username" autocapitalize="off" spellcheck="false"><input id="authPassword" class="field" type="password" style="margin-top:8px" placeholder="Contraseña" autocomplete="current-password"><button class="linkbtn" id="forgotPassword" type="button" style="margin-top:10px">He olvidado la contraseña</button><div class="inline-actions" style="margin-top:10px"><button class="primary btn" id="login" type="button" '+(state.authBusy?"disabled":"")+'>Entrar</button></div></div>'+
-    '<details class="section"><summary style="cursor:pointer;font-weight:800;font-size:18px">Crear cuenta</summary><div style="margin-top:12px"><input id="registerUser" class="field" type="text" placeholder="Usuario" autocomplete="username" autocapitalize="off" spellcheck="false"><input id="registerEmail" class="field" type="email" style="margin-top:8px" placeholder="Email (solo recuperación de contraseña)" autocomplete="email"><input id="registerPassword" class="field" type="password" style="margin-top:8px" placeholder="Contraseña (mín. 6 caracteres)" autocomplete="new-password"><input id="registerPassword2" class="field" type="password" style="margin-top:8px" placeholder="Confirmar contraseña" autocomplete="new-password"><button class="secondary btn" id="register" type="button" style="margin-top:10px" '+(state.authBusy?"disabled":"")+'>Crear cuenta</button><p class="muted" style="margin-bottom:0">No verificamos el email al crear la cuenta. Solo se utilizará si necesitas recuperar la contraseña.</p></div></details>')+
-  '<div class="section"><h2>Estado</h2><div class="small">Catálogo: '+state.cards.length.toLocaleString("es-ES")+' cartas · '+state.packs.length+' expansiones'+(state.priceDate?' · Precios: '+new Date(state.priceDate).toLocaleString("es-ES"):"")+'</div></div></div>';
+const openAccountPanels=new Set();
+function accountPanel(key,title,body,extra="",defaultOpen=false){
+  return '<details class="section account-section '+extra+'" data-account-panel="'+key+'"'+
+    (openAccountPanels.has(key)||defaultOpen?' open':'')+'><summary>'+title+'</summary>'+
+    '<div class="account-section-content">'+body+'</div></details>';
 }
-
+function accountView(){
+  const status=state.authError?'<div class="notice">'+esc(state.authError)+'</div>':
+    state.authNotice?'<div class="validation ok"><b>'+esc(state.authNotice)+'</b></div>':
+    !state.authReady?'<div class="notice">Conectando con la cuenta…</div>':"";
+  const recovery=state.authRecovery?'<div class="section"><h2>Crear nueva contraseña</h2><p class="muted">Escribe la nueva contraseña para terminar la recuperación.</p><input id="newPassword" class="field" type="password" placeholder="Nueva contraseña (mín. 6 caracteres)" autocomplete="new-password"><input id="newPassword2" class="field" type="password" style="margin-top:8px" placeholder="Confirmar nueva contraseña" autocomplete="new-password"><button class="primary btn" id="saveRecoveredPassword" type="button" style="margin-top:8px">Guardar nueva contraseña</button></div>':"";
+  const header='<div class="wrap"><div class="hero"><h1>Cuenta</h1></div>'+status+recovery;
+  if(!state.user){
+    const signIn='<input id="authLogin" class="field" type="text" placeholder="Usuario o email" autocomplete="username" autocapitalize="off" spellcheck="false">'+
+      '<input id="authPassword" class="field" type="password" style="margin-top:8px" placeholder="Contraseña" autocomplete="current-password">'+
+      '<button class="linkbtn" id="forgotPassword" type="button" style="margin-top:10px">He olvidado la contraseña</button>'+
+      '<div class="inline-actions" style="margin-top:10px"><button class="primary btn" id="login" type="button" '+(state.authBusy?'disabled':'')+'>Entrar</button></div>';
+    const signup='<input id="registerUser" class="field" type="text" placeholder="Usuario" autocomplete="username" autocapitalize="off" spellcheck="false">'+
+      '<input id="registerEmail" class="field" type="email" style="margin-top:8px" placeholder="Email de recuperación" autocomplete="email">'+
+      '<input id="registerPassword" class="field" type="password" style="margin-top:8px" placeholder="Contraseña (mín. 6 caracteres)" autocomplete="new-password">'+
+      '<input id="registerPassword2" class="field" type="password" style="margin-top:8px" placeholder="Confirmar contraseña" autocomplete="new-password">'+
+      '<button class="secondary btn" id="register" type="button" style="margin-top:10px" '+(state.authBusy?'disabled':'')+'>Crear cuenta</button>'+
+      '<p class="muted">El email se utilizará para recuperar la contraseña.</p>';
+    return header+accountPanel("login","Iniciar sesión",signIn,"",true)+
+      accountPanel("signup","Crear cuenta",signup)+accountPanel("status","Estado",accountStatusView())+'</div>';
+  }
+  const account='<p class="small">Usuario: <b>'+esc(accountDisplayName())+'</b></p>'+
+    '<p class="small">Email: <b>'+esc(state.user.email||"Sin configurar")+'</b></p>'+
+    '<p class="small">Tu colección y mazos están sincronizados con esta cuenta.</p>';
+  const backups='<div class="account-backup-sections">'+
+    '<div><h3>Colección</h3><p class="small">Importa y exporta cantidades y versiones exactas (CSV). Importar sustituye la colección actual tras confirmación.</p>'+
+    '<div class="inline-actions"><button class="secondary btn" id="exportCsv">Exportar colección (CSV)</button>'+
+    '<button class="secondary btn" id="importCsv">Importar colección (CSV)</button>'+
+    '<input id="csvFile" type="file" class="fileinput" accept=".csv,text/csv">'+
+    '<button class="danger btn" id="deletePersonalCollection">Borrar mi colección</button></div></div>'+
+    '<div><h3>Todos los mazos</h3><p class="small">Guarda todos los mazos en un archivo JSON o añade los de una copia de seguridad sin borrar los actuales.</p>'+
+    '<div class="inline-actions"><button class="secondary btn" id="exportAllDecks">Exportar todos los mazos</button>'+
+    '<button class="secondary btn" id="importAllDecks">Importar todos los mazos</button>'+
+    '<input id="decksBackupFile" type="file" class="fileinput" accept=".json,application/json"></div></div></div>';
+  const security='<div class="account-security-group"><h3>Cambiar contraseña</h3>'+
+    '<input id="changePassword" class="field" type="password" placeholder="Nueva contraseña (mín. 6 caracteres)" autocomplete="new-password">'+
+    '<input id="changePassword2" class="field" type="password" style="margin-top:8px" placeholder="Repite la nueva contraseña" autocomplete="new-password">'+
+    '<button class="primary btn" id="changePasswordBtn" type="button" style="margin-top:8px" '+(state.authBusy?'disabled':'')+'>Cambiar contraseña</button></div>'+
+    '<div class="account-security-group"><h3>Correo de recuperación</h3>'+
+    '<p class="small">Actual: <b>'+esc(state.user.email||"Sin configurar")+'</b></p>'+
+    '<label for="newRecoveryEmail">Nuevo correo electrónico</label>'+
+    '<input id="newRecoveryEmail" class="field" type="email" inputmode="email" autocomplete="email" autocapitalize="off" spellcheck="false" placeholder="nuevo@correo.com">'+
+    '<input id="newRecoveryEmailConfirm" class="field" type="email" inputmode="email" autocomplete="off" autocapitalize="off" spellcheck="false" style="margin-top:8px" placeholder="Repite el nuevo correo" aria-label="Confirmar nuevo correo">'+
+    '<button class="secondary btn" id="changeRecoveryEmailBtn" type="button" style="margin-top:9px" '+(state.authBusy?'disabled':'')+'>Solicitar cambio de correo</button>'+
+    '<p class="hint">Revisa el nuevo correo para confirmar el cambio. Según la configuración de Supabase, también puede requerirse confirmar desde el correo anterior.</p></div>';
+  const danger='<p class="muted">Elimina permanentemente la cuenta y sus datos de colección y mazos.</p>'+
+    '<button class="danger btn" id="deleteAccount" type="button">Eliminar mi cuenta</button>';
+  return header+
+    accountPanel("profile","Mi cuenta",account)+
+    accountPanel("backups","Datos y copias de seguridad",backups)+
+    accountPanel("security","Seguridad",security)+
+    accountPanel("status","Estado",accountStatusView())+
+    accountPanel("danger","Eliminar cuenta",danger,"account-destructive")+
+    '<div class="account-signout"><button class="secondary btn" id="logout" type="button">Cerrar sesión</button></div></div>';
+}
+function accountStatusView(){
+  return '<div class="small">Catálogo: '+state.cards.length.toLocaleString("es-ES")+
+    ' cartas · '+state.packs.length+' expansiones'+
+    (state.priceDate?' · Precios: '+new Date(state.priceDate).toLocaleString("es-ES"):"")+'</div>';
+}
 
 function proxyPickedEntries(){
   return Object.entries(state.proxySelection).map(([id,count])=>({c:card(id),count:Number(count)}))
@@ -2088,7 +2141,6 @@ function bindShell(){
     detailHistoryActive=false;state.detail=null;
     navigateApp(()=>{state.tab=next;state.shared=false});
   });
-  document.querySelectorAll("[data-quick-edit-deck]").forEach(b=>b.addEventListener("click",()=>{state.deckId=b.dataset.quickEditDeck;state.deckLibrary=false;renderShell();const editor=$("#deckMetaEditor");if(editor){editor.hidden=false;$("#editDeckName")?.focus()}}));
   $("#retryCollectionLoad")?.addEventListener("click",async()=>{if(!state.user)return;const id=state.user.id;await loadCollectionFromCloud(id);if(state.user?.id===id)renderShell()});
   $("#accountBtn")?.addEventListener("click",()=>{if(state.tab!=="account")navigateApp(()=>{state.tab="account";state.shared=false})});
   document.querySelectorAll("[data-close]").forEach(b=>b.onclick=()=>{state.newDeck=false;renderShell()});
@@ -2224,12 +2276,17 @@ function bindShell(){
   }
 }
 function bindAccount(){
+  document.querySelectorAll("[data-account-panel]").forEach(panel=>panel.addEventListener("toggle",()=>{
+    if(panel.open)openAccountPanels.add(panel.dataset.accountPanel);
+    else openAccountPanels.delete(panel.dataset.accountPanel);
+  }));
   $("#login")?.addEventListener("click",()=>loginFrom("#authLogin","#authPassword"));
   $("#register")?.addEventListener("click",()=>registerFrom("#registerUser","#registerEmail","#registerPassword","#registerPassword2"));
   $("#authPassword")?.addEventListener("keydown",e=>{if(e.key==="Enter")loginFrom("#authLogin","#authPassword")});
   $("#forgotPassword")?.addEventListener("click",forgotPasswordPrompt);
   $("#forgotPassword2")?.addEventListener("click",forgotPasswordPrompt);
   $("#changePasswordBtn")?.addEventListener("click",()=>changePassword($("#changePassword")?.value,$("#changePassword2")?.value));
+  $("#changeRecoveryEmailBtn")?.addEventListener("click",()=>changeRecoveryEmail($("#newRecoveryEmail")?.value,$("#newRecoveryEmailConfirm")?.value));
   $("#saveRecoveredPassword")?.addEventListener("click",()=>changePassword($("#newPassword")?.value,$("#newPassword2")?.value,{recovery:true}));
   $("#exportCsv")?.addEventListener("click",exportCollectionCSV);
   $("#importCsv")?.addEventListener("click",()=>$("#csvFile")?.click());
@@ -2330,6 +2387,39 @@ async function changePassword(password,repeat,{recovery=false}={}){
   }catch(e){state.authError=authMessage(e);notify(state.authError)}
   finally{state.authBusy=false;renderShell()}
 }
+async function changeRecoveryEmail(email,confirmation){
+  if(!state.user?.id)return notify("Inicia sesión para cambiar el correo.");
+  if(state.authBusy)return;
+  email=String(email||"").trim().toLowerCase();
+  confirmation=String(confirmation||"").trim().toLowerCase();
+  if(!email||!confirmation)return notify("Introduce el nuevo correo dos veces.");
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))return notify("Introduce un correo válido.");
+  if(email!==confirmation)return notify("Los correos no coinciden.");
+  if(email===String(state.user.email||"").toLowerCase())return notify("Ya tienes ese correo registrado.");
+  const userId=state.user.id;
+  state.authBusy=true;state.authError="";state.authNotice="";
+  openAccountPanels.add("security");
+  renderShell();
+  try{
+    const sb=state.sb||await initSupabase();
+    if(!sb)throw Error("No se pudo conectar con Supabase.");
+    if(state.user?.id!==userId)throw Error("La sesión ha cambiado.");
+    const r=await sb.auth.updateUser({email},{emailRedirectTo:AUTH_RETURN_URL});
+    if(r.error)throw r.error;
+    if(state.user?.id!==userId)return;
+    state.authNotice="Cambio solicitado. Comprueba el nuevo correo y, si se solicita, también el anterior. El cambio debe confirmarse mediante los enlaces recibidos.";
+    notify("Confirma el cambio desde tu correo.");
+  }catch(e){
+    if(state.user?.id===userId){
+      state.authError="No se pudo solicitar el cambio: "+authMessage(e);
+      notify(state.authError);
+    }
+  }finally{
+    state.authBusy=false;
+    if(state.user?.id===userId)renderShell();
+  }
+}
+
 async function deleteAccount(){
   if(!state.user)return;
   const first=confirm("¿Eliminar tu cuenta? Se borrarán permanentemente la colección y los mazos sincronizados.");
@@ -2535,7 +2625,7 @@ async function handleAuthCallback(sb){
       history.replaceState(null,"","/");
     }else{
       state.authRecovery=false;
-      state.authNotice="Correo confirmado correctamente. Tu cuenta ya está activa.";
+      state.authNotice=type==="email_change"?"Correo de recuperación confirmado correctamente.":"Correo confirmado correctamente. Tu cuenta ya está activa.";
       history.replaceState(null,"","/");
     }
     return {handled:true,error:false};
