@@ -21,7 +21,7 @@ concurrency:
 jobs:
   update:
     if: >-
-      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/audit/full-site-2026-10-08') &&
+      github.ref == 'refs/heads/main' &&
       !(github.event_name == 'push' && startsWith(github.event.head_commit.message, 'data: update Cardmarket prices'))
     runs-on: ubuntu-latest
     timeout-minutes: 30
