@@ -3,7 +3,7 @@
 // One Piece deck JPG share: 6-column card collage, exact printings and red copy badges.
 // This only reads deck/catalog data; collection quantities and Supabase are not modified.
 const WIDTH=1800, COLUMNS=6, MARGIN=99, GAP=18, CARD_W=252, CARD_H=352, CAPTION=40;
-const HEADER_H=183, ROW_H=412, FOOTER_H=102;
+const HEADER_H=183, ROW_H=412, FOOTER_H=240;
 const cache=new Map();
 let previewModal=null;
 let previewUrl=null;
@@ -189,7 +189,22 @@ function drawHeader(ctx,deck,playCount,entryCount,leaderColor){
   ctx.font="600 20px system-ui,sans-serif";
   ctx.fillText(entryCount+" IMPRESIONES · 1 LÍDER MÁX.",WIDTH-MARGIN,110);
 }
-async function makeJpg(deck,entries,onProgress){
+function drawDeckQRCode(ctx,url){
+  if(typeof qrcode!=="function")throw Error("El generador QR no está disponible.");
+  const qr=qrcode(0,"M");qr.addData(url);qr.make();
+  const count=qr.getModuleCount();
+  // Four-module quiet border; render integer pixel sizes to maintain scanner contrast.
+  const pitch=Math.max(3,Math.floor(166/(count+8))),block=(count+8)*pitch;
+  const x=WIDTH-MARGIN-block-12,y=ctx.canvas.height-FOOTER_H+(FOOTER_H-block)/2;
+  ctx.save();
+  ctx.fillStyle="#ffffff";roundRect(ctx,x-13,y-13,block+26,block+26,12);ctx.fill();
+  ctx.fillStyle="#10141e";
+  for(let row=0;row<count;row++)for(let col=0;col<count;col++){
+    if(qr.isDark(row,col))ctx.fillRect(x+(col+4)*pitch,y+(row+4)*pitch,pitch,pitch);
+  }
+  ctx.restore();
+}
+async function makeJpg(deck,entries,onProgress,publicUrl){
   const rows=Math.ceil(entries.length/COLUMNS);
   const canvas=document.createElement("canvas");
   canvas.width=WIDTH;canvas.height=HEADER_H+rows*ROW_H+FOOTER_H;
@@ -215,8 +230,14 @@ async function makeJpg(deck,entries,onProgress){
     try{drawCard(ctx,entries[i],artworks[i],i)}
     finally{artworks[i]?.close?.()}
   }
-  ctx.textAlign="center";ctx.font="700 24px system-ui,sans-serif";
-  ctx.fillStyle="#ffffff";ctx.fillText("MIÁLBUMONEPIECE · LISTA PARA COMPARTIR",WIDTH/2,canvas.height-43);
+  drawDeckQRCode(ctx,publicUrl);
+  ctx.textAlign="left";ctx.fillStyle="#ffffff";
+  ctx.font="800 31px system-ui,sans-serif";
+  ctx.fillText("ESCANEA EL QR PARA VER EL MAZO",MARGIN,canvas.height-133);
+  ctx.font="600 21px system-ui,sans-serif";
+  ctx.fillText("La lista completa está disponible en MiAlbumOnePiece",MARGIN,canvas.height-94);
+  ctx.font="600 18px system-ui,sans-serif";
+  ctx.fillText(clipText(ctx,publicUrl,WIDTH-590),MARGIN,canvas.height-56);
   const blob=await new Promise((resolve,reject)=>canvas.toBlob(b=>b?resolve(b):reject(Error("No se pudo convertir el mazo a JPG.")),"image/jpeg",.9));
   return {file:new File([blob],"mazo-"+cleanFilename(deck.name)+".jpg",{type:"image/jpeg"}),missing};
 }
@@ -240,7 +261,8 @@ function showPreview(deck){
     '<p class="deck-share-status" id="jpgShareStatus" aria-live="polite">Preparando imágenes…</p>'+
     '<img class="deck-share-preview" id="jpgSharePreview" alt="Vista previa del mazo en formato JPG" hidden>'+
     '<div class="deck-share-buttons"><button id="shareDeckJpgFile" class="primary btn" disabled>📤 Compartir JPG</button>'+
-    '<button id="downloadDeckJpgFile" class="secondary btn" disabled>⬇ Guardar JPG</button></div></div>';
+    '<button id="downloadDeckJpgFile" class="secondary btn" disabled>⬇ Guardar JPG</button>'+
+    '<button id="copyDeckPublicLink" class="secondary btn" disabled>🔗 Copiar enlace al mazo</button></div></div>';
   document.body.appendChild(dialog);
   previewModal=dialog;
   dialog.querySelector("[data-jpg-close]").onclick=()=>closePreview();
@@ -254,15 +276,19 @@ async function open(deck){
   let entries;
   try{entries=entriesForDeck(deck)}
   catch(e){notify(e.message);return}
-  const signature=JSON.stringify([deck.name,deck.leader,Object.entries(deck.cards||{}).sort()]);
   const ui=showPreview(deck);
   busy=true;
   try{
+    ui.status.textContent="Preparando el enlace público del mazo…";
+    if(typeof window.preparePublicDeckShare!=="function")throw Error("Compartir mazos todavía no está disponible.");
+    const publicUrl=await window.preparePublicDeckShare(deck);
+    if(!publicUrl)throw Error("No se ha creado el enlace público.");
+    const signature=JSON.stringify([deck.name,deck.description,deck.leader,Object.entries(deck.cards||{}).sort(),publicUrl]);
     let result=cache.get(signature);
     if(!result){
       result=await makeJpg(deck,entries,(done,total)=>{
         if(previewModal===ui.dialog)ui.status.textContent="Preparando cartas "+done+"/"+total+"…";
-      });
+      },publicUrl);
       cache.set(signature,result);
       if(cache.size>3)cache.delete(cache.keys().next().value);
     }
@@ -275,6 +301,14 @@ async function open(deck){
       ?"Imagen lista; "+missing.length+" carta(s) no pudieron cargar su ilustración."
       :"Imagen JPG lista · "+entries.length+" impresiones · "+(file.size/1024/1024).toFixed(1)+" MB.";
     ui.share.disabled=false;ui.download.disabled=false;
+    const copyLink=ui.dialog.querySelector("#copyDeckPublicLink");
+    if(copyLink){
+      copyLink.disabled=false;
+      copyLink.onclick=async()=>{
+        try{await navigator.clipboard.writeText(publicUrl);ui.status.textContent="Enlace del mazo copiado."}
+        catch{ui.status.textContent="Enlace: "+publicUrl}
+      };
+    }
     ui.download.onclick=()=>saveFile(file);
     ui.share.onclick=async()=>{
       if(typeof navigator.share!=="function"||(typeof navigator.canShare==="function"&&!navigator.canShare({files:[file]}))){
