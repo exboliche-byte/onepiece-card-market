@@ -115,7 +115,9 @@ async function loadGlobal(force=false){
   try{
     const query=new URLSearchParams({days:String(days),format});if(force)query.set("refresh","1");
     const r=await fetch("/api/meta?"+query,{headers:{accept:"application/json"}});
-    const json=await r.json();if(!r.ok)throw Error(json.error||"No se pudo consultar Limitless.");
+    const raw=await r.text();let json;
+    try{json=JSON.parse(raw)}catch{throw Error("El servidor de Meta no ha devuelto JSON válido (HTTP "+r.status+"). Reintenta actualizar.")}
+    if(!r.ok)throw Error(json.error||"No se pudo consultar Limitless (HTTP "+r.status+").");
     if(days===m.days&&format===m.format){m.global=json;if(json.partial)m.error="Algunos torneos no pudieron consultarse. La muestra mostrada es parcial."}
   }catch(e){m.error=String(e.message||e)}
   finally{m.loading=false;if(state.tab==="meta")renderShell()}
