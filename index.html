@@ -641,7 +641,7 @@ function groupCardList(arr){
   return [...by.values()];
 }
 function groupPriceStats(g){
-  const prices=g.versions.map(priceOf).filter(v=>Number.isFinite(Number(v))).map(Number);
+  const prices=g.versions.map(priceOf).filter(v=>typeof v==="number"&&Number.isFinite(v)&&v>0);
   if(!prices.length)return {min:null,max:null,sort:null};
   const min=Math.min(...prices),max=Math.max(...prices);
   return {min,max,sort:min};
@@ -728,7 +728,7 @@ function mergePriceDataset(d){
   for(const [id,rawEntry] of Object.entries(d?.cards||{})){
     const entry=selectPrimaryMarketEntry(id,rawEntry);
     const n=Number(entry?.eur);
-    if(Number.isFinite(n)){state.prices[id]=n;state.prices[norm(id)]=n;}
+    if(Number.isFinite(n)&&n>0){state.prices[id]=n;state.prices[norm(id)]=n;}
     const meta={
       url:String(entry?.url||""),
       cardmarketId:entry?.cardmarketId||null,
@@ -779,8 +779,8 @@ async function loadMarketPrices({refresh=false}={}){
   return priceDatasetPromise;
 }
 async function fillMissingExactPrices(cards=state.cards){
-  const ids=[...new Set((cards||[]).map(c=>String(c?.id||"").trim()).filter(Boolean))]
-    .filter(id=>!Number.isFinite(Number(state.prices?.[id]))&&!Number.isFinite(Number(state.prices?.[norm(id)])));
+  const ids=[...new Set((cards||[]).map(c=>String(typeof c==="string"?c:c?.id||"").trim()).filter(Boolean))]
+    .filter(id=>![state.prices?.[id],state.prices?.[norm(id)]].some(value=>Number.isFinite(Number(value))&&Number(value)>0));
   for(let i=0;i<ids.length;i+=500){
     const batch=ids.slice(i,i+500);
     try{
