@@ -3021,8 +3021,15 @@ async function preparePublicDeckShare(deck){
   if(!state.user?.id||!state.sb)throw Error("Inicia sesión para crear un enlace público del mazo.");
   if(!deck?.id||deck?.draftCompetitive)throw Error("Guarda primero el mazo en tu cuenta.");
   const userId=state.user.id;
-  const synced=await syncDeck(deck);
-  if(!synced||state.user?.id!==userId)throw Error("No se pudo sincronizar el mazo antes de compartirlo.");
+  // Existing decks are already in Supabase. Do not rewrite their saved cards
+  // just to share a JPG; only wait for the initial save if it has not landed.
+  const check=await state.sb.from("decks").select("id").eq("id",deck.id).eq("user_id",userId).maybeSingle();
+  if(check.error)throw Error("No se pudo comprobar el mazo.");
+  if(!check.data){
+    const synced=await syncDeck(deck);
+    if(!synced)throw Error("No se pudo guardar el mazo antes de compartirlo.");
+  }
+  if(state.user?.id!==userId)throw Error("La sesión ha cambiado.");
   const payload={name:String(deck.name||"Mi mazo").slice(0,120),description:String(deck.description||"").slice(0,2000),
     leader:deck.leader||"",cards:Object.fromEntries(Object.entries(deck.cards||{})
       .filter(([id,n])=>card(id)&&Number.isSafeInteger(Number(n))&&Number(n)>0).map(([id,n])=>[id,Number(n)]))};
@@ -3188,7 +3195,7 @@ async function loadShared(){
       await loadSupabaseConfig();
       if(!/^[a-f0-9]{32}$/.test(collectionPath[1]))return;
       const r=await fetch(SUPABASE_URL+"/rest/v1/rpc/public_collection_snapshot",{
-        method:"POST",headers:{apikey:SUPABASE_KEY,Authorization:"Bearer "+SUPABASE_KEY,"content-type":"application/json"},
+        method:"POST",headers:{apikey:SUPABASE_KEY,"content-type":"application/json"},
         body:JSON.stringify({p_slug:collectionPath[1]}),cache:"no-store"
       });
       if(!r.ok)throw Error("HTTP "+r.status);
@@ -3209,7 +3216,7 @@ async function loadShared(){
     if(location.pathname.startsWith("/deck/")){
       if(!/^[a-f0-9]{32}$/.test(slug))return;
       const url=SUPABASE_URL+"/rest/v1/deck_shares?select=payload&share_slug=eq."+encodeURIComponent(slug)+"&limit=1";
-      const r=await fetch(url,{headers:{apikey:SUPABASE_KEY,Authorization:"Bearer "+SUPABASE_KEY},cache:"no-store"});
+      const r=await fetch(url,{headers:{apikey:SUPABASE_KEY},cache:"no-store"});
       if(!r.ok)throw Error("HTTP "+r.status);
       const rows=await r.json();p=rows?.[0]?.payload;
     }else{
