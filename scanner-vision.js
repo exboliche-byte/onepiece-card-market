@@ -2,7 +2,7 @@
 "use strict";
 let refs=[],ready=false,busy=false;
 const W=160,H=224;
-function bitCount(x){x>>>=0;x-=(x>>>1)&0x55555555;x=(x&0x33333333)+((x>>>2)&0x33333333);return (((x+(x>>>4))&0x0f0f0f)*0x01010101)>>>24}
+function bitCount(x){x>>>=0;x-=(x>>>1)&0x55555555;x=(x&0x33333333)+((x>>>2)&0x33333333);return (((x+(x>>>4))&0x0f0f0f0f)*0x01010101)>>>24}
 function decode(hash){
  if(typeof hash!=="string"||hash.length!==64||!/^[0-9a-f]{64}$/i.test(hash))return null;
  const out=new Uint32Array(8);
