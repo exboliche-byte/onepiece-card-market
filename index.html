@@ -1036,7 +1036,10 @@ function preferredOwnedDeckPrinting(c){
 // Spend available copies once across deck rows; never modify the collection.
 function deckAvailableByPrinting(d){
   const allocated={},used=new Map();
-  for(const [id,raw] of Object.entries(d?.cards||{}).sort(([a],[b])=>String(a).localeCompare(String(b),"es",{numeric:true}))){
+  // Attribute copies to an exact owned printing first. Any remaining
+  // printing can use the rest of the shared playset, without double counting.
+  for(const [id,raw] of Object.entries(d?.cards||{}).sort(([a],[b])=>
+    qty(b)-qty(a)||String(a).localeCompare(String(b),"es",{numeric:true}))){
     const need=Math.max(0,Number(raw)||0),code=deckPrintedCode(id);
     const available=Math.max(0,deckOwnedCopies(code)-(used.get(code)||0));
     const have=Math.min(need,available);
