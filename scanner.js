@@ -182,13 +182,21 @@ function show(hit){
    if(x&&pic){pic.dataset.imageRecovery="0";pic.dataset.imageStep="";pic.dataset.imageOfficial=officialImageUrl(x);pic.dataset.imageFallback=fallbackImageUrl(x);pic.src=imageCdnUrl(x);}
  };
  $("#scanVariant").onchange=display;display();
- const add=count=>{
+ const add=async count=>{
+   if(!state.user||!state.collectionReady){say("Debes iniciar sesión y cargar tu colección antes de añadir.");return}
    const c=selected(),n=Number(count);
    if(!c){say("Selecciona primero la impresión exacta.");return}
    if(!Number.isInteger(n)||n<1||n>99){say("La cantidad debe estar entre 1 y 99.");return}
    const current=qty(c.id),next=Math.min(99,current+n);
    if(next===current){say("Ya tienes el máximo de copias admitido.");return}
-   setQty(c.id,next);resume();say("Añadidas "+(next-current)+" copia(s) de "+c.id+". Continúa escaneando.");
+   const buttons=["#scanAdd","#scanAddMore"].map(id=>$(id)).filter(Boolean);
+   buttons.forEach(button=>button.disabled=true);
+   say("Guardando la carta en Supabase…");
+   const saved=await setQty(c.id,next);
+   if(!valid())return;
+   buttons.forEach(button=>button.disabled=false);
+   if(!saved){say("No se pudo guardar la carta en la nube. La imagen sigue congelada.");return}
+   resume();say("Guardadas "+(next-current)+" copia(s) de "+c.id+" en Supabase. Continúa escaneando.");
  };
  $("#scanAdd").onclick=()=>add(1);
  $("#scanAddMore").onclick=()=>add($("#scanCount").value);
@@ -215,6 +223,7 @@ function manual(){
 }
 async function open(){
  if(root())return;
+ if(!state.user||!state.collectionReady||!state.sb){alert("Inicia sesión y carga tu colección desde Supabase antes de escanear cartas.");return}
  if(!state.cards?.length){alert("El catálogo todavía no ha terminado de cargar.");return}
  generation++;const turn=generation;closed=false;locked=false;busy=false;aiDisabled=false;streak=0;lastCode="";
  const ui=document.createElement("section");ui.id="scanPanel";
