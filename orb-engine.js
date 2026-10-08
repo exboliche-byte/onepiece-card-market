@@ -106,8 +106,11 @@ class OrbEngine {
   constructor(cv){
     this.cv=cv;this.disposed=false;
     // El constructor ORB de Emscripten no admite un único parámetro.
-    this.orb=typeof cv.ORB.create==="function"?cv.ORB.create():new cv.ORB();
-    if(typeof this.orb.setMaxFeatures==="function")this.orb.setMaxFeatures(700);
+    // Usar las firmas de OpenCV.js: ORB.create(nfeatures) o el constructor de 9 parámetros.
+    // new cv.ORB() sin argumentos no es compatible con todas las builds WASM.
+    this.orb=typeof cv.ORB.create==="function"?
+      cv.ORB.create(700):
+      new cv.ORB(700,1.2,8,31,0,2,0,31,20);
     this.matcher=typeof cv.BFMatcher.create==="function"?
       cv.BFMatcher.create(cv.NORM_HAMMING,true):
       new cv.BFMatcher(cv.NORM_HAMMING,true);

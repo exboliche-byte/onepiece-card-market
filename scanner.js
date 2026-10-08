@@ -75,10 +75,16 @@ function initializeOrb(){
   status("Arrancando reconocimiento ORB en segundo plano…");
   try{
     if(!window.Worker)throw Error("El navegador no admite Web Workers.");
-    const worker=new Worker("/orb-worker.js?v=orbworker3");
+    const worker=new Worker("/orb-worker.js?v=orbworker4");
     orbWorker=worker;
     worker.onmessage=({data})=>{
       if(!running||generation!==orbGeneration||orbWorker!==worker)return;
+      if(data.type==="boot"){status("Motor de visión iniciado. Cargando OpenCV…");return}
+      if(data.type==="vision-ready"){status("OpenCV cargado. Iniciando reconocimiento ORB…");return}
+      if(data.type==="reference-error"){
+        console.warn("ORB reference:",data.message);
+        return;
+      }
       if(data.type==="status"){status(data.message);return}
       if(data.type==="ready"){
         if(workerBootTimer){clearTimeout(workerBootTimer);workerBootTimer=null}
@@ -115,11 +121,13 @@ function initializeOrb(){
         worker.terminate();orbWorker=null;
       }
     };
-    worker.onerror=()=>{
+    worker.onerror=(event)=>{
       if(!running||generation!==orbGeneration)return;
+      const message=event?.message||"Error desconocido al cargar el motor visual";
+      console.error("ORB worker:",message,event);
       stopWorker();
-      status("Error del motor visual. Puedes usar la búsqueda manual.");
-      if(progress)progress.textContent="El motor visual no ha arrancado";
+      status("No se ha iniciado la visión ORB: "+message);
+      if(progress)progress.textContent="Fallo al inicializar OpenCV: "+message;
     };
     workerBootTimer=setTimeout(()=>{
       if(!running||generation!==orbGeneration||orbReady)return;

@@ -1,6 +1,6 @@
 /* El procesado ORB se ejecuta en un hilo independiente para no congelar la cámara. */
 "use strict";
-let engine=null,cv=null,closed=false,scanning=false;
+let engine=null,opencvApi=null,closed=false,scanning=false;
 let loaded=0,failed=0,total=0;
 const OPENCV_URL="https://docs.opencv.org/4.13.0/opencv.js";
 const post=(type,extra={})=>self.postMessage({type,...extra});
@@ -33,10 +33,11 @@ async function initialize(cards){
       throw Error("Este navegador no permite procesar imágenes en segundo plano. Prueba Chrome actualizado.");
     }
     post("status",{message:"Cargando módulo visual OpenCV en segundo plano…"});
-    importScripts("/orb-engine.js?v=orbworker3");
-    cv=await awaitCV();
+    importScripts("/orb-engine.js?v=orbworker4");
+    opencvApi=await awaitCV();
+    post("vision-ready");
     if(closed)return;
-    engine=new self.OptcgOrbEngine(cv);
+    engine=new self.OptcgOrbEngine(opencvApi);
     await engine.prepareCache();
     total=cards.length;
     post("ready",{total});
@@ -44,7 +45,7 @@ async function initialize(cards){
     // Se priorizan las cartas de la colección y se permite intercalar fotogramas.
     for(let i=0;i<cards.length&&!closed;i++){
       try{if(await engine.indexCard(cards[i]))loaded++;else failed++}
-      catch{failed++}
+      catch(error){failed++;if(failed<=2)post("reference-error",{message:String(error?.message||error)})}
       if(i<15||i%5===0||i===cards.length-1)
         post("progress",{loaded,failed,total,processed:i+1,done:i===cards.length-1});
       await new Promise(resolve=>setTimeout(resolve,12));
@@ -53,7 +54,7 @@ async function initialize(cards){
 }
 self.onmessage=async ({data})=>{
   if(closed)return;
-  if(data.type==="start"){void initialize(data.cards||[]);return}
+  if(data.type==="start"){post("boot");void initialize(data.cards||[]);return}
   if(data.type!=="frame"||!engine||!loaded||scanning)return;
   scanning=true;
   try{
