@@ -11,6 +11,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: onepiece-catalog-sync
+  cancel-in-progress: false
+
 jobs:
   sync:
     runs-on: ubuntu-latest
@@ -19,6 +23,9 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           persist-credentials: true
+
+      - name: Verify catalogue integrity rules
+        run: node --test scripts/catalog-guard.test.cjs
 
       - name: Download upstream catalog
         run: |
@@ -32,6 +39,7 @@ jobs:
           set -euo pipefail
           node <<'NODE'
           const fs=require("fs");
+          const {protectCatalog}=require("./scripts/catalog-guard.cjs");
           const raw=JSON.parse(fs.readFileSync("/tmp/optcg-allsets.json","utf8"));
           const normalizeSetCode=v=>{
             v=String(v||"").trim().toUpperCase();
@@ -116,10 +124,13 @@ jobs:
 
           if(cards.length<4500)throw new Error("merged catalog unexpectedly small: "+cards.length);
           if(packs.length<40)throw new Error("merged pack list unexpectedly small: "+packs.length);
-          console.log("Secondary exact-print cards added:",secondaryAdded);
+          const previousCards=fs.existsSync("data/cards.json")?JSON.parse(fs.readFileSync("data/cards.json","utf8")):[];
+          const previousPacks=fs.existsSync("data/packs.json")?JSON.parse(fs.readFileSync("data/packs.json","utf8")):[];
+          const integrity=protectCatalog(cards,packs,previousCards,previousPacks);
+          console.log("Secondary exact-print cards added:",secondaryAdded,"Integrity:",JSON.stringify(integrity));
           fs.writeFileSync("data/cards.json",JSON.stringify(cards,null,2)+"\n");
           fs.writeFileSync("data/packs.json",JSON.stringify(packs,null,2)+"\n");
-          fs.writeFileSync("data/catalog-meta.json",JSON.stringify({updatedAt:new Date().toISOString(),cardCount:cards.length,packCount:packs.length,source:"hugoprudente/optcgjson"},null,2)+"\n");
+          fs.writeFileSync("data/catalog-meta.json",JSON.stringify({updatedAt:new Date().toISOString(),cardCount:cards.length,packCount:packs.length,source:"hugoprudente/optcgjson",integrity},null,2)+"\n");
           NODE
 
       - name: Commit catalog changes
