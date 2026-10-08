@@ -225,10 +225,10 @@ function logicalQty(c){
 }
 function uniqueSorted(arr){return [...new Set(arr.filter(v=>v!==null&&v!==undefined&&String(v)!==""))].sort((a,b)=>String(a).localeCompare(String(b),"es"))}
 function packSortKey(code){
-  const s=String(code||"").toUpperCase().replace(/\\s+/g,"");
-  const embedded=s.match(/^OP(\\d+)-EB(\\d+)/);
-  if(embedded)return [1,Number(embedded[1]),"OP",s];
-  const m=s.match(/^(OP|ST|EB|PRB|P|DON|PROMO)[-_]?(\\d+)/);
+  const s=String(code||"").toUpperCase().replace(/\s+/g,"");
+  const merged=s.match(/^OP-?([0-9]+)-EB-?[0-9]+/);
+  if(merged)return [1,Number(merged[1]),"OP",s];
+  const m=s.match(/^(OP|ST|EB|PRB|P|DON|PROMO)[-_]?([0-9]+)/);
   const rank={OP:1,EB:2,ST:3,PRB:4,P:5,PROMO:6,DON:7};
   if(m)return [rank[m[1]]||99,Number(m[2]),m[1],s];
   return [99,9999,s,s];
@@ -241,8 +241,9 @@ function comparePacks(a,b){
 function setName(code){return state.packs.find(p=>p.code===code)?.name||code}
 function packLabel(p){
   const code=String(p?.code||"");
-  if(/^OP14-EB04$/i.test(code))return "OP14";
-  if(/^OP15-EB04$/i.test(code))return "OP15";
+  // Presentation only; don't alter stored expansion and printing identifiers.
+  if(/^OP-?14(?:-EB-?04)?$/i.test(code))return "OP-14";
+  if(/^OP-?15(?:-EB-?04)?$/i.test(code))return "OP-15";
   return code;
 }
 function expansionFamilyKey(code){
@@ -269,10 +270,10 @@ function cardsForExpansion(code){
 }
 function expansionType(code){
   const s=String(code||"").toUpperCase();
-  if(/^OP-?\\d+$/i.test(s))return "OP";
-  if(/^EB-?\\d+$/i.test(s)||/^OP\\d+-EB\\d+$/i.test(s))return "EB";
-  if(/^ST-?\\d+$/i.test(s))return "ST";
-  if(/^PRB-?\\d+$/i.test(s))return "PRB";
+  if(/^OP-?[0-9]+(?:-EB-?04)?$/i.test(s))return "OP";
+  if(/^EB-?[0-9]+$/i.test(s))return "EB";
+  if(/^ST-?[0-9]+$/i.test(s))return "ST";
+  if(/^PRB-?[0-9]+$/i.test(s))return "PRB";
   if(/^P(ROMO)?[-_]/i.test(s)||/PROMOTION/i.test(s)||/LIMITED.?PRODUCT.?CARD|OTHER.?PRODUCT.?CARD/i.test(s))return "PROMO";
   return "OTROS";
 }
@@ -917,7 +918,7 @@ async function renderCatalogResults(){
   }
 }
 function catalogView(){
-  return '<div class="wrap"><div class="hero"><div><h1>Catálogo</h1><p>Todas las cartas disponibles. Busca por nombre, ID o expansión; usa FILTRO para acotar resultados.</p></div></div><div id="liveCollectionCount" class="notice">'+(!state.user?'Inicia sesión para consultar tu colección':!state.collectionReady?'Cargando colección desde Supabase…':'Mi colección: '+collectionStats().distinct.toLocaleString("es-ES")+' cartas · '+collectionStats().copies.toLocaleString("es-ES")+' copias')+'</div>'+catalogToolbar()+'<div id="catalogResults"></div></div>';
+  return '<div class="wrap"><div class="hero"><div><h1>Catálogo</h1><p>Todas las cartas disponibles. Busca por nombre, ID o expansión; usa FILTRO para acotar resultados.</p></div></div>'+catalogToolbar()+'<div id="catalogResults"></div></div>';
 }
 function collectionActiveFilterCount(){
   const f=state.collection;let n=0;
