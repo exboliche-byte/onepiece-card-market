@@ -209,7 +209,7 @@ async function openProxyPdf(cards,button,source){
     const url=URL.createObjectURL(file);
     if(pdfTab&&!pdfTab.closed)pdfTab.location.replace(url);
     else window.location.assign(url);
-    notify("PDF abierto. Para compartir el documento, vuelve a la web y pulsa «Compartir archivo PDF».");
+    notify("PDF abierto. Para compartir el documento, vuelve a la web y pulsa «Compartir PDF de proxies».");
     // The Blob URL must remain alive while the viewer is open; sharing uses the File itself.
   }catch(error){
     if(pdfTab&&!pdfTab.closed)pdfTab.close();
@@ -243,7 +243,7 @@ async function shareProxyPdf(cards,button,source){
     }catch(error){
       if(error?.name==="AbortError")return; // The user cancelled the share sheet.
       if(error?.name==="NotAllowedError"){
-        alert("El PDF ya está preparado. Pulsa otra vez «Compartir archivo PDF» para enviarlo "+
+        alert("El PDF ya está preparado. Pulsa otra vez «Compartir PDF de proxies» para enviarlo "+
           "como documento por WhatsApp. No utilices el enlace del visor.");
       }else{
         console.warn("Compartir proxies",error);

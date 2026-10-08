@@ -82,6 +82,17 @@
 .account-destructive{border-color:#713441}
 .account-inline-status{border-top:1px solid var(--line);margin-top:14px;padding-top:12px}
 .account-inline-status h3{margin:0 0 7px;font-size:14px}
+
+.deck-action-menu-panel .deck-menu-group{display:grid;gap:7px;min-width:0}
+.deck-action-menu-panel .deck-menu-group+.deck-menu-group{border-top:1px solid var(--line);padding-top:10px;margin-top:3px}
+.deck-action-menu-panel .deck-menu-group .btn{display:block;width:100%;text-align:left;text-decoration:none}
+.deck-share-modal{z-index:95}
+.deck-share-dialog{width:min(680px,100%);max-height:94dvh;overflow:auto;background:#101521;border:1px solid var(--line);border-radius:20px 20px 0 0;padding:16px}
+.deck-share-preview{display:block;width:100%;max-height:62dvh;object-fit:contain;margin:10px auto 8px;border-radius:10px;border:1px solid var(--line);background:#091523}
+.deck-share-buttons{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+.deck-share-buttons .btn{min-height:44px}
+.deck-share-status{font-size:12px;color:var(--muted);margin-top:10px}
+@media(max-width:500px){.deck-share-dialog{padding:12px}.deck-share-buttons{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -1319,15 +1330,16 @@ function decksView(){
   if(!d){state.deckLibrary=true;return deckLibraryView()}
   const v=deckValidate(d),n=deckActiveFilterCount(),l=card(d.leader),choosingLeader=!l||state.deckChoosingLeader;
   const draftSource=d.competitiveSource||{};
-  const proxyButton='<button class="secondary btn" id="generateDeckProxies" type="button" title="A4, 9 cartas de 63 × 88 mm por hoja. Imprimir al 100%.">🖨 Generar proxies (PDF A4)</button>'+
-    '<button class="secondary btn" id="shareDeckProxies" type="button" title="Envía el archivo PDF real por WhatsApp u otra aplicación, no un enlace temporal.">📤 Compartir archivo PDF</button>';
+  const proxyButton='<button class="secondary btn" id="generateDeckProxies" type="button" title="Proxies faltantes · A4 · 9 cartas por hoja, 63 × 88 mm.">🖨 Generar PDF de proxies</button>'+
+    '<button class="secondary btn" id="shareDeckProxies" type="button" title="Compartir el PDF de proxies como documento, no como enlace temporal.">📤 Compartir PDF de proxies</button>';
   const deckActions=draft
-    ?proxyButton+(draftSource.url?'<a class="secondary btn" target="_blank" rel="noopener" href="'+esc(draftSource.url)+'">Fuente ↗</a>':'')
-    :'<button class="secondary btn" id="importDeckBtn">Importar lista</button>'+
-      '<button class="secondary btn" id="exportDeck">Exportar lista</button>'+proxyButton+
-      '<button class="secondary btn" id="editDeckMeta">Editar nombre y descripción</button>'+
-      '<button class="secondary btn" id="shareDeck">Compartir lista</button>'+
-      '<button class="danger btn" id="deleteDeck">Eliminar mazo</button>';
+    ?'<div class="deck-menu-group">'+proxyButton+'</div>'+(draftSource.url?'<div class="deck-menu-group"><a class="secondary btn" target="_blank" rel="noopener" href="'+esc(draftSource.url)+'">Fuente ↗</a></div>':'')
+    :'<div class="deck-menu-group"><button class="secondary btn" id="importDeckBtn">Importar lista</button>'+
+      '<button class="secondary btn" id="exportDeck">Exportar lista</button>'+
+      '<button class="secondary btn" id="shareDeck">📸 Compartir mazo (JPG)</button></div>'+
+      '<div class="deck-menu-group">'+proxyButton+'</div>'+
+      '<div class="deck-menu-group"><button class="secondary btn" id="editDeckMeta">Editar nombre y descripción</button>'+
+      '<button class="danger btn" id="deleteDeck">Eliminar mazo</button></div>';
   const hero='<div class="deck-compact-hero">'+
     '<div class="deck-compact-title"><button class="linkbtn" id="'+(draft?'backCompetitiveResults':'backDecks')+'">← '+(draft?'Volver a resultados':'Mis mazos')+'</button><h1>'+esc(d.name)+'</h1></div>'+
     '<details class="deck-action-menu" id="deckActionsMenu"><summary class="secondary btn" aria-label="Mostrar acciones del mazo">⋯ Acciones</summary><div class="deck-action-menu-panel">'+deckActions+'</div></details></div>'+
@@ -1943,7 +1955,7 @@ function proxyPickedView(){
       '<button type="button" class="linkbtn" data-proxy-remove="'+esc(c.id)+'">Eliminar</button></div></div></div>'
     ).join("")+'</div>':'<p class="muted">Todavía no has añadido cartas.</p>')+
     '<button id="generateStandaloneProxies" class="primary btn" type="button" style="width:100%" '+(total?'':'disabled')+'>🖨 Crear PDF A4 ('+total+' copias)</button>'+
-    '<button id="shareStandaloneProxies" class="secondary btn" type="button" style="width:100%;margin-top:8px" '+(total?'':'disabled')+'>📤 Compartir archivo PDF (WhatsApp, etc.)</button>'+
+    '<button id="shareStandaloneProxies" class="secondary btn" type="button" style="width:100%;margin-top:8px" '+(total?'':'disabled')+'>📤 Compartir PDF de proxies (WhatsApp, etc.)</button>'+
     '<p class="hint">9 cartas por página · 63 × 88 mm · imprime al 100%. Para enviarlo, usa «Compartir archivo PDF» desde aquí, no «Compartir enlace» del visor.</p>'+
     (total?'<button id="clearProxySelection" type="button" class="linkbtn">Vaciar selección</button>':'');
 }
@@ -2716,8 +2728,10 @@ async function initSupabase(){
 }
 
 function shareDeck(){
-  const d=state.decks.find(x=>x.id===state.deckId);if(!d)return notify("Abre un mazo para compartirlo");
-  renderShareModal(deckListText(d),d.name);
+  const d=state.decks.find(x=>x.id===state.deckId);
+  if(!d)return notify("Abre un mazo para compartirlo");
+  if(!window.DeckImageShare)return notify("El generador JPG todavía se está cargando. Inténtalo de nuevo.");
+  window.DeckImageShare.open(d);
 }
 function renderShareModal(text,title){
   const old=$(".sharemodal");if(old)old.remove();
@@ -3155,5 +3169,6 @@ window.addEventListener("popstate",e=>{
 <script src="/image-visibility.js"></script>
 <script src="/scanner.js"></script>
 <script src="/proxy-generator.js"></script>
+<script src="/deck-image-share.js"></script>
 </body>
 </html>
