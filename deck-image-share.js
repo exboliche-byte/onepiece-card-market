@@ -2,7 +2,7 @@
 "use strict";
 // One Piece deck JPG share: 6-column card collage, exact printings and red copy badges.
 // This only reads deck/catalog data; collection quantities and Supabase are not modified.
-const WIDTH=1800, COLUMNS=6, MARGIN=58, GAP=18, CARD_W=252, CARD_H=352, CAPTION=40;
+const WIDTH=1800, COLUMNS=6, MARGIN=99, GAP=18, CARD_W=252, CARD_H=352, CAPTION=40;
 const HEADER_H=183, ROW_H=412, FOOTER_H=102;
 const cache=new Map();
 let previewModal=null;
