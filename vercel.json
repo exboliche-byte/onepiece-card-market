@@ -51,5 +51,5 @@
       ]
     }
   ],
-  "buildCommand": "node --test scripts/scanner-ocr.test.mjs && mkdir -p public && cp index.html scanner.js scanner-ocr.js image-visibility.js public/"
+  "buildCommand": "node --test scripts/scanner-ocr.test.mjs scripts/scanner-vision.test.mjs && mkdir -p public && cp index.html scanner.js scanner-ocr.js scanner-vision.js image-visibility.js public/"
 }

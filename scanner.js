@@ -2,7 +2,12 @@
 "use strict";
 // ORB local con indexación progresiva del catálogo y caché IndexedDB.
 let camera=null,stream=null,track=null;
-let recognizer=null,recognizerReady=false,recognizerGeneration=0,lastFrameAt=0,engineError="",forceOne=false;
+let recognizer=null,recognizerReady=false,recognizerGeneration=0,lastFrameAt=0,engineError="";
+let visionWorker=null,visionReady=false,visionPending=false,visionCount=0,lastVisionAt=0,lastOCRAt=0,ocrPending=false,ocrHint="";
+let lastVisualId="",visualStable=0,visualResults=[],ocrAttempts=0;
+const visionCanvas=document.createElement("canvas");
+visionCanvas.width=160;visionCanvas.height=224;
+const visionContext=visionCanvas.getContext("2d",{willReadFrequently:true});
 
 let running=false,locked=false,processing=false,scanTimer=null,session=0;
 let lastCode="",lastSeenAt=0,repeatCount=0,attempts=0,shot=null,activeHit=null;
@@ -58,35 +63,70 @@ function matchingName(text){
 }
 function stopRecognition(){
   recognizerGeneration++;
-  recognizerReady=false;
-  const previous=recognizer;recognizer=null;
-  if(previous)void previous.destroy();
-  processing=false;
+  if(visionWorker)visionWorker.terminate();
+  visionWorker=null;visionReady=false;visionPending=false;visionCount=0;
+  const old=recognizer;recognizer=null;recognizerReady=false;ocrPending=false;
+  if(old)void old.destroy();
 }
-async function startRecognition(){
+function startRecognition(){
   stopRecognition();
   const generation=recognizerGeneration;
-  const index=$("#scanIndex");
-  if(index)index.textContent="El reconocimiento lee el código impreso: no necesita descargar imágenes.";
-  status("Iniciando reconocimiento de texto local…");
+  visualResults=[];lastVisualId="";visualStable=0;
+  const index=$("#scanIndex"),candidateBtn=$("#scanCandidates");
+  if(index)index.textContent="Cargando huellas de ilustraciones…";
+  if(candidateBtn){candidateBtn.hidden=true;candidateBtn.disabled=true}
+  status("Arrancando comparación visual…");
   try{
-    const mod=await import("/scanner-ocr.js?v=ocr5");
-    if(!running||generation!==recognizerGeneration)return;
-    const instance=mod.createEngine(message=>{
-      if(generation===recognizerGeneration&&running&&!locked)status(message);
-    });
-    recognizer=instance;
-    await instance.init();
-    if(!running||generation!==recognizerGeneration)return;
-    recognizerReady=true;engineError="";
-    status("OCR activo. Encuadra la carta y apunta a su código inferior.");
-    if(index)index.textContent="OCR listo · análisis continuo de la carta";
-  }catch(error){
-    if(!running||generation!==recognizerGeneration)return;
-    recognizerReady=false;engineError=String(error?.message||error);
-    status("OCR no disponible: "+engineError);
-    if(index)index.textContent="Pulsa «Reiniciar OCR» para reintentar. También puedes buscar manualmente.";
-  }
+    if(!window.Worker)throw Error("Este navegador no admite Web Workers");
+    const worker=new Worker("/scanner-vision.js?v=visual1");
+    visionWorker=worker;
+    const timer=setTimeout(()=>{
+      if(!running||generation!==recognizerGeneration||visionReady||visionWorker!==worker)return;
+      worker.terminate();visionWorker=null;
+      if(index)index.textContent="El índice visual no responde; OCR como alternativa.";
+    },18000);
+    worker.onmessage=({data})=>{
+      if(!running||generation!==recognizerGeneration||visionWorker!==worker)return;
+      if(data.type==="ready"){
+        clearTimeout(timer);visionReady=true;visionCount=data.count;
+        if(index)index.textContent="Índice visual listo: "+visionCount+" impresiones";
+        status("Reconocimiento visual activo. Coloca la carta dentro del recuadro.");
+      }else if(data.type==="result"){
+        visionPending=false;handleVisualResults(data.ranked||[]);
+      }else if(data.type==="frame-error"){
+        visionPending=false;console.warn("Visual frame",data.message);
+        if(index)index.textContent="Problema al analizar imagen: "+data.message;
+      }else if(data.type==="error"){
+        clearTimeout(timer);visionReady=false;visionPending=false;
+        if(index)index.textContent="Índice visual no disponible: "+data.message;
+        status("Sin comparación visual. OCR y búsqueda manual disponibles.");
+      }
+    };
+    worker.onerror=event=>{
+      clearTimeout(timer);visionPending=false;visionReady=false;
+      if(index)index.textContent="Fallo del motor visual: "+(event?.message||"error desconocido");
+    };
+    worker.postMessage({type:"init"});
+  }catch(error){if(index)index.textContent="Error visual: "+(error.message||error)}
+  // OCR es un segundo indicio, no un requisito para usar el reconocimiento visual.
+  void (async()=>{
+    try{
+      const mod=await import("/scanner-ocr.js?v=ocr5");
+      if(!running||generation!==recognizerGeneration)return;
+      const instance=mod.createEngine(message=>{
+        if(generation===recognizerGeneration&&running&&!locked&&!visionReady)status(message);
+      });
+      recognizer=instance;
+      await instance.init();
+      if(!running||generation!==recognizerGeneration)return;
+      recognizerReady=true;engineError="";
+      if(!visionReady)status("OCR activo. Buscando el código como alternativa…");
+    }catch(error){
+      if(!running||generation!==recognizerGeneration)return;
+      recognizerReady=false;engineError=String(error?.message||error);
+      if(!visionReady)status("No se pudo cargar OCR: "+engineError);
+    }
+  })();
 }
 function fitGuide(){
   const stage=$(".scanStage"),guide=$(".scanGuide");
@@ -103,7 +143,7 @@ function visibleVideoBounds(){
   const offsetX=(w*factor-r.width)/2,offsetY=(h*factor-r.height)/2;
   return {r,w,h,factor,offsetX,offsetY};
 }
-function snapshot(freeze=false){
+function snapshot(freeze=false,small=false){
   const b=visibleVideoBounds(),guide=$(".scanGuide");
   if(!b||!guide)return null;
   const g=guide.getBoundingClientRect();
@@ -112,7 +152,7 @@ function snapshot(freeze=false){
   const cropW=Math.min(b.w-left,g.width/b.factor),cropH=Math.min(b.h-top,g.height/b.factor);
   if(cropW<100||cropH<100)return null;
   const crop=document.createElement("canvas");
-  crop.width=Math.min(1050,Math.round(cropW*1.5));
+  crop.width=Math.min(small?430:1050,Math.round(cropW*1.5));
   crop.height=Math.round(crop.width*cropH/cropW);
   crop.getContext("2d").drawImage(camera,left,top,cropW,cropH,0,0,crop.width,crop.height);
   if(!freeze)return {card:crop,still:""};
@@ -128,75 +168,128 @@ function plan(){
   const tick=now=>{
     if(!running||locked||document.hidden)return;
     scanTimer=requestAnimationFrame(tick);
-    if(now-lastFrameAt<650||processing||!recognizerReady)return;
-    lastFrameAt=now;
-    void scan();
+    if(visionReady&&!visionPending&&now-lastVisionAt>750){
+      lastVisionAt=now;scanVisual();
+    }
+    if(recognizerReady&&!ocrPending&&now-lastOCRAt>5200){
+      lastOCRAt=now;void scanOCR();
+    }
   };
   scanTimer=requestAnimationFrame(tick);
 }
-async function scan(){
-  if(!running||locked||processing||!recognizerReady||!recognizer)return;
+function scanVisual(){
+  if(!running||locked||!visionWorker||!visionReady||visionPending)return;
+  try{
+    const frame=snapshot(false,true);
+    if(!frame)return;
+    visionContext.drawImage(frame.card,0,0,160,224);
+    const pixels=visionContext.getImageData(0,0,160,224).data;
+    visionPending=true;attempts++;
+    visionWorker.postMessage({type:"frame",pixels:pixels.buffer,frames:attempts,hints:ocrHint?[ocrHint]:[]},[pixels.buffer]);
+    const counter=$(".scanCounter");
+    if(counter)counter.textContent="Comparando arte · "+attempts+" capturas";
+  }catch(error){
+    visionPending=false;
+    status("Error en la captura visual: "+(error?.message||error));
+  }
+}
+function handleVisualResults(ranked){
+  if(!running||locked)return;
+  const known=new Map(state.cards.map(c=>[c.id,c]));
+  visualResults=ranked.filter(x=>known.has(x.id)).slice(0,8);
+  const button=$("#scanCandidates");
+  if(button){
+    button.hidden=!visualResults.length;button.disabled=!visualResults.length;
+    if(visualResults.length)button.textContent="Ver "+Math.min(5,visualResults.length)+" posibles cartas";
+  }
+  const best=visualResults[0],second=visualResults[1];
+  if(!best){
+    if(attempts%4===0)status("Buscando ilustración. Alinea los cuatro bordes y evita reflejos.");
+    return;
+  }
+  const gap=second?second.score-best.score:999;
+  if(lastVisualId===best.id)visualStable++;
+  else{lastVisualId=best.id;visualStable=1}
+  if(best.score<=64&&gap>=12){
+    status("Posible "+best.id+" · verificación "+visualStable+"/3");
+    if(visualStable>=3){
+      const card=known.get(best.id),code=idBase(best.id);
+      shot=snapshot(true);
+      show({card,code,variants:cardByCode(code),
+        source:"Reconocimiento visual; comprueba la impresión",confidence:"visual"});
+    }
+  }else if(attempts%2===0){
+    status("Comparando arte… Posible "+best.id+". Pulsa «Ver posibles cartas» para comprobar.");
+  }
+}
+async function scanOCR(){
+  if(!running||locked||!recognizerReady||!recognizer||ocrPending)return;
   const turn=session;
-  processing=true;attempts++;
-  const currentPass=attempts;
-  const counter=$(".scanCounter");
-  if(counter)counter.textContent="OCR activo · "+currentPass+" lecturas";
+  ocrPending=true;
   try{
     const frame=snapshot(false);
-    if(!frame){if(currentPass%4===0)status("Coloca la carta dentro del recuadro amarillo");return}
-    if(currentPass%3===0)status("Leyendo el código impreso de la carta…");
-    const result=await recognizer.recognize(frame.card,currentPass);
+    if(!frame)return;
+    const result=await recognizer.recognize(frame.card,++ocrAttempts);
     if(!running||locked||turn!==session)return;
     const code=result.codes.find(id=>cardByCode(id).length);
     if(code){
-      const variants=cardByCode(code);
-      const now=Date.now();
-      if(lastCode===code&&now-lastSeenAt<9500)repeatCount++;
+      if(lastCode===code&&Date.now()-lastSeenAt<14000)repeatCount++;
       else repeatCount=1;
-      lastCode=code;lastSeenAt=now;
-      const matched=variants.find(c=>c.id===code)||variants[0];
-      status("Detectado "+code+" · "+(forceOne?"confirmando":"verificación "+repeatCount+"/2"));
-      if(repeatCount>=2||forceOne){
-        forceOne=false;
-        shot=snapshot(true);
-        activeHit={card:matched,code,variants,source:"Número leído con OCR",confidence:"high"};
-        show(activeHit);
-      }
-    }else{
-      if(currentPass%6===0&&result.mode==="full"){
-        const possible=matchingName(result.text);
-        if(possible){
-          shot=snapshot(true);
-          showNameChoices(possible);
-          return;
+      lastCode=code;lastSeenAt=Date.now();
+      if(repeatCount>=2){
+        ocrHint=code;
+        if(!visionReady){
+          const variants=cardByCode(code);
+          visualResults=variants.slice(0,8).map(c=>({id:c.id,score:0}));
+          showVisualChoices("Código leído dos veces; elige la impresión correcta.");
         }
       }
-      if(currentPass%3===0){
-        status(result.codes.length?
-          "Código leído, pero no aparece en el catálogo: "+result.codes.join(", "):
-          "Buscando… Acerca la esquina inferior derecha, evita reflejos y mantén la carta quieta.");
-      }
-      if(lastSeenAt&&Date.now()-lastSeenAt>9500){lastCode="";repeatCount=0}
     }
   }catch(error){
     if(running&&turn===session){
-      console.warn("OCR scanner",error);
       engineError=String(error?.message||error);
-      status("Error del reconocimiento: "+engineError+". Pulsa «Reiniciar OCR».");
+      console.warn("OCR fallback",error);
       recognizerReady=false;
+      if(!visionReady)status("Error OCR: "+engineError+". Usa la búsqueda manual.");
     }
-  }finally{
-    processing=false;
+  }finally{ocrPending=false}
+}
+function showVisualChoices(heading="Posibles cartas según la ilustración"){
+  if(!running||!visualResults.length)return;
+  locked=true;cancelAnimationFrame(scanTimer);
+  shot=snapshot(true);
+  panel()?.classList.add("locked");
+  if(shot?.still){
+    const still=document.createElement("img");still.className="scanFreeze";still.src=shot.still;
+    $(".scanFreeze")?.remove();$(".scanStage").prepend(still);
   }
+  if(camera)camera.style.visibility="hidden";
+  const entries=visualResults.slice(0,8).map(item=>({item,c:state.cards.find(c=>c.id===item.id)})).filter(x=>x.c);
+  const area=$("#scanDecision");area.hidden=false;
+  area.innerHTML='<strong>'+esc(heading)+'</strong>'+
+    '<p class="small">Compara cada imagen y confirma la impresión exacta. El sistema nunca añade cartas por sí solo.</p>'+
+    '<div class="scanNameChoices">'+entries.map(({c})=>
+      '<button type="button" data-scan-print="'+esc(c.id)+'">'+cardImg(c,"scanCandidateImage")+
+      '<span><b>'+esc(c.name)+'</b><small>'+esc(c.id)+' · '+esc(printSetOf(c))+
+      '</small></span></button>').join("")+'</div>'+
+    '<div class="scanChoiceButtons"><button id="scanBackVisual">Volver a escanear</button></div>';
+  area.querySelectorAll("[data-scan-print]").forEach(button=>button.onclick=()=>{
+    const chosen=state.cards.find(c=>c.id===button.dataset.scanPrint);
+    if(!chosen)return;
+    releaseFreeze();
+    show({card:chosen,code:idBase(chosen.id),variants:cardByCode(idBase(chosen.id)),
+      selectedId:chosen.id,source:"Elegida de los resultados visuales",confidence:"manual"});
+  });
+  $("#scanBackVisual").onclick=resume;
+  status("Selecciona la impresión que se corresponde con tu carta.");
 }
 function scanImmediately(){
   if(!running)return;
-  if(!recognizerReady){status("Motor OCR aún cargando. También puedes usar «Buscar manualmente».");return}
-  forceOne=true;
-  lastFrameAt=0;
   if(locked)resume();
-  if(!processing)void scan();
-  else status("Analizando. En cuanto termine esta lectura se comprobará de nuevo.");
+  if(visualResults.length){showVisualChoices();return}
+  if(visionReady){lastVisionAt=0;scanVisual();status("Analizando ilustración…");return}
+  if(recognizerReady){lastOCRAt=0;void scanOCR();return}
+  status("Motor preparando. También puedes utilizar la búsqueda manual.");
 }
 function ownedCount(id){return Number(qty(id)||0)}
 function chooseVariant(variants,selected){
@@ -255,7 +348,7 @@ function show(hit){
   const owned=variants.reduce((total,c)=>total+ownedCount(c.id),0);
   const limit=playsetTarget(hit.card);
   const options='<option value="">Elige la impresión exacta…</option>'+variants.map(c=>
-    '<option value="'+esc(c.id)+'"'+(variants.length===1?' selected':'')+'>'+esc(c.id)+" · "+esc(variantKindOf(c))+" · "+esc(printSetOf(c))+'</option>'
+    '<option value="'+esc(c.id)+'"'+(hit.selectedId===c.id||variants.length===1?' selected':'')+'>'+esc(c.id)+" · "+esc(variantKindOf(c))+" · "+esc(printSetOf(c))+'</option>'
   ).join("");
   const area=$("#scanDecision");area.hidden=false;
   area.innerHTML='<div class="scanIdentity">'+
@@ -304,7 +397,8 @@ function resume(){
   if(!running)return;
   session++;lastCode="";repeatCount=0;lastSeenAt=0;shot=null;activeHit=null;
   releaseFreeze();
-  status(recognizerReady?"Buscando el número de la carta…":"Inicializando motor OCR…");plan();
+  visualResults=[];lastVisualId="";visualStable=0;ocrHint="";
+  status(visionReady?"Comparando ilustraciones…":"Preparando reconocimiento…");plan();
 }
 function manual(){
   if(!running)return;
@@ -372,8 +466,8 @@ async function startCamera(turn){
     await camera.play();
     if(turn!==session||!running)return;
     updateCameraControls();fitGuide();
-    status("Cámara activa. Iniciando lectura del código…");
-    hint("OCR local · lectura continua del número de carta · sin imágenes de referencia");
+    status("Cámara activa. Iniciando comparación de ilustraciones…");
+    hint("Reconocimiento de ilustraciones + OCR auxiliar · sin pago");
     plan();
     if(navigator.wakeLock?.request)navigator.wakeLock.request("screen").then(lock=>{if(running)wakeLock=lock;else lock.release()}).catch(()=>{});
   }catch(e){
@@ -414,25 +508,26 @@ async function open(){
   const turn=session;
   const p=document.createElement("section");p.id="scanPanel";
   p.innerHTML='<div class="scanLayout">'+
-    '<div class="scanTop"><h2>Escáner gratuito · One Piece</h2><button id="scanClose">✕ Cerrar</button></div>'+
+    '<div class="scanTop"><h2>Escáner visual · One Piece</h2><button id="scanClose">✕ Cerrar</button></div>'+
     '<div id="scanStatus" role="status" aria-live="polite">Preparando cámara…</div>'+
-    '<div id="scanHint">OCR en el dispositivo · sin servicios de pago</div>'+
-    '<div id="scanIndex" class="small">Preparando OCR…</div>'+
+    '<div id="scanHint">Ilustraciones + OCR auxiliar · sin servicios de pago</div>'+
+    '<div id="scanIndex" class="small">Cargando índice visual…</div>'+
     '<div class="scanStage"><video muted playsinline autoplay></video><div class="scanGuide"></div>'+
     '<div class="scanCounter">Escaneo continuo</div><div class="scanDecision" id="scanDecision" hidden></div></div>'+
     '<div class="scanTools"><button id="scanTorch" hidden>Linterna</button>'+
     '<label id="scanZoomWrap" hidden>Zoom <input id="scanZoom" type="range" min="1" max="2" step=".1"></label>'+
     '<button id="scanFlip">Cambiar cámara</button></div>'+
     '<div class="scanActions"><button class="primary" id="scanNow">Analizar ahora</button>'+ 
-    '<button id="scanRetry">Reiniciar OCR</button><button id="scanResume">Continuar</button>'+
+    '<button id="scanCandidates" hidden disabled>Ver posibles cartas</button><button id="scanRetry">Reiniciar motores</button><button id="scanResume">Continuar</button>'+
     '<button id="scanManual">Buscar manualmente</button></div>'+
-    '<div class="scanHelp">Coloca los cuatro bordes dentro del recuadro. Confirma la impresión antes de añadir copias.</div>'+
+    '<div class="scanHelp">Llena el recuadro con la carta y evita reflejos. Confirma siempre la impresión.</div>'+
     '</div>';
   document.body.appendChild(p);
   camera=$(".scanStage video");
   $("#scanClose").onclick=close;
   $("#scanResume").onclick=resume;
   $("#scanNow").onclick=scanImmediately;
+  $("#scanCandidates").onclick=()=>showVisualChoices();
   $("#scanRetry").onclick=()=>{if(running)void startRecognition()};
   $("#scanManual").onclick=manual;
   $("#scanTorch").onclick=toggleTorch;
