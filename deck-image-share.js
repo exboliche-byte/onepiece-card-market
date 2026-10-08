@@ -127,14 +127,58 @@ function drawCard(ctx,entry,image,index){
   ctx.fillText(clipText(ctx,entry.card.id,CARD_W-15),x+CARD_W/2,y+CARD_H+36);
   shield(ctx,x+CARD_W/2,y+CARD_H-48,entry.count);
 }
-function drawHeader(ctx,deck,playCount,entryCount){
-  const background=ctx.createLinearGradient(0,0,WIDTH,0);
-  background.addColorStop(0,"#0076bd");background.addColorStop(.52,"#03b8ed");background.addColorStop(1,"#007aba");
+// Read the leader's *actual illustration*, not the card's printed color identity.
+ // Sampling the middle of the art avoids most card borders, symbols and rules text.
+function leaderArtworkColor(image){
+  if(!image)return null;
+  try{
+    const sample=document.createElement("canvas");
+    sample.width=64;sample.height=88;
+    const ctx=sample.getContext("2d",{willReadFrequently:true});
+    if(!ctx)return null;
+    imageToCanvas(ctx,image,0,0,sample.width,sample.height);
+    const pixels=ctx.getImageData(0,0,sample.width,sample.height).data;
+    const buckets=Array.from({length:18},()=>({weight:0,r:0,g:0,b:0}));
+    for(let y=12;y<65;y+=2){
+      for(let x=9;x<55;x+=2){
+        const i=(y*sample.width+x)*4;
+        if(pixels[i+3]<180)continue;
+        const r=pixels[i],g=pixels[i+1],b=pixels[i+2];
+        const hi=Math.max(r,g,b),lo=Math.min(r,g,b),delta=hi-lo;
+        if(hi<45||hi>247||delta<26)continue; // omit black, paper-white and gray lettering
+        let hue=hi===r?((g-b)/delta)%6:hi===g?(b-r)/delta+2:(r-g)/delta+4;
+        hue=(hue*60+360)%360;
+        const bucket=buckets[Math.floor((hue+10)/20)%18];
+        const weight=.35+2.1*delta/hi;
+        bucket.weight+=weight;
+        bucket.r+=weight*r;bucket.g+=weight*g;bucket.b+=weight*b;
+      }
+    }
+    const winner=buckets.reduce((best,b)=>b.weight>best.weight?b:best,buckets[0]);
+    if(winner.weight<12)return null;
+    return [winner.r,winner.g,winner.b].map(v=>Math.round(v/winner.weight));
+  }catch(error){
+    // Unavailable pixels or browser-specific image decoding must never stop JPG sharing.
+    console.warn("No se pudo analizar el color del líder",error);
+    return null;
+  }
+}
+function darkTint(color,factor,base){
+  return "rgb("+color.map((v,i)=>Math.min(255,Math.round(v*factor+base[i]))).join(",")+")";
+}
+function drawHeader(ctx,deck,playCount,entryCount,leaderColor){
+  const color=leaderColor||[65,101,133]; // neutral fallback when art is unavailable
+  const background=ctx.createLinearGradient(0,0,WIDTH,ctx.canvas.height);
+  background.addColorStop(0,darkTint(color,.56,[13,16,22]));
+  background.addColorStop(.22,darkTint(color,.42,[12,14,19]));
+  background.addColorStop(.65,darkTint(color,.24,[10,12,17]));
+  background.addColorStop(1,darkTint(color,.13,[8,10,15]));
   ctx.fillStyle=background;ctx.fillRect(0,0,WIDTH,ctx.canvas.height);
-  const glow=ctx.createRadialGradient(WIDTH*.58,180,50,WIDTH*.58,180,WIDTH*.75);
-  glow.addColorStop(0,"rgba(255,255,255,.12)");glow.addColorStop(1,"rgba(255,255,255,0)");
+  const glow=ctx.createRadialGradient(WIDTH*.55,110,40,WIDTH*.55,110,WIDTH*.85);
+  glow.addColorStop(0,"rgba("+color.join(",")+",.19)");
+  glow.addColorStop(1,"rgba("+color.join(",")+",0)");
   ctx.fillStyle=glow;ctx.fillRect(0,0,WIDTH,ctx.canvas.height);
-  ctx.fillStyle="rgba(2,31,71,.35)";ctx.fillRect(0,0,WIDTH,155);
+  ctx.fillStyle="rgba(0,0,0,.28)";ctx.fillRect(0,0,WIDTH,155);
   ctx.textAlign="left";ctx.textBaseline="alphabetic";
   ctx.fillStyle="#ffffff";ctx.font="900 30px system-ui,sans-serif";
   ctx.fillText("ONE PIECE  /  MIÁLBUMONEPIECE",MARGIN,47);
@@ -151,7 +195,6 @@ async function makeJpg(deck,entries,onProgress){
   canvas.width=WIDTH;canvas.height=HEADER_H+rows*ROW_H+FOOTER_H;
   const ctx=canvas.getContext("2d",{alpha:false});
   if(!ctx)throw Error("El navegador no puede generar la imagen JPG.");
-  drawHeader(ctx,deck,Object.values(deck.cards||{}).reduce((s,n)=>s+Number(n||0),0),entries.length);
   let loaded=0,missing=[];
   // Bounded parallelism prevents an entire 50-card deck from flooding the network.
   const artworks=new Array(entries.length);
@@ -165,6 +208,9 @@ async function makeJpg(deck,entries,onProgress){
     }
   }
   await Promise.all(Array.from({length:Math.min(5,entries.length)},()=>worker()));
+  // Wait until all art is decoded so the theme matches the pictured leader.
+  const leaderColor=entries[0]?.leader?leaderArtworkColor(artworks[0]):null;
+  drawHeader(ctx,deck,Object.values(deck.cards||{}).reduce((s,n)=>s+Number(n||0),0),entries.length,leaderColor);
   for(let i=0;i<entries.length;i++){
     try{drawCard(ctx,entries[i],artworks[i],i)}
     finally{artworks[i]?.close?.()}
