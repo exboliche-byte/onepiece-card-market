@@ -3,7 +3,7 @@
 "use strict";
 const m={scope:"global",section:"tiers",days:90,format:"auto",leader:"",expanded:false,
  global:null,community:null,loading:false,communityLoading:false,error:"",communityError:"",
- consent:null,consentUser:null,consentLoading:false,consentSaving:false};
+ consent:null,consentUser:null,consentLoading:false,consentSaving:false,lastGlobalAttempt:"",lastCommunityAttempt:""};
 const css=".meta-page{max-width:1320px;padding-bottom:105px}.meta-tabs{display:flex;gap:7px;overflow-x:auto;padding:9px 0}.meta-tabs button{border:1px solid var(--line);background:var(--panel2);color:var(--text);border-radius:10px;padding:10px 12px;font-weight:800;white-space:nowrap}.meta-tabs button.active{border-color:var(--accent);color:var(--accent);background:#332d19}.meta-controls{display:flex;flex-wrap:wrap;gap:8px;align-items:end;margin:12px 0}.meta-controls label{display:grid;gap:5px;flex:1;min-width:115px;color:var(--muted);font-size:12px}.meta-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:12px 0}.meta-stat{border:1px solid var(--line);background:var(--panel);border-radius:12px;padding:11px}.meta-stat b{font-size:clamp(18px,3vw,25px);display:block}.meta-stat small{font-size:11px;color:var(--muted)}.meta-tier{display:flex;border:1px solid var(--line);background:var(--panel);border-radius:14px;overflow:hidden;margin-bottom:9px}.meta-tier-grade{width:51px;flex:none;display:grid;place-items:center;color:#16191e;font-size:26px;font-weight:950}.meta-tier-grade.s{background:#e9898e}.meta-tier-grade.a{background:#efbb79}.meta-tier-grade.b{background:#e9d68d}.meta-tier-grade.c{background:#a5c6a6}.meta-tier-grade.d{background:#8fb2cb}.meta-tier-grade.unknown{background:#8993a5}.meta-tier-items{display:flex;flex-wrap:wrap;gap:7px;min-width:0;padding:9px}.meta-leader-card{width:88px;border:1px solid var(--line);background:var(--panel2);color:var(--text);border-radius:9px;text-align:center;padding:5px}.meta-leader-card img{width:100%;aspect-ratio:.716;object-fit:cover;display:block;border-radius:5px}.meta-leader-card b{display:block;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-size:11px;margin-top:5px}.meta-leader-card small{display:block;color:var(--muted);font-size:10px}.meta-scroller{width:100%;max-height:70vh;overflow:auto;border:1px solid var(--line);border-radius:12px}.meta-table{width:100%;min-width:650px;border-collapse:separate;border-spacing:0;font-size:12px}.meta-table th,.meta-table td{padding:9px 8px;text-align:center;white-space:nowrap;border-right:1px solid #334052;border-bottom:1px solid #334052}.meta-table th{position:sticky;top:0;z-index:2;background:#283246}.meta-table th:first-child{left:0;z-index:4}.meta-table td:first-child{position:sticky;left:0;z-index:1;background:#192333;text-align:left}.meta-table small{display:block;color:#a0adbf;font-size:10px}.meta-win{background:#15513d;color:#bcf7db}.meta-mid{background:#554921;color:#fff4c7}.meta-loss{background:#592933;color:#ffcad4}.meta-no{background:#252b37;color:#929cac}.meta-consent{border:1px solid #496a5d;background:#192722;padding:14px;border-radius:14px;margin:14px 0}.meta-consent p,.meta-source{color:var(--muted);font-size:12px;line-height:1.5}.meta-source a{color:var(--accent)}@media(max-width:650px){.meta-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.meta-tier-grade{width:40px;font-size:21px}.meta-leader-card{width:73px}.meta-tier-items{padding:6px;gap:5px}}";
 const s=document.createElement("style");s.textContent=css;document.head.appendChild(s);
 const $=x=>document.querySelector(x);
@@ -108,8 +108,9 @@ function view(){
       (!loading?'<div class="notice">'+(community?"Sin datos comunitarios públicos. Es necesario aplicar la migración SQL y disponer de participantes voluntarios suficientes.":"No hay datos disponibles por el momento.")+'</div>':""))+'</div>';
 }
 async function loadGlobal(force=false){
-  if(m.loading||m.global&&!force)return;
-  const days=m.days,format=m.format;
+  const days=m.days,format=m.format,key=days+":"+format;
+  if(m.loading||(!force&&m.lastGlobalAttempt===key))return;
+  m.lastGlobalAttempt=key;
   m.loading=true;m.error="";if(state.tab==="meta")renderShell();
   try{
     const query=new URLSearchParams({days:String(days),format});if(force)query.set("refresh","1");
@@ -120,8 +121,9 @@ async function loadGlobal(force=false){
   finally{m.loading=false;if(state.tab==="meta")renderShell()}
 }
 async function loadCommunity(force=false){
-  if(m.communityLoading||m.community&&!force)return;
-  const days=m.days;
+  const days=m.days,key=String(days);
+  if(m.communityLoading||(!force&&m.lastCommunityAttempt===key))return;
+  m.lastCommunityAttempt=key;
   m.communityLoading=true;m.communityError="";if(state.tab==="meta")renderShell();
   try{
     if(!state.sb)throw Error("Supabase no disponible.");
