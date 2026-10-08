@@ -877,7 +877,7 @@ function collectionView(){
   if(!state.user)return '<div class="wrap"><div class="hero"><h1>Mi colección</h1></div><div class="section center"><h2>Inicia sesión para ver tu colección</h2><p class="muted">Solo se guarda y consulta desde tu cuenta de Supabase.</p><button class="primary btn" data-tab="account">Iniciar sesión</button></div></div>';
   if(!state.collectionReady)return '<div class="wrap"><div class="hero"><h1>Mi colección</h1></div><div class="notice">Cargando la colección desde Supabase…</div><button class="secondary btn" id="retryCollectionLoad">Reintentar carga</button></div>';
   const s=collectionStats();
-  return '<div class="wrap"><div class="hero"><div><h1>Mi colección</h1><p>Todas mis cartas, todos los sets, filtrables y ordenables.</p></div></div>'+
+  return '<div class="wrap"><div class="hero"><div><h1>Mi colección</h1><p>Todas mis cartas, todos los sets, filtrables y ordenables.</p></div><button class="danger btn" id="deletePersonalCollection" type="button">Borrar mi colección</button></div>'+
     '<div class="stats"><div class="stat"><b id="collectionValue">'+money(s.value)+'</b><span>Valor de mis cartas</span></div></div>'+collectionToolbar()+'<div id="collectionResults"></div></div>';
 }
 function updateCollectionValue(){
@@ -1305,7 +1305,8 @@ function changeQty(id,d){
 }
 async function clearCollection(){
   if(!collectionRequireLogin())return;
-  if(!confirm("¿Borrar TODA tu colección?\n\nSe eliminarán permanentemente todas las cartas de tu cuenta en Supabase.\n\nEsta acción no se puede deshacer."))return;
+  if(!confirm("¿Borrar TODA tu colección personal?\n\nSe eliminarán permanentemente todas las cartas de tu cuenta en Supabase. Esto no elimina el catálogo general ni tus mazos.\n\nEsta acción no se puede deshacer."))return;
+  if(prompt("Para confirmar la eliminación definitiva, escribe BORRAR:")!=="BORRAR"){notify("Borrado cancelado");return}
   collectionBulkBusy=true;
   const userId=state.user.id;
   try{
@@ -1579,6 +1580,7 @@ function bindShell(){
   });
   document.querySelectorAll("[data-quick-edit-deck]").forEach(b=>b.addEventListener("click",()=>{state.deckId=b.dataset.quickEditDeck;state.deckLibrary=false;renderShell();const editor=$("#deckMetaEditor");if(editor){editor.hidden=false;$("#editDeckName")?.focus()}}));
   $("#retryCollectionLoad")?.addEventListener("click",async()=>{if(!state.user)return;const id=state.user.id;await loadCollectionFromCloud(id);if(state.user?.id===id)renderShell()});
+  $("#deletePersonalCollection")?.addEventListener("click",clearCollection);
   $("#accountBtn")?.addEventListener("click",()=>{if(state.tab!=="account")navigateApp(()=>{state.tab="account";state.shared=false})});
   document.querySelectorAll("[data-close]").forEach(b=>b.onclick=()=>{state.newDeck=false;renderShell()});
   document.querySelectorAll("[data-close-auth]").forEach(b=>b.onclick=()=>{state.auth=false;renderShell()});
