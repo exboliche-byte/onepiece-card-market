@@ -4,7 +4,7 @@
 let camera=null,stream=null,track=null;
 let recognizer=null,recognizerReady=false,recognizerGeneration=0,lastFrameAt=0,engineError="";
 let visionWorker=null,visionReady=false,visionPending=false,visionCount=0,lastVisionAt=0,lastOCRAt=0,ocrPending=false,ocrHint="";
-let lastVisualId="",visualStable=0,visualResults=[],ocrAttempts=0;
+let lastVisualId="",visualStable=0,visualResults=[],ocrAttempts=0,nameHints=[];
 const visionCanvas=document.createElement("canvas");
 visionCanvas.width=160;visionCanvas.height=224;
 const visionContext=visionCanvas.getContext("2d",{willReadFrequently:true});
@@ -54,7 +54,7 @@ function matchingName(text){
   const seen=new Map();
   for(const c of state.cards){
     const name=norm(c.name).replace(/[^A-Z0-9]+/g," ").replace(/\s+/g," ").trim();
-    if(name.length>=7&&upper.includes(name)&&!seen.has(idBase(c.id)))seen.set(idBase(c.id),c);
+    if(name.length>=4&&(" "+upper+" ").includes(" "+name+" ")&&!seen.has(idBase(c.id)))seen.set(idBase(c.id),c);
   }
   const found=[...seen.values()].sort((a,b)=>b.name.length-a.name.length);
   if(!found.length)return null;
@@ -185,7 +185,7 @@ function scanVisual(){
     visionContext.drawImage(frame.card,0,0,160,224);
     const pixels=visionContext.getImageData(0,0,160,224).data;
     visionPending=true;attempts++;
-    visionWorker.postMessage({type:"frame",pixels:pixels.buffer,frames:attempts,hints:ocrHint?[ocrHint]:[]},[pixels.buffer]);
+    visionWorker.postMessage({type:"frame",pixels:pixels.buffer,frames:attempts,hints:ocrHint?[ocrHint,...nameHints]:nameHints},[pixels.buffer]);
     const counter=$(".scanCounter");
     if(counter)counter.textContent="Comparando arte · "+attempts+" capturas";
   }catch(error){
@@ -232,6 +232,13 @@ async function scanOCR(){
     const result=await recognizer.recognize(frame.card,++ocrAttempts);
     if(!running||locked||turn!==session)return;
     const code=result.codes.find(id=>cardByCode(id).length);
+    if(result.mode==="name"||result.mode==="full"){
+      const hit=matchingName(result.text);
+      if(hit){
+        const matching=state.cards.filter(c=>norm(c.name)===norm(hit.name)).slice(0,180);
+        nameHints=[...new Set(matching.map(c=>idBase(c.id)))];
+      }
+    }
     if(code){
       if(lastCode===code&&Date.now()-lastSeenAt<14000)repeatCount++;
       else repeatCount=1;
@@ -397,7 +404,7 @@ function resume(){
   if(!running)return;
   session++;lastCode="";repeatCount=0;lastSeenAt=0;shot=null;activeHit=null;
   releaseFreeze();
-  visualResults=[];lastVisualId="";visualStable=0;ocrHint="";
+  visualResults=[];lastVisualId="";visualStable=0;ocrHint="";nameHints=[];
   status(visionReady?"Comparando ilustraciones…":"Preparando reconocimiento…");plan();
 }
 function manual(){

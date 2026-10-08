@@ -113,15 +113,15 @@ export function createEngine(onProgress=()=>{}){
     const w=await init();
     if(closed)throw Error("Escáner cerrado");
     const api=window.Tesseract;
-    // Tres pasadas cíclicas: esquina del ID, toda la banda inferior, texto de la carta.
-    const mode=count%6===0?"full":count%4===0?"bottom":"corner";
+    // La ilustración manda. El OCR lee texto grande como pista, y el código solo si se distingue.
+    const mode=count%7===0?"full":count%3===0?"corner":"name";
     const config=mode==="corner"?"line":"sparse";
     if(config!==activeMode){
       await w.setParameters({tessedit_pageseg_mode:config==="line"?(api.PSM?.SINGLE_LINE||"7"):(api.PSM?.SPARSE_TEXT||"11")});
       activeMode=config;
     }
-    const region=mode==="corner"?[.39,.80,.61,.20,1150]:
-      mode==="bottom"?[0,.72,1,.28,1000]:[0,0,1,1,800];
+    const region=mode==="corner"?[.38,.78,.62,.22,1200]:
+      mode==="name"?[.03,.43,.94,.44,1100]:[0,0,1,1,850];
     const input=crop(frame,region,mode!=="full");
     const result=await w.recognize(input);
     const text=String(result?.data?.text||"");
