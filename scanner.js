@@ -2,7 +2,7 @@
 "use strict";
 let video=null,stream=null,timer=null,ocrWorker=null,ocrLoading=null,closed=true,busy=false,locked=false,generation=0;
 let frame="",lastCode="",streak=0,matches=[],recognition=null,aiDisabled=false,suggested=null;
-let aiRetryAt=0,scanCount=0,source="vision",liveSocket=null,liveBusy=false,liveReconnects=0,liveTimer=null,liveSerial=0,providerAbort=null;
+let aiRetryAt=0,scanCount=0,source="vision",liveSocket=null,liveBusy=false,liveReconnects=0,liveTimer=null,liveSerial=0,providerAbort=null,liveConfigured=false;
 const style=document.createElement("style");
 style.textContent=[
 "#scanLaunch{position:fixed;bottom:80px;right:14px;z-index:200;background:#ffd447;color:#111;border:0;border-radius:28px;padding:13px 15px;font-weight:800;box-shadow:0 6px 20px #0009;cursor:pointer}",
@@ -45,7 +45,7 @@ function takePhoto(){
  c.getContext("2d").drawImage(video,sx,sy,cropW,cropH,0,0,c.width,c.height);
  return c.toDataURL("image/jpeg",.78);
 }
-function plan(ms=5200){clearTimeout(timer);if(valid()&&!locked)timer=setTimeout(scan,ms)}
+function plan(ms=4200){clearTimeout(timer);if(valid()&&!locked&&source==="vision")timer=setTimeout(scan,ms)}
 async function getOCR(){
  if(ocrWorker)return ocrWorker;
  if(ocrLoading)return ocrLoading;
@@ -98,7 +98,7 @@ function resolveAI(data){
  return {c:base,matches:[{c:base,score:100},...other.map(c=>({c,score:65}))],confidence:data.confidence,engine:"IA",description:data.art_description||"",variantHint:data.variant_hint,confirmedCode:byCode&&data.readable_code===true};
 }
 async function vision(image,turn){
- if(aiDisabled||!state.user||!state.sb)return null;
+ if(aiDisabled||!state.user||!state.sb||Date.now()<aiRetryAt)return null;
  const session=await state.sb.auth.getSession();
  const token=session?.data?.session?.access_token;
  if(!token){aiDisabled=true;return null}
@@ -108,19 +108,21 @@ async function vision(image,turn){
    if(turn!==generation||!valid()||locked)return null;
    const data=await response.json().catch(()=>({}));
    if(!response.ok){
-     if(response.status===401||response.status===503){aiDisabled=true;say(data.error||"IA no disponible. Se usará OCR.");}
-     else if(response.status===429){say("Límite de consultas de IA. Volviendo a intentar…")}
-     else say(data.error||"No se pudo consultar la IA");
+     if(response.status===401){aiDisabled=true;say("Sesión de IA caducada. El escáner seguirá intentando con OCR.");}
+     else if(response.status===429||response.status===503){aiRetryAt=Date.now()+30000;say((data.error||"IA ocupada")+". Se reintentará automáticamente.");}
+     else{aiRetryAt=Date.now()+12000;say(data.error||"Error temporal del reconocimiento visual.");}
      return null;
    }
    return resolveAI(data);
  }finally{clearTimeout(timeout)}
 }
 function resume(){
- generation++;locked=false;busy=false;streak=0;lastCode="";suggested=null;recognition=null;
+ generation++;locked=false;busy=false;streak=0;lastCode="";suggested=null;recognition=null;root()?.classList.remove("locked");
  $(".scanStill")?.remove();const result=$("#scanResult");if(result)result.replaceChildren();
  if(video)video.style.display="";const hint=$("#scanHint");if(hint)hint.innerHTML="";
- say(aiDisabled?"Escaneando con OCR (IA no disponible).":"Buscando cartas con IA…");plan(600);
+ say("Buscando cartas continuamente…");
+ if(liveConfigured)startLive(generation);
+ else plan(600);
 }
 function consider(hit){
  if(!hit)return false;
@@ -133,7 +135,7 @@ function consider(hit){
  streak=lastCode===key?streak+1:1;lastCode=key;
  // Strong visual recognition with legible printed ID can freeze immediately;
  // weaker recognition needs consecutive frames of the same card.
- const need=hit.engine==="IA"&&hit.confidence==="high"&&hit.confirmedCode?1:2;
+ const need=(hit.engine==="IA"&&hit.confidence==="high"&&hit.confirmedCode)||(hit.engine==="TCGGraph"&&hit.confidence==="high")?1:2;
  if(hit.confidence==="low") {
    suggested=hit;
    const hint=$("#scanHint");
@@ -147,12 +149,12 @@ function consider(hit){
 }
 async function scan(){
  if(!valid()||locked||busy)return;
- const turn=generation;busy=true;
+ const turn=generation;busy=true;scanCount++;
  try{
    const photo=takePhoto();
    if(!photo){plan(900);return}
    frame=photo;
-   say(aiDisabled||!state.user?"Buscando texto de la carta…":"Analizando la ilustración con IA…");
+   say("Búsqueda continua · intento "+scanCount+(Date.now()<aiRetryAt?" · IA reintentará tras la pausa":" · analizando con IA"));
    const ai=await vision(photo,turn);
    if(!valid()||locked||turn!==generation)return;
    if(ai?.c){if(consider(ai))return}
@@ -162,7 +164,7 @@ async function scan(){
      const local=await localGuess(photo,turn);
      if(!valid()||locked||turn!==generation)return;
      if(local)consider(local);
-     else if(!ai?.ambiguous)say(aiDisabled?"OCR: no se reconoce. Acerca la carta o usa búsqueda manual.":"No reconocida. Acerca la carta, evita reflejos o busca manualmente.");
+     else if(!ai?.ambiguous)say("Escaneo activo · intento "+scanCount+". Centra una sola carta, acerca la cámara y evita reflejos.");
    }
  }catch(e){
    if(valid()&&turn===generation){say("Error de reconocimiento: "+(e.name==="AbortError"?"consulta agotada":e.message));console.warn("scanner",e);}
@@ -171,7 +173,7 @@ async function scan(){
 function show(hit){
  if(!valid()||!hit?.c)return;
  generation++;locked=true;recognition=hit;matches=hit.matches||[];
- clearTimeout(timer);
+ clearTimeout(timer);stopLive();root()?.classList.add("locked");
  const image=root().querySelector(".scanFrame");
  let still=$(".scanStill");if(!still){still=document.createElement("img");still.className="scanStill";image.insertBefore(still,image.firstChild)}
  still.src=frame;if(video)video.style.display="none";
@@ -222,7 +224,7 @@ function show(hit){
 }
 function manual(){
  if(!valid())return;
- generation++;locked=true;clearTimeout(timer);
+ generation++;locked=true;clearTimeout(timer);stopLive();root()?.classList.add("locked");
  const el=$("#scanManualArea");
  el.innerHTML='<input id="scanSearch" placeholder="Nombre o código de la carta" autocomplete="off"><div id="scanHits"></div>';
  const input=$("#scanSearch");
@@ -240,7 +242,7 @@ async function open(){
  if(root())return;
  if(!state.user||!state.collectionReady||!state.sb){alert("Inicia sesión y carga tu colección desde Supabase antes de escanear cartas.");return}
  if(!state.cards?.length){alert("El catálogo todavía no ha terminado de cargar.");return}
- generation++;const turn=generation;closed=false;locked=false;busy=false;aiDisabled=false;streak=0;lastCode="";
+ generation++;const turn=generation;closed=false;locked=false;busy=false;aiDisabled=false;aiRetryAt=0;scanCount=0;streak=0;lastCode="";liveConfigured=false;liveReconnects=0;
  const ui=document.createElement("section");ui.id="scanPanel";
  ui.innerHTML='<div class="inner"><h2>Escáner con IA <button id="scanClose" type="button">✕ Cerrar</button></h2><div id="scanStatus" role="status">Abriendo cámara…</div><div class="scanFrame"><video muted playsinline autoplay></video><div class="aim"></div><div id="scanResult"></div></div><div id="scanHint"></div><button id="scanResume">Reanudar reconocimiento</button><button id="scanManual">Buscar manualmente</button><div id="scanManualArea"></div><p class="muted">La IA analiza fotografías en la nube. Solo se envían imágenes al reconocer con tu cuenta. Los resultados pueden equivocarse: confirma siempre la impresión antes de guardarla.</p></div>';
  document.body.append(ui);
@@ -250,11 +252,11 @@ async function open(){
    const media=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:"environment"},width:{ideal:1280},height:{ideal:1920}}});
    if(turn!==generation||closed){media.getTracks().forEach(t=>t.stop());return}
    stream=media;video.srcObject=stream;await video.play();
-   if(turn===generation&&!closed){say(state.user?"IA lista. Centra una carta y mantén el móvil estable.":"Inicia sesión para IA; OCR local activo.");plan(600)}
+   if(turn===generation&&!closed){say("Cámara abierta. Centra una carta; el escáner seguirá buscando hasta reconocerla.");await startLive(turn)}
  }catch(e){say("No se pudo abrir la cámara: "+e.message+". Revisa permisos y HTTPS.")}
 }
 function close(){
- generation++;closed=true;locked=false;clearTimeout(timer);
+ generation++;closed=true;locked=false;clearTimeout(timer);stopLive();
  if(stream)stream.getTracks().forEach(t=>t.stop());stream=null;
  if(video){video.pause();video.srcObject=null}video=null;
  if(ocrWorker){ocrWorker.terminate();ocrWorker=null}
