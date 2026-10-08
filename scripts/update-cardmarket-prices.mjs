@@ -1,4 +1,6 @@
 import fs from "node:fs/promises";
+import expansionAliases from "./expansion-aliases.cjs";
+const {registerCatalogExpansionNames,registerProductExpansionNames}=expansionAliases;
 
 const PRODUCT_URL = "https://downloads.s3.cardmarket.com/productCatalog/productList/products_singles_18.json";
 const PRICE_URL = "https://downloads.s3.cardmarket.com/productCatalog/priceGuide/price_guide_18.json";
@@ -310,7 +312,7 @@ function cardmarketCardUrl(card) {
 
 
 function extractCardCode(text) {
-  const m = String(text || "").toUpperCase().match(/\b((?:OP|EB|ST|PRB)\d{2}|P)[- ](\d{3})\b/);
+  const m = String(text || "").toUpperCase().match(/\b((?:OP|EB|ST|PRB)\d{2,3}|P)[- ](\d{3})\b/);
   return m ? m[1] + "-" + m[2] : null;
 }
 
@@ -799,7 +801,7 @@ function normalizeOptcgSetCode(raw) {
   const value = String(raw || "").trim().toUpperCase();
   if (value === "OP14") return "OP14-EB04";
   if (value === "OP15") return "OP15-EB04";
-  const m = value.match(/^(OP|EB|ST|PRB)-?(\d{2})$/i);
+  const m = value.match(/^(OP|EB|ST|PRB)-?(\d{2,3})$/i);
   return m ? m[1].toUpperCase() + "-" + m[2] : value;
 }
 
@@ -902,16 +904,17 @@ function primaryExpansionMap(products) {
 }
 
 async function main() {
-  const [localCardsRaw, localPacksRaw, productsRaw, pricesRaw, previous, languageMap, exactPrintOracle] = await Promise.all([
+  const [localCardsRaw, localPacksRaw, productsRaw, pricesRaw, previous, exactPrintOracle] = await Promise.all([
     fs.readFile(new URL("../data/cards.json", import.meta.url), "utf8"),
     fs.readFile(new URL("../data/packs.json", import.meta.url), "utf8"),
     fetchJson(PRODUCT_URL),
     fetchJson(PRICE_URL),
     readPreviousDataset(),
-    loadCardmarketExpansionLanguageMap(),
     loadExactPrintOracle()
   ]);
   const packs = JSON.parse(localPacksRaw);
+  const discoveredExpansionCodes = registerCatalogExpansionNames(packs,CARDMARKET_SET_NAMES);
+  const languageMap = await loadCardmarketExpansionLanguageMap();
   const dynamicSetNames = new Map(packs.map(p => [String(p?.code || "").trim().toUpperCase(), String(p?.name || "").trim()]));
   // Price exactly the catalog the app serves. The catalog sync may augment
   // the primary source with newly published promos/reprints, so re-fetching
@@ -929,6 +932,7 @@ async function main() {
   if (!products.length) throw new Error("Cardmarket product catalog is empty");
   if (!prices.size) throw new Error("Cardmarket price guide is empty");
   const primaryExpansionBySet = primaryExpansionMap(products);
+  registerProductExpansionNames(discoveredExpansionCodes,products,primaryExpansionBySet,languageMap.expansionNamesById,CARDMARKET_SET_NAMES,extractCardCode);
   const oldCards = previous?.cards || {};
   const outputCards = {};
   const unmatched = [];
@@ -1163,6 +1167,29 @@ async function main() {
   };
 
   const priceCoverage = priced / Math.max(1, cards.length);
+  // A newly released set is published only after most new exact prints have
+  // both a real positive EUR price and their own Cardmarket product URL.
+  // Until then, retain the previously valid price dataset without guessing.
+  const newlyDiscovered = new Map();
+  for (const card of cards) {
+    if (oldCards[card.id]) continue;
+    const code = sourceSetCode(card);
+    if (!/^(OP|ST|EB|PRB)-\d{2,3}$/.test(code)) continue;
+    if (!newlyDiscovered.has(code)) newlyDiscovered.set(code, []);
+    newlyDiscovered.get(code).push(card.id);
+  }
+  for (const [code, ids] of newlyDiscovered) {
+    if (ids.length < 25) continue;
+    const trustworthy = ids.filter(id => {
+      const entry = outputCards[id];
+      return Number(entry?.eur) > 0 &&
+        /cardmarket\.com\/[^/]+\/OnePiece\/Products\?idProduct=/.test(String(entry?.url || ""));
+    }).length;
+    if (trustworthy / ids.length < .7) {
+      throw new Error("New expansion " + code + ": only " + trustworthy + "/" +
+        ids.length + " exact-price product links; preserving last good prices");
+    }
+  }
   if (coverage < MIN_COVERAGE) {
     throw new Error("Safety check failed: only " + mapped + "/" + cards.length + " cards matched to an exact Cardmarket product (" + (coverage * 100).toFixed(1) + "%)");
   }
