@@ -41,3 +41,29 @@ test("parallel and reprinted IDs retain their correct type",()=>{
    assert.equal(p.variantKind,derived,id+" print kind mismatch");
  }
 });
+
+test("every Cardmarket product is bound to at most one exact printing",()=>{
+ const seenProducts=new Map(),seenExactUrls=new Map();
+ for(const card of cards){
+   const id=String(card.id),entry=prices[id];if(!entry)continue;
+   const productId=String(entry.cardmarketId||"").trim();
+   if(productId){
+     assert.ok(!seenProducts.has(productId),"Product "+productId+" shared by "+seenProducts.get(productId)+" and "+id);
+     seenProducts.set(productId,id);
+   }
+   const url=String(entry.url||"").trim();
+   if(url){
+     const key=id.replace(/_[prc]\d+$/i,"")+"|"+url;
+     assert.ok(!seenExactUrls.has(key),"Shared print URL: "+id+" and "+seenExactUrls.get(key));
+     seenExactUrls.set(key,id);
+   }
+ }
+});
+test("every print has an image URI and a supported physical expansion",()=>{
+ const packsIndex=new Set(packs.map(p=>String(p.code).toUpperCase().replace(/[-_\s]/g,"").replace(/^OP14EB04$/,"OP14").replace(/^OP15EB04$/,"OP15")));
+ for(const c of cards){
+  assert.ok(/^https?:\/\//.test(String(c.image||c.imageUrl||"")),c.id+" missing image");
+  const set=String(c.source_set||c.set||"").toUpperCase().replace(/[-_\s]/g,"").replace(/^OP14EB04$/,"OP14").replace(/^OP15EB04$/,"OP15");
+  assert.ok(packsIndex.has(set),c.id+" unknown printing expansion: "+set);
+ }
+});
