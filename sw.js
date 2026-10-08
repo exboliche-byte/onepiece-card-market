@@ -1,10 +1,12 @@
-const CACHE="mialbumonepiece-v11";
-const SHELL=["/","/index.html","/manifest.json","/icon.svg","/data/cards.json","/data/packs.json","/data/cardmarket-prices.json"];
+/* Network-first for live catalogue, with a small offline fallback.
+   Never cache private/API responses or precache the 25 MB data feed. */
+const CACHE="mialbumonepiece-v12";
+const SHELL=["/","/index.html","/manifest.json","/icon.svg"];
 self.addEventListener("install",event=>{
-  event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(SHELL).catch(()=>{})).then(()=>self.skipWaiting()));
+  event.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL).catch(()=>{})).then(()=>self.skipWaiting()));
 });
 self.addEventListener("activate",event=>{
-  event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim()));
+  event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>key.startsWith("mialbumonepiece-")&&key!==CACHE).map(key=>caches.delete(key)))).then(()=>self.clients.claim()));
 });
 self.addEventListener("message",event=>{
   if(event.data==="SKIP_WAITING")self.skipWaiting();
@@ -12,39 +14,34 @@ self.addEventListener("message",event=>{
 self.addEventListener("fetch",event=>{
   if(event.request.method!=="GET")return;
   const url=new URL(event.request.url);
-  if(url.origin!==location.origin)return;
-  // Evita que miles de imágenes de referencia llenen CacheStorage.
-  if(url.pathname.startsWith("/orb-image/")||url.pathname.startsWith("/orb-official/"))return;
+  if(url.origin!==self.location.origin)return;
+  // API and account/session data must never be intercepted or cached.
+  if(url.pathname.startsWith("/api/")||url.pathname.startsWith("/auth/")||
+     url.pathname.startsWith("/orb-image/")||url.pathname.startsWith("/orb-official/"))return;
   if(url.pathname==="/sw.js"){
-    event.respondWith(fetch(event.request,{cache:"no-store"}));
-    return;
+    event.respondWith(fetch(event.request,{cache:"no-store"}));return;
   }
   const isData=url.pathname.startsWith("/data/");
-  if(isData){
-    if(url.pathname==="/data/cardmarket-prices.json"){
-      event.respondWith(
-        fetch(event.request,{cache:"no-store"}).then(response=>{
-          if(response.ok)caches.open(CACHE).then(cache=>cache.put(event.request,response.clone())).catch(()=>{});
-          return response;
-        }).catch(()=>caches.match(event.request).then(cached=>cached||new Response("",{status:504})))
-      );
-      return;
+  event.respondWith((async()=>{
+    try{
+      const response=await fetch(event.request,{cache:isData||event.request.mode==="navigate"?"no-store":"default"});
+      if(response.ok){
+        if(!isData||url.pathname.endsWith(".json")){
+          const copy=response.clone();
+          event.waitUntil(caches.open(CACHE).then(cache=>cache.put(event.request,copy)).catch(()=>{}));
+        }
+        return response;
+      }
+      if(!isData)return response;
+      const fallback=await caches.match(event.request);
+      return fallback||response;
+    }catch{
+      const fallback=await caches.match(event.request);
+      if(fallback)return fallback;
+      if(event.request.mode==="navigate"){
+        return await caches.match("/index.html")||Response.error();
+      }
+      return isData?new Response("",{status:504,statusText:"Offline and uncached"}):Response.error();
     }
-    event.respondWith(
-      caches.match(event.request).then(cached=>{
-        const refresh=fetch(event.request,{cache:"no-store"}).then(response=>{
-          if(response.ok)caches.open(CACHE).then(cache=>cache.put(event.request,response.clone())).catch(()=>{});
-          return response;
-        }).catch(()=>null);
-        return cached||refresh.then(response=>response||new Response("",{status:504}));
-      })
-    );
-    return;
-  }
-  event.respondWith(
-    fetch(event.request,{cache:event.request.mode==="navigate"?"no-store":"default"}).then(response=>{
-      if(response.ok)caches.open(CACHE).then(cache=>cache.put(event.request,response.clone())).catch(()=>{});
-      return response;
-    }).catch(()=>caches.match(event.request).then(cached=>cached||caches.match("/index.html")))
-  );
+  })());
 });
