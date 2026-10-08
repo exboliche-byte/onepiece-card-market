@@ -42,7 +42,7 @@ style.textContent=[
 "#scanPanel #scanStatus{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}",
 "#scanPanel #scanStatus.scan-error{position:relative;width:auto;height:auto;min-height:20px;padding:7px 10px;margin:0;overflow:visible;clip-path:none;white-space:normal;border:1px solid #dc9c5a;border-radius:8px;font-size:12px;color:#ffe1b5;background:#322116}",
 "#scanPanel .scanStage{position:relative;flex:1;min-height:0;overflow:hidden;border:1px solid #344156;border-radius:12px;background:#000}",
-"#scanPanel .scanStage video,#scanPanel .scanFreeze{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}",
+"#scanPanel .scanStage video,#scanPanel .scanFreeze{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;display:block}",
 "#scanPanel .scanGuide{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);border:2px solid #ffd447;box-shadow:0 0 0 100vmax #0006;border-radius:11px;pointer-events:none}",
 "#scanPanel .scanGuide:before,#scanPanel .scanGuide:after{content:'';position:absolute;left:10%;right:10%;height:1px;background:#ffd44777}#scanPanel .scanGuide:before{top:24%}#scanPanel .scanGuide:after{bottom:18%}",
 "#scanPanel .scanCounter{position:absolute;z-index:2;left:8px;top:8px;border:1px solid #fff4;border-radius:7px;background:#09111ae8;padding:6px 9px;font-size:11px;color:#e8eefb}",
@@ -154,23 +154,26 @@ function fitGuide(){
   const stage=$(".scanStage"),guide=$(".scanGuide");
   if(!stage||!guide)return;
   const w=Math.max(100,stage.clientWidth),h=Math.max(100,stage.clientHeight);
-  const height=Math.min(h*.85,w*.87/.716),width=height*.716;
+  const vw=camera?.videoWidth||0,vh=camera?.videoHeight||0;
+  const factor=vw&&vh?Math.min(w/vw,h/vh):1;
+  const usableW=vw?vw*factor:w,usableH=vh?vh*factor:h;
+  const height=Math.min(usableH*.85,usableW*.87/.716),width=height*.716;
   guide.style.width=Math.round(width)+"px";guide.style.height=Math.round(height)+"px";
 }
 function visibleVideoBounds(){
   if(!camera||camera.readyState<2||!camera.videoWidth||!camera.videoHeight)return null;
   const r=camera.getBoundingClientRect(),w=camera.videoWidth,h=camera.videoHeight;
   if(!r.width||!r.height)return null;
-  const factor=Math.max(r.width/w,r.height/h);
-  const offsetX=(w*factor-r.width)/2,offsetY=(h*factor-r.height)/2;
+  const factor=Math.min(r.width/w,r.height/h);
+  const offsetX=(r.width-w*factor)/2,offsetY=(r.height-h*factor)/2;
   return {r,w,h,factor,offsetX,offsetY};
 }
 function snapshot(freeze=false,small=false){
   const b=visibleVideoBounds(),guide=$(".scanGuide");
   if(!b||!guide)return null;
   const g=guide.getBoundingClientRect();
-  const left=Math.max(0,(g.left-b.r.left+b.offsetX)/b.factor);
-  const top=Math.max(0,(g.top-b.r.top+b.offsetY)/b.factor);
+  const left=Math.max(0,(g.left-b.r.left-b.offsetX)/b.factor);
+  const top=Math.max(0,(g.top-b.r.top-b.offsetY)/b.factor);
   const cropW=Math.min(b.w-left,g.width/b.factor),cropH=Math.min(b.h-top,g.height/b.factor);
   if(cropW<100||cropH<100)return null;
   const crop=document.createElement("canvas");
@@ -465,7 +468,7 @@ function manual(){
   };
   $("#scanSearch").focus();status("Búsqueda manual · no se guarda nada sin confirmación.");
 }
-function updateCameraControls(){
+async function updateCameraControls(){
   const t=track,cap=t?.getCapabilities?.()||{};
   const torchButton=$("#scanTorch"),zoomControl=$("#scanZoom"),zoomWrap=$("#scanZoomWrap");
   torch=false;
@@ -474,10 +477,16 @@ function updateCameraControls(){
   if(zoomControl&&cap.zoom){
     zoomControl.min=String(cap.zoom.min);zoomControl.max=String(cap.zoom.max);
     zoomControl.step=String(cap.zoom.step||.1);
-    zoomControl.value=String(Math.min(cap.zoom.max,Math.max(cap.zoom.min,t.getSettings?.().zoom||cap.zoom.min)));
+    zoomControl.value=String(cap.zoom.min);
   }
   if(cap.focusMode?.includes?.("continuous")){
-    t.applyConstraints({advanced:[{focusMode:"continuous"}]}).catch(()=>{});
+    try{await t.applyConstraints({advanced:[{focusMode:"continuous"}]})}catch{}
+  }
+  // The browser may start on a previously saved digital zoom. Reset the physical track
+  // to its lowest supported zoom on every camera open and camera flip.
+  if(cap.zoom&&Number.isFinite(cap.zoom.min)){
+    try{await t.applyConstraints({advanced:[{zoom:cap.zoom.min}]})}catch{if(zoomWrap)zoomWrap.hidden=true}
+    if(zoomControl)zoomControl.value=String(t.getSettings?.().zoom??cap.zoom.min);
   }
 }
 async function startCamera(turn){
@@ -502,7 +511,9 @@ async function startCamera(turn){
     camera.muted=true;camera.setAttribute("playsinline","");
     await camera.play();
     if(turn!==session||!running)return;
-    updateCameraControls();fitGuide();
+    await updateCameraControls();
+    if(turn!==session||!running)return;
+    fitGuide();
     status("Cámara activa. Iniciando comparación de ilustraciones…");
     hint("Reconocimiento de ilustraciones + OCR auxiliar · sin pago");
     plan();
@@ -532,8 +543,15 @@ async function toggleTorch(){
 }
 async function zoomCamera(value){
   if(!track||!running)return;
-  try{await track.applyConstraints({advanced:[{zoom:Number(value)}]})}
-  catch{status("El zoom no está disponible con esta cámara.")}
+  const range=track.getCapabilities?.().zoom;
+  const requested=Number(value);
+  if(!Number.isFinite(requested)||!range)return;
+  const clamped=Math.max(range.min,Math.min(range.max,requested));
+  try{
+    await track.applyConstraints({advanced:[{zoom:clamped}]});
+    const slider=$("#scanZoom");if(slider)slider.value=String(track.getSettings?.().zoom??clamped);
+    fitGuide();
+  }catch{status("El zoom no está disponible con esta cámara.")}
 }
 async function open(){
   if(panel())return;
