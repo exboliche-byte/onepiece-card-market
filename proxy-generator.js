@@ -126,11 +126,6 @@ async function createProxyPdf(cards,button){
   return pdf.save({useObjectStreams:true});
 }
 
-function safeFileName(name){
-  return String(name||"mazo").normalize("NFD").replace(/[\u0300-\u036f]/g,"")
-    .replace(/[^a-zA-Z0-9_-]+/g,"-").replace(/^-+|-+$/g,"").slice(0,70)||"mazo";
-}
-
 async function generateDeckProxies(button){
   if(generating)return;
   const d=state.decks.find(deck=>deck.id===state.deckId);
@@ -139,21 +134,34 @@ async function generateDeckProxies(button){
   try{cards=missingDeckProxies(d)}
   catch(error){notify(error.message);return}
   if(!cards.length){notify("Ya tienes todas las cartas de este mazo; no necesitas proxies.");return}
+
+  // Reserve the PDF tab within the actual click. Browsers block window.open
+  // when called after awaiting image downloads or PDF generation.
+  const pdfTab=window.open("about:blank","_blank");
+  if(pdfTab){
+    try{
+      pdfTab.opener=null;
+      pdfTab.document.title="Preparando PDF A4…";
+      pdfTab.document.body.textContent="Generando proxies A4. El PDF aparecerá aquí en cuanto esté listo…";
+    }catch{}
+  }
   generating=true;
   const before=button.textContent;button.disabled=true;
   try{
     const bytes=await createProxyPdf(cards,button);
     const blob=new Blob([bytes],{type:"application/pdf"});
-    const url=URL.createObjectURL(blob),link=document.createElement("a");
-    link.href=url;
-    link.download="proxies-"+safeFileName(d.name)+"-A4.pdf";
-    document.body.appendChild(link);link.click();link.remove();
-    setTimeout(()=>URL.revokeObjectURL(url),60000);
-    notify("PDF A4: "+cards.length+" proxies · "+Math.ceil(cards.length/PER_PAGE)+" hojas. Imprime al 100%.");
+    const url=URL.createObjectURL(blob);
+    // Display the PDF, not a forced download. If popups are blocked,
+    // navigate to the viewer in this same browser tab.
+    if(pdfTab&&!pdfTab.closed)pdfTab.location.replace(url);
+    else window.location.assign(url);
+    notify("PDF A4 abierto: "+cards.length+" proxies · "+Math.ceil(cards.length/PER_PAGE)+" hojas. Imprime al 100%.");
+    // Keep the Blob URL valid for the duration of viewing/printing.
   }catch(error){
+    if(pdfTab&&!pdfTab.closed)pdfTab.close();
     console.warn("Generador de proxies",error);
     alert("No se pudo generar el PDF completo: "+(error?.message||"error desconocido")+
-      "\nNo se ha descargado un documento incompleto.");
+      "\nNo se ha abierto un documento incompleto.");
   }finally{
     generating=false;button.disabled=false;button.textContent=before;
   }
