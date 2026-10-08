@@ -2,7 +2,7 @@
 // IndexedDB almacena solamente descriptores de cartas; NO almacena fotogramas ni datos personales.
 const URL_OPENCV="https://docs.opencv.org/4.13.0/opencv.js";
 let cvPromise;
-export function loadCV(){
+function loadCV(){
   if(cvPromise)return cvPromise;
   cvPromise=new Promise((resolve,reject)=>{
     let finished=false;
@@ -82,16 +82,22 @@ function dbWrite(db,id,data){
   try{db.transaction("images","readwrite").objectStore("images").put(data,"orb13:"+id)}
   catch{ /* navegación privada o cuota llena: continuar sin caché */ }
 }
-function loadImage(url){
-  return new Promise((resolve,reject)=>{
-    const image=new Image();
-    image.crossOrigin="anonymous";
+async function loadImage(url){
+  if(typeof createImageBitmap==="function"){
+    const response=await fetch(url,{cache:"force-cache"});
+    if(!response.ok)throw Error("HTTP "+response.status);
+    const blob=await response.blob();
+    if(!blob.type.startsWith("image/"))throw Error("No es una imagen");
+    return await createImageBitmap(blob);
+  }
+  return await new Promise((resolve,reject)=>{
+    const image=new Image();image.crossOrigin="anonymous";
     image.onload=()=>resolve(image);
     image.onerror=()=>reject(Error("No se pudo abrir la referencia"));
     image.src=url;
   });
 }
-export class OrbEngine {
+class OrbEngine {
   constructor(cv){
     this.cv=cv;this.disposed=false;
     this.orb=new cv.ORB(1000);
@@ -99,8 +105,10 @@ export class OrbEngine {
     this.mask=new cv.Mat();
     this.cards=[];
     this.postings=new Map();
-    this.frame=document.createElement("canvas");this.frame.width=320;this.frame.height=448;
-    this.ref=document.createElement("canvas");this.ref.width=320;this.ref.height=448;
+    this.frame=typeof OffscreenCanvas!=="undefined"?new OffscreenCanvas(320,448):document.createElement("canvas");
+    this.frame.width=320;this.frame.height=448;
+    this.ref=typeof OffscreenCanvas!=="undefined"?new OffscreenCanvas(320,448):document.createElement("canvas");
+    this.ref.width=320;this.ref.height=448;
     this.refCtx=this.ref.getContext("2d",{willReadFrequently:true});
     this.db=null;
   }
@@ -124,7 +132,8 @@ export class OrbEngine {
     return true;
   }
   extract(canvas){
-    const cv=this.cv,src=cv.imread(canvas),gray=new cv.Mat(),enhanced=new cv.Mat();
+    const cv=this.cv,src=new cv.Mat(canvas.height,canvas.width,cv.CV_8UC4),gray=new cv.Mat(),enhanced=new cv.Mat();
+    src.data.set(canvas.getContext("2d",{willReadFrequently:true}).getImageData(0,0,canvas.width,canvas.height).data);
     const kp=new cv.KeyPointVector(),desc=new cv.Mat();
     try{
       cv.cvtColor(src,gray,cv.COLOR_RGBA2GRAY);
@@ -148,15 +157,17 @@ export class OrbEngine {
         if(this.add(saved,card)){dbWrite(this.db,card.id,saved);return true}
       }catch(e){
         if(e?.name==="SecurityError")throw Error("Las imágenes no permiten procesarse por CORS.");
-      }finally{if(image)image.src=""}
+      }finally{if(image?.close)image.close();else if(image)image.src=""}
     }
     return false;
   }
   scan(cardCanvas){
     if(!this.cards.length)return {best:null,second:null,features:0};
     const cv=this.cv,ctx=this.frame.getContext("2d",{willReadFrequently:true});
-    ctx.drawImage(cardCanvas,0,0,320,448);
-    const src=cv.imread(this.frame),gray=new cv.Mat(),enhanced=new cv.Mat();
+    if(cardCanvas instanceof ImageData)ctx.putImageData(cardCanvas,0,0);
+    else ctx.drawImage(cardCanvas,0,0,320,448);
+    const src=new cv.Mat(448,320,cv.CV_8UC4),gray=new cv.Mat(),enhanced=new cv.Mat();
+    src.data.set(ctx.getImageData(0,0,320,448).data);
     const kp=new cv.KeyPointVector(),desc=new cv.Mat();
     try{
       cv.cvtColor(src,gray,cv.COLOR_RGBA2GRAY);cv.equalizeHist(gray,enhanced);
@@ -203,3 +214,5 @@ export class OrbEngine {
     this.mask.delete();this.matcher.delete();this.orb.delete();
   }
 }
+
+self.OptcgOrbEngine=OrbEngine;

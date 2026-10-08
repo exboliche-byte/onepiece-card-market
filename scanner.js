@@ -2,8 +2,8 @@
 "use strict";
 // ORB local con indexación progresiva del catálogo y caché IndexedDB.
 let camera=null,stream=null,track=null;
-let orb=null,orbGeneration=0,orbReady=false,orbCount=0,orbFailed=0,lastFrameAt=0,orbScope="all";
-let cvModulePromise=null;
+let orbGeneration=0,orbReady=false,orbCount=0,orbFailed=0,lastFrameAt=0,orbScope="all";
+
 let running=false,locked=false,processing=false,scanTimer=null,session=0;
 let lastCode="",lastSeenAt=0,repeatCount=0,attempts=0,shot=null,activeHit=null;
 let torch=false,facing="environment",cameraStarting=false,resizeWatcher=null,wakeLock=null;
@@ -60,48 +60,79 @@ function orbCandidates(){
   return [...new Map(subset.map(c=>[c.id,{id:c.id,baseId:idBase(c.id),
     name:c.name,printSet:printSetOf(c)}])).values()];
 }
-async function initializeOrb(){
-  const generation=++orbGeneration;
-  orbReady=false;orbCount=0;orbFailed=0;
-  status("Cargando módulo de visión OpenCV WebAssembly…");
+let orbWorker=null,workerBootTimer=null;
+function stopWorker(){
+  orbGeneration++;
+  if(workerBootTimer){clearTimeout(workerBootTimer);workerBootTimer=null}
+  if(orbWorker){orbWorker.terminate();orbWorker=null}
+  orbReady=false;orbCount=0;processing=false;
+}
+function initializeOrb(){
+  stopWorker();
+  const generation=orbGeneration,cards=orbCandidates();
+  const progress=$("#scanIndex");
+  if(progress)progress.textContent="Referencias: 0 / "+cards.length;
+  status("Cargando módulo de visión en segundo plano…");
   try{
-    if(orb){orb.dispose();orb=null}
-    const mod=await import("/orb-engine.js");
-    if(!running||generation!==orbGeneration)return;
-    cvModulePromise ||= mod.loadCV();
-    const cv=await cvModulePromise;
-    if(!running||generation!==orbGeneration)return;
-    const engine=new mod.OrbEngine(cv);
-    orb=engine;
-    await engine.prepareCache();
-    if(!running||generation!==orbGeneration)return;
-    const cards=orbCandidates();
-    const progress=$("#scanIndex");
-    if(progress)progress.textContent="Indexando referencias: 0 / "+cards.length;
-    orbReady=true;
-    if(cards.length===0){status("Este filtro no contiene cartas. Cambia el ámbito del catálogo.");return}
-    status("Indexando imágenes ORB en el dispositivo. Puedes escanear mientras se cargan…");
-    for(const entry of cards){
-      if(!running||generation!==orbGeneration)break;
-      try{if(await engine.indexCard(entry))orbCount++;else orbFailed++}
-      catch(e){orbFailed++;console.warn("ORB reference",entry.id,e)}
-      if(progress&&(orbCount+orbFailed)%3===0)progress.textContent=
-        "Referencias ORB: "+orbCount+" / "+cards.length+(orbFailed?" · Sin imagen: "+orbFailed:"");
-      // Pausa entre referencias para que la cámara conserve respuesta en móviles.
-      if((orbCount+orbFailed)%2===0)await new Promise(r=>setTimeout(r,24));
-    }
-    if(running&&generation===orbGeneration){
-      if(progress)progress.textContent="Referencias ORB: "+orbCount+" / "+cards.length+
-        (orbFailed?" · Sin imagen: "+orbFailed:"");
-      status(orbCount?"Reconocimiento ORB listo · "+orbCount+" impresiones indexadas.":
-        "No se pudo generar ninguna referencia. Revisa las imágenes del catálogo.");
-    }
+    if(!window.Worker)throw Error("El navegador no admite Web Workers.");
+    const worker=new Worker("/orb-worker.js?v=orbworker2");
+    orbWorker=worker;
+    worker.onmessage=({data})=>{
+      if(!running||generation!==orbGeneration||orbWorker!==worker)return;
+      if(data.type==="status"){status(data.message);return}
+      if(data.type==="ready"){
+        if(workerBootTimer){clearTimeout(workerBootTimer);workerBootTimer=null}
+        orbReady=true;
+        status("Módulo ORB listo. Preparando referencias sin bloquear la cámara…");
+        return;
+      }
+      if(data.type==="progress"){
+        orbCount=data.loaded;orbFailed=data.failed;
+        if(progress)progress.textContent="Referencias: "+orbCount+" / "+data.total+
+          (orbFailed?" · No disponibles: "+orbFailed:"")+(data.done?" · Índice terminado":"");
+        if(data.done&&orbCount===0)status("No hay imágenes disponibles para el reconocimiento. Puedes buscar manualmente.");
+        else if(data.done)status("Índice ORB preparado: "+orbCount+" cartas. Buscando…");
+        return;
+      }
+      if(data.type==="result"){
+        processing=false;
+        handleOrbResult(data);
+        return;
+      }
+      if(data.type==="frameError"){
+        processing=false;
+        console.warn("ORB frame",data.message);
+        status("Error en el análisis: "+data.message);
+        return;
+      }
+      if(data.type==="error"){
+        if(workerBootTimer){clearTimeout(workerBootTimer);workerBootTimer=null}
+        processing=false;orbReady=false;
+        status("Reconocimiento no disponible: "+data.message+" Puedes buscar manualmente.");
+        if(progress)progress.textContent="Error preparando reconocimiento visual";
+        worker.terminate();orbWorker=null;
+      }
+    };
+    worker.onerror=()=>{
+      if(!running||generation!==orbGeneration)return;
+      stopWorker();
+      status("Error del motor visual. Puedes usar la búsqueda manual.");
+      if(progress)progress.textContent="El motor visual no ha arrancado";
+    };
+    workerBootTimer=setTimeout(()=>{
+      if(!running||generation!==orbGeneration||orbReady)return;
+      stopWorker();
+      status("OpenCV no ha respondido en 30 segundos. Usa la búsqueda manual o reinicia el escáner.");
+    },30000);
+    worker.postMessage({type:"start",cards});
   }catch(e){
-    console.error("ORB initialization",e);
-    if(running&&generation===orbGeneration)status("Error cargando ORB: "+(e.message||e));
+    stopWorker();status("Error del motor visual: "+(e.message||e)+". Usa la búsqueda manual.");
   }
 }
-function setOrbScope(value){orbScope=value;orbGeneration++;orbReady=false;void initializeOrb()}
+function setOrbScope(value){
+  orbScope=value;lastCode="";repeatCount=0;
+  if(running)initializeOrb();
+}
 function fitGuide(){
   const stage=$(".scanStage"),guide=$(".scanGuide");
   if(!stage||!guide)return;
@@ -137,47 +168,57 @@ function snapshot(freeze=false){
   still.getContext("2d").drawImage(camera,stillX,stillY,Math.min(b.w-stillX,b.r.width/b.factor),Math.min(b.h-stillY,b.r.height/b.factor),0,0,still.width,still.height);
   return {card:crop,still:still.toDataURL("image/jpeg",.79)};
 }
+const frameCanvas=document.createElement("canvas");
+frameCanvas.width=320;frameCanvas.height=448;
+const frameContext=frameCanvas.getContext("2d",{willReadFrequently:true});
 function plan(){
   if(scanTimer)cancelAnimationFrame(scanTimer);
   const tick=now=>{
     if(!running||locked||document.hidden)return;
     scanTimer=requestAnimationFrame(tick);
-    if(now-lastFrameAt<260||processing||!orbReady||!orb?.cards.length)return;
+    if(now-lastFrameAt<340||processing||!orbReady||!orbCount)return;
     lastFrameAt=now;scan();
   };
   scanTimer=requestAnimationFrame(tick);
 }
 function scan(){
-  if(!running||locked||processing||document.hidden||!orb?.cards.length)return;
-  processing=true;attempts++;
+  if(!running||locked||processing||!orbReady||!orbWorker||document.hidden)return;
   try{
     const frame=snapshot(false);
     if(!frame)return;
-    const outcome=orb.scan(frame.card),best=outcome.best,second=outcome.second;
-    const counter=$(".scanCounter");
-    if(counter)counter.textContent="ORB · "+orbCount+" refs · "+(best?.good||0)+" coincidencias";
-    const enough=best&&best.good>=41&&best.cells>=5;
-    const ambiguous=enough&&second&&second.good>=41&&
-      (second.good>=best.good*.91||best.good-second.good<6);
-    if(!enough||ambiguous){
-      lastCode="";repeatCount=0;
-      if(attempts%6===0)status(ambiguous?"Varias impresiones se parecen; acércate o cambia el ángulo.":
-        "Buscando carta… "+(orbCount?"("+orbCount+" referencias)":"preparando catálogo"));
-      return;
-    }
-    if(lastCode===best.card.id)repeatCount++;else{lastCode=best.card.id;repeatCount=1}
-    status("Coincidencia ORB: "+best.card.id+" · verificando "+repeatCount+" / 3");
-    if(repeatCount<3)return;
-    const matched=state.cards.find(c=>c.id===best.card.id);
-    if(!matched)return;
-    shot=snapshot(true);
-    activeHit={card:matched,code:idBase(matched.id),variants:cardByCode(idBase(matched.id)),
-      source:"Reconocimiento visual ORB ("+best.good+" coincidencias)",confidence:"high"};
-    show(activeHit);
+    frameContext.drawImage(frame.card,0,0,320,448);
+    const pixels=frameContext.getImageData(0,0,320,448).data;
+    processing=true;attempts++;
+    orbWorker.postMessage({type:"frame",pixels:pixels.buffer},[pixels.buffer]);
   }catch(e){
-    console.warn("ORB scan",e);
-    status("Error procesando imagen: "+(e.message||e));
-  }finally{processing=false}
+    processing=false;
+    status("Error capturando fotograma: "+(e.message||e));
+  }
+}
+function handleOrbResult(outcome){
+  if(!running||locked)return;
+  const best=outcome.best,second=outcome.second;
+  const counter=$(".scanCounter");
+  if(counter)counter.textContent="ORB · "+orbCount+" refs · "+(best?.good||0)+" coincidencias";
+  const enough=best&&best.good>=32&&best.cells>=5;
+  const ambiguous=enough&&second&&second.good>=28&&
+    (second.good>=best.good*.9||best.good-second.good<7);
+  if(!enough||ambiguous){
+    lastCode="";repeatCount=0;
+    if(attempts%8===0)status(ambiguous?
+      "Impresiones similares. Acerca la carta y evita reflejos.":
+      "Buscando imagen… referencias listas: "+orbCount);
+    return;
+  }
+  if(lastCode===best.id)repeatCount++;else{lastCode=best.id;repeatCount=1}
+  status("Posible "+best.id+" · comprobando "+repeatCount+" / 3");
+  if(repeatCount<3)return;
+  const matched=state.cards.find(c=>c.id===best.id);
+  if(!matched)return;
+  shot=snapshot(true);
+  activeHit={card:matched,code:idBase(matched.id),variants:cardByCode(idBase(matched.id)),
+    source:"Reconocimiento ORB ("+best.good+" coincidencias)",confidence:"high"};
+  show(activeHit);
 }
 function ownedCount(id){return Number(qty(id)||0)}
 function chooseVariant(variants,selected){
@@ -285,7 +326,7 @@ function resume(){
   if(!running)return;
   session++;lastCode="";repeatCount=0;lastSeenAt=0;shot=null;activeHit=null;
   releaseFreeze();
-  status("Buscando de forma continua…");if(!processing)plan(250);
+  status(orbCount?"Buscando en "+orbCount+" cartas…":"Preparando referencias ORB…");plan();
 }
 function manual(){
   if(!running)return;
@@ -353,8 +394,8 @@ async function startCamera(turn){
     await camera.play();
     if(turn!==session||!running)return;
     updateCameraControls();fitGuide();
-    status("Cámara activa · buscando cartas sin parar");
-    hint("ORB + Hamming · sin ORB · vídeo procesado en este dispositivo.");
+    status("Cámara activa. Preparando referencias visuales…");
+    hint("ORB + Hamming · sin OCR · cálculo separado de la cámara.");
     plan(250);
     if(navigator.wakeLock?.request)navigator.wakeLock.request("screen").then(lock=>{if(running)wakeLock=lock;else lock.release()}).catch(()=>{});
   }catch(e){
@@ -436,8 +477,7 @@ function close(){
   if(stream){stream.getTracks().forEach(t=>t.stop());stream=null}
   if(camera){camera.pause();camera.srcObject=null;camera=null}
   track=null;shot=null;activeHit=null;
-  orbGeneration++;orbReady=false;cvModulePromise=null;
-  if(orb){orb.dispose();orb=null}
+  stopWorker();
   panel()?.remove();
 }
 document.addEventListener("visibilitychange",()=>{
