@@ -878,7 +878,7 @@ function collectionView(){
   if(!state.collectionReady)return '<div class="wrap"><div class="hero"><h1>Mi colección</h1></div><div class="notice">Cargando la colección desde Supabase…</div><button class="secondary btn" id="retryCollectionLoad">Reintentar carga</button></div>';
   const s=collectionStats();
   return '<div class="wrap"><div class="hero"><div><h1>Mi colección</h1><p>Todas mis cartas, todos los sets, filtrables y ordenables.</p></div><button class="danger btn" id="deletePersonalCollection" type="button">Borrar mi colección</button></div>'+
-    '<div class="stats"><div class="stat"><b id="collectionValue">'+money(s.value)+'</b><span>Valor de mis cartas</span></div></div><div class="notice">Protección activa: cada alta de cartas exige tu confirmación y se verifica en Supabase.</div>'+collectionToolbar()+'<div id="collectionResults"></div></div>';
+    '<div class="stats"><div class="stat"><b id="collectionValue">'+money(s.value)+'</b><span>Valor de mis cartas</span></div></div>'+collectionToolbar()+'<div id="collectionResults"></div></div>';
 }
 function updateCollectionValue(){
   const el=$("#collectionValue");
@@ -1131,7 +1131,7 @@ function deckRows(d){
     const l=card(d.leader);
     if(l){
       const lp=priceOf(l),missing=qty(l.id)<1;
-      r.push('<article class="card deck-owned-card '+(missing?"deckcard-missing":"")+'"><span class="tag">Líder</span><button class="linkbtn" data-detail="'+esc(l.id)+'" style="display:block;width:100%;padding:0">'+deckOwnedImg(l,qty(l.id),1)+'</button><div class="cardbody"><div class="name">'+esc(l.name||l.id)+'</div><div class="small">'+esc(l.id)+' · '+esc(l.colors?.join("/")||"—")+'</div><div class="small deck-owned-status">'+(lp!==null?money(lp)+' · ':"")+(missing?"te falta 1":"en colección")+'</div><button class="danger btn" style="width:100%;margin-top:6px" data-removeleader>Quitar líder</button></div></article>');
+      r.push('<article class="card deck-owned-card '+(missing?"deckcard-missing":"")+'"><span class="tag">Líder</span><button class="linkbtn" data-detail="'+esc(l.id)+'" style="display:block;width:100%;padding:0">'+deckOwnedImg(l,qty(l.id),1)+'</button><div class="cardbody"><div class="name">'+esc(l.name||l.id)+'</div><div class="small">'+esc(l.id)+' · '+esc(l.colors?.join("/")||"—")+'</div><div class="small deck-owned-status">'+(lp!==null?money(lp)+' · ':"")+(missing?"te falta 1":"en colección")+'</div>'+(state.user&&state.collectionReady&&qty(l.id)<99?'<button type="button" class="secondary btn" style="width:100%;margin:6px 0 3px;font-size:11px;padding:7px 3px" data-deck-collect="'+esc(l.id)+'">＋1 a colección</button>':'')+'<button class="danger btn" style="width:100%;margin-top:6px" data-removeleader>Quitar líder</button></div></article>');
     }
   }
   for(const [id,nRaw] of Object.entries(d.cards||{}).sort(([a],[b])=>String(a).localeCompare(String(b),"es",{numeric:true}))){
@@ -1140,7 +1140,7 @@ function deckRows(d){
     const have=qty(id),need=Math.max(0,n-have),unit=priceOf(cc),total=unit===null?null:n*Number(unit);
     const info=(unit!==null?money(unit)+(n>1?' · '+money(total):''):'Precio —');
     const ownership=need?('Tienes '+Math.min(have,n)+'/'+n+' · faltan '+need):('Tienes '+Math.min(have,n)+'/'+n);
-    r.push('<article class="card deck-owned-card '+(need?"deckcard-missing":"")+'"><span class="tag">×'+n+'</span><button class="linkbtn" data-detail="'+esc(cc.id)+'" style="display:block;width:100%;padding:0">'+deckOwnedImg(cc,have,n)+'</button><div class="cardbody"><div class="name">'+esc(cc.name||cc.id)+'</div><div class="small">'+esc(cc.id)+' · '+esc(cc.set||"—")+' · '+esc(cc.rarity||"—")+'</div><div class="small deck-owned-status">'+info+'<br>'+ownership+'</div><div class="quick"><button class="secondary" data-deckqty="'+esc(id)+'" data-d="-1">−</button><div class="qty">'+n+'</div><button class="primary" data-deckqty="'+esc(id)+'" data-d="1">+</button></div></div></article>');
+    r.push('<article class="card deck-owned-card '+(need?"deckcard-missing":"")+'"><span class="tag">×'+n+'</span><button class="linkbtn" data-detail="'+esc(cc.id)+'" style="display:block;width:100%;padding:0">'+deckOwnedImg(cc,have,n)+'</button><div class="cardbody"><div class="name">'+esc(cc.name||cc.id)+'</div><div class="small">'+esc(cc.id)+' · '+esc(cc.set||"—")+' · '+esc(cc.rarity||"—")+'</div><div class="small deck-owned-status">'+info+'<br>'+ownership+'</div>'+(state.user&&state.collectionReady&&have<99?'<button type="button" class="secondary btn" style="width:100%;margin:6px 0 3px;font-size:11px;padding:7px 3px" data-deck-collect="'+esc(id)+'">＋1 a colección</button>':'')+'<div class="quick"><button class="secondary" data-deckqty="'+esc(id)+'" data-d="-1">−</button><div class="qty">'+n+'</div><button class="primary" data-deckqty="'+esc(id)+'" data-d="1">+</button></div></div></article>');
   }
   return r.join("")||'<div class="notice" style="grid-column:1/-1">Elige primero un líder.</div>';
 }
@@ -1299,10 +1299,9 @@ function createDeck(){
   const name=prompt("Nombre del mazo","Nuevo mazo");if(!name)return;
   const d={id:crypto.randomUUID(),name:name.trim(),leader:"",cards:{},description:"",colors:[],owner_id:state.user.id,updatedAt:new Date().toISOString()};state.decks.unshift(d);state.deckId=d.id;saveLocal();syncDeck(d);renderShell();
 }
-function changeQty(id,d,event){
-  // Never accept synthetic/background clicks as permission to mutate inventory.
-  if(!event?.isTrusted || (Number(d)!==1 && Number(d)!==-1))return Promise.resolve(false);
-  return writeCollection(id,current=>current+Number(d),{source:"manual",trustedClick:true});
+function changeQty(id,d){
+  // Deltas are computed against the last confirmed server write for this card.
+  return writeCollection(id,current=>current+Number(d||0));
 }
 async function clearCollection(){
   if(!collectionRequireLogin())return;
@@ -1330,7 +1329,7 @@ async function clearCollection(){
     if(state.user?.id===userId)renderShell();
   }finally{collectionBulkBusy=false}
 }
-function setQty(id,n,permission){return writeCollection(id,n,permission)}
+function setQty(id,n){return writeCollection(id,n)}
 // An explicit CSV import may replace a signed-in user's collection, but never from
 // browser cache. The server is read back after all writes; no optimistic local import.
 async function replaceCollectionFromCSV(imported){
@@ -1373,6 +1372,13 @@ async function replaceCollectionFromCSV(imported){
 }
 
 function deckCardTotal(d){return Object.values(d?.cards||{}).reduce((s,n)=>s+Number(n||0),0)}
+function addDeckCardToCollection(id){
+  const d=state.decks.find(x=>x.id===state.deckId);
+  if(!d||(d.leader!==id&&Number(d.cards?.[id]||0)<=0))return;
+  if(!collectionRequireLogin())return;
+  if(!card(id)||qty(id)>=99)return notify("No se pueden añadir más copias de esta impresión.");
+  return changeQty(id,1);
+}
 function changeDeckQty(id,delta){
   const d=state.decks.find(x=>x.id===state.deckId);if(!d)return;
   const cc=card(id);if(!cc||cc.category==="Leader")return;
@@ -1523,12 +1529,13 @@ function renderVisibleOnly(){
   if(state.tab==="catalog")renderCatalogResults();
   else if(state.tab==="collection")renderCollectionResults();
   else if(state.tab==="album")renderAlbumResults();
-  else if(state.tab==="decks"){const rows=$("#deckRows");const d=state.decks.find(x=>x.id===state.deckId);if(rows&&d)rows.innerHTML=deckRows(d);renderDeckResults()}
+  else if(state.tab==="decks"){const rows=$("#deckRows");const d=state.decks.find(x=>x.id===state.deckId);if(rows&&d){rows.innerHTML=deckRows(d);bindResultEvents(rows)}renderDeckResults()}
   renderToast();
 }
 function bindResultEvents(root){
   root.querySelectorAll("[data-detail]").forEach(b=>b.onclick=e=>{e.preventDefault();openCardDetail(b.dataset.detail)});
-  root.querySelectorAll("[data-qty]").forEach(b=>b.onclick=e=>{e.preventDefault();changeQty(b.dataset.qty,Number(b.dataset.d),e)});
+  root.querySelectorAll("[data-qty]").forEach(b=>b.onclick=e=>{e.preventDefault();changeQty(b.dataset.qty,Number(b.dataset.d))});
+  root.querySelectorAll("[data-deck-collect]").forEach(b=>b.onclick=()=>addDeckCardToCollection(b.dataset.deckCollect));
   root.querySelectorAll("[data-page]").forEach(b=>b.onclick=()=>{const k=b.dataset.page;state[k].page=Math.max(1,state[k].page+Number(b.dataset.p));renderVisibleOnly();if(k==="catalog"||k==="collection")window.scrollTo({top:0,behavior:"smooth"})});
   root.querySelectorAll("[data-group]").forEach(b=>b.onclick=()=>openCardDetail(b.dataset.group));
   root.querySelectorAll("[data-deckgroup]").forEach(b=>b.onclick=()=>openCardDetail(b.dataset.deckgroup));
@@ -1707,7 +1714,7 @@ function bindShell(){
   if(state.detail&&!state.detail.shareUrl){
     document.querySelectorAll(".modalback").forEach(m=>m.addEventListener("click",e=>{if(e.target===m)closeCardDetail()}));
     document.querySelectorAll(".modalback [data-close]").forEach(b=>b.onclick=()=>closeCardDetail());
-    document.querySelectorAll(".modalback [data-qty]").forEach(b=>b.onclick=e=>changeQty(b.dataset.qty,Number(b.dataset.d),e));
+    document.querySelectorAll(".modalback [data-qty]").forEach(b=>b.onclick=()=>changeQty(b.dataset.qty,Number(b.dataset.d)));
     document.querySelectorAll(".modalback [data-deckqty]").forEach(b=>b.onclick=()=>changeDeckQty(b.dataset.deckqty,Number(b.dataset.d)));
     document.querySelectorAll(".modalback [data-adddeck]").forEach(b=>b.onclick=()=>addToDeck(b.dataset.adddeck));
     document.querySelectorAll(".modalback [data-setleader]").forEach(b=>b.onclick=()=>setLeader(b.dataset.setleader));
@@ -1846,71 +1853,45 @@ function collectionRequireLogin(){
   if(!collectionAvailable()){notify("La colección aún no está disponible. Revisa la conexión.");return false}
   return true;
 }
-function writeCollection(id,nextValue,permission){
-  // Changes must originate in an actual click on a manual or scanner Add button.
-  // Catalog loads, auth callbacks, OCR and background tasks cannot write inventory.
-  if(!permission?.trustedClick||!["manual","scanner"].includes(permission.source)){
-    console.warn("Intento de escritura de colección sin acción explícita bloqueado",id);
-    return Promise.resolve(false);
-  }
+function writeCollection(id,nextValue){
   if(!collectionRequireLogin())return Promise.resolve(false);
-  if(typeof id!=="string"||!state.cards.some(c=>c.id===id)){
-    notify("Impresión desconocida. No se ha modificado la colección.");
-    return Promise.resolve(false);
-  }
-  const userId=state.user.id,client=state.sb;
+  const userId=state.user.id;
   const prior=collectionWrites.get(id)||Promise.resolve();
   const write=prior.catch(()=>{}).then(async()=>{
-    if(!collectionAvailable()||state.user?.id!==userId||state.sb!==client)return false;
-    const requested=Number(typeof nextValue==="function"?nextValue(qty(id)):nextValue);
-    if(!Number.isInteger(requested)||requested<0||requested>99)return false;
-    const n=requested,old=qty(id);
+    if(!collectionAvailable()||state.user?.id!==userId)return false;
+    const n=Math.max(0,Math.min(99,Number(typeof nextValue==="function"?nextValue(qty(id)):nextValue)||0));
+    const old=qty(id);
     if(n===old)return true;
-    // Emergency safeguard against silent additions: every increase requires
-    // an affirmative confirmation specifying the exact printing and amount.
-    if(n>old&&!window.confirm("CONFIRMAR ALTA DE CARTAS\n\n"+
-      id+"\nCopias actuales: "+old+"\nSe van a añadir: "+(n-old)+
-      "\nTotal nuevo: "+n+"\n\nSolo acepta si tú has solicitado esta operación."))return false;
-    if(!collectionAvailable()||state.user?.id!==userId||state.sb!==client||document.hidden)return false;
     try{
-      const session=await client.auth.getSession();
-      if(session.error||session.data?.session?.user?.id!==userId)throw Error("La sesión ha cambiado");
-      if(!collectionAvailable()||state.user?.id!==userId||state.sb!==client)return false;
       if(n===0){
-        const deleted=await client.from("collection_items").delete().eq("user_id",userId).eq("card_id",id);
+        const deleted=await state.sb.from("collection_items").delete().eq("user_id",userId).eq("card_id",id);
         if(deleted.error)throw deleted.error;
+        const verify=await state.sb.from("collection_items").select("card_id").eq("user_id",userId).eq("card_id",id);
+        if(verify.error)throw verify.error;
+        if(verify.data?.length)throw Error("La carta sigue guardada en la nube");
       }else{
-        const saved=await client.from("collection_items").upsert({
+        const saved=await state.sb.from("collection_items").upsert({
           user_id:userId,card_id:id,quantity:n,updated_at:new Date().toISOString()
         },{onConflict:"user_id,card_id"}).select("card_id,quantity");
         if(saved.error)throw saved.error;
         if(!saved.data?.some(c=>c.card_id===id&&Number(c.quantity)===n))throw Error("Supabase no confirmó la cantidad");
       }
-      const verify=await client.from("collection_items").select("quantity")
-        .eq("user_id",userId).eq("card_id",id).limit(1);
-      if(verify.error)throw verify.error;
-      if(n===0 ? !!verify.data?.length : verify.data?.length!==1||Number(verify.data[0].quantity)!==n)
-        throw Error("La cantidad cambió en el servidor durante la operación");
-      if(state.user?.id!==userId||state.sb!==client)return false;
+      if(state.user?.id!==userId)return false;
       if(n===0)delete state.owned[id];else state.owned[id]=n;
       updateLiveCollectionCount();
       if(state.detail)renderShell();else renderVisibleOnly();
-      notify(n?"Cantidad verificada en Supabase":"Carta eliminada y verificada en Supabase");
+      notify(n?"Cantidad guardada en tu cuenta":"Carta eliminada de tu cuenta");
       return true;
     }catch(e){
-      console.warn("No se pudo confirmar el estado de la colección",id,e);
-      if(state.user?.id===userId){
-        // A network error can occur after the server committed a write.
-        // Do not invent or retain an unverified inventory snapshot.
-        state.collectionReady=false;renderShell();
-        notify("Estado de colección sin verificar. Pulsa Reintentar carga para consultar Supabase.");
-      }
+      console.warn("Error al guardar la colección",id,e);
+      if(state.user?.id===userId)notify("No se pudo guardar en Supabase. Tu colección no se ha modificado.");
       return false;
     }
   }).finally(()=>{if(collectionWrites.get(id)===write)collectionWrites.delete(id)});
   collectionWrites.set(id,write);
   return write;
 }
+function syncOne(id,n){return writeCollection(id,n)}
 async function syncDeck(d){
   if(d?.draftCompetitive)return false;
   if(!state.sb||!state.user||!d)return false;
