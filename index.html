@@ -564,6 +564,31 @@ function numericCardValue(value){
   const n=Number(match[0]);
   return Number.isFinite(n)?n:null;
 }
+// Al editar cantidades se conservan las posiciones si la vista está ordenada por
+// "Cantidad que tengo". Otros criterios y cambios explícitos de filtros se ordenan normalmente.
+const quantityOrderSnapshots={catalog:null,collection:null};
+function preserveQuantitySort(mode,items,getId){
+  if(state[mode]?.sort!=="quantity"){
+    if(Object.hasOwn(quantityOrderSnapshots,mode))quantityOrderSnapshots[mode]=null;
+    return items;
+  }
+  const f=state[mode];
+  const criteria=Object.fromEntries(Object.entries(f).filter(([key])=>key!=="page"&&key!=="filtersOpen"));
+  const signature=JSON.stringify([state.user?.id||"",state.cards.length,criteria]);
+  const previous=quantityOrderSnapshots[mode];
+  if(!previous||previous.signature!==signature){
+    quantityOrderSnapshots[mode]={signature,ids:items.map(getId)};
+    return items;
+  }
+  const index=new Map(previous.ids.map((id,i)=>[id,i]));
+  // Los elementos nuevos se añaden después sin desplazar los existentes.
+  items.sort((a,b)=>{
+    const ia=index.get(getId(a)),ib=index.get(getId(b));
+    return ia===undefined?(ib===undefined?0:1):ib===undefined?-1:ia-ib;
+  });
+  quantityOrderSnapshots[mode]={signature,ids:items.map(getId)};
+  return items;
+}
 function filteredCards(mode){
   const f=state[mode];
   let list=mode==="collection"
@@ -625,7 +650,7 @@ function filteredCards(mode){
     const d=cmp(av,bv);
     return d?d*dir:String(a.id).localeCompare(String(b.id),"es",{numeric:true})*dir;
   });
-  return list;
+  return mode==="collection"?preserveQuantitySort("collection",list,c=>c.id):list;
 }
 function groupCardList(arr){
   state.catalog.grouped=true;
@@ -684,7 +709,7 @@ function groupFiltered(){
     }
     return String(a.card?.id||"").localeCompare(String(b.card?.id||""),"es",{numeric:true})*dir;
   });
-  return groups;
+  return preserveQuantitySort("catalog",groups,g=>g.key);
 }
 function cmpPrice(a,b){
   const am=a===null||a===undefined,bm=b===null||b===undefined;
@@ -2415,6 +2440,8 @@ function bindShell(){
     if(next===state.tab&&!state.detail)return;
     if(state.detail&&detailHistoryActive)history.replaceState({mialbumView:appViewSnapshot()},"",location.href);
     detailHistoryActive=false;state.detail=null;
+    // Al volver a entrar, restaurar la clasificación real por cantidad.
+    if(state.tab==="catalog"||state.tab==="collection")quantityOrderSnapshots[state.tab]=null;
     navigateApp(()=>{state.tab=next;state.collectionStatsOpen=false;state.shared=false;state.sharedDeck=null;if(next!=="tournaments"){state.tournamentDraft=null;state.tournamentRoundDraft=null;state.tournamentStats=null}});
   });
   $("#retryCollectionLoad")?.addEventListener("click",async()=>{if(!state.user)return;const id=state.user.id;await loadCollectionFromCloud(id);if(state.user?.id===id)renderShell()});
