@@ -116,6 +116,158 @@ async function vision(image,turn){
    return resolveAI(data);
  }finally{clearTimeout(timeout)}
 }
+
+// TCGGraph offers a purpose-built One Piece matcher over a persistent socket.
+// The server mints short-lived tickets; neither its paid key nor the Supabase
+// access token is put into a socket URL.
+function stopLive(){
+  liveSerial++;
+  clearTimeout(liveTimer);liveTimer=null;
+  liveBusy=false;
+  if(providerAbort){providerAbort.abort();providerAbort=null}
+  const old=liveSocket;liveSocket=null;
+  if(old)try{old.close()}catch{}
+}
+function fallbackVision(message=""){
+  stopLive();source="vision";liveConfigured=false;
+  if(valid()&&!locked){
+    if(message)say(message+" Seguiré buscando con la IA disponible.");
+    plan(500);
+  }
+}
+function matchLiveCard(m){
+  const entry=m?.card||{};
+  const print=entry.gameData||{};
+  const groupId=val=>{
+    const text=normalize(typeof val==="string"?val:"");
+    const matched=text.match(/(?:^|[^A-Z0-9])((?:OP|ST|EB|PRB)[-_ ]?\d{2}[-_ ]?\d{3}|P[-_ ]?\d{3})(?:$|[^A-Z0-9])/);
+    if(!matched)return "";
+    return matched[1].replace(/[-_ ]/g,"").replace(/^((?:OP|ST|EB|PRB)\d{2})(\d{3})$/,"$1-$2").replace(/^P(\d{3})$/,"P-$1");
+  };
+  const values=[entry.cardNumber,entry.collectorNumber,entry.number,entry.code,entry.printedNumber,print.cardNumber,print.code,print.number,entry.id];
+  const candidates=values.map(groupId).filter(Boolean);
+  const setRaw=entry.set?.code||entry.setCode||entry.set?.id||"";
+  const setMatch=normalize(setRaw).replace(/[^A-Z0-9]/g,"").match(/^(OP|ST|EB|PRB)\d{2}$/);
+  if(setMatch)for(const val of values){
+    const digits=String(val||"").trim().match(/^\d{1,3}$/);
+    if(digits)candidates.push(setMatch[0]+"-"+digits[0].padStart(3,"0"));
+  }
+  let same=[];
+  for(const code of [...new Set(candidates)]){
+    same=state.cards.filter(c=>groupId(baseId(c.id))===code);
+    if(same.length)break;
+  }
+  if(!same.length&&entry.name){
+    const byName=state.cards.filter(c=>normalize(c.name)===normalize(entry.name));
+    if(new Set(byName.map(c=>baseId(c.id))).size===1)same=byName;
+  }
+  if(!same.length)return null;
+  const first=same.find(c=>variantKindOf(c)==="base")||same[0];
+  const confidence=Number(m.confidence)||0;
+  if(confidence<.9)return null;
+  return {
+    c:first,engine:"TCGGraph",confidence:confidence>=.92?"high":"medium",
+    confirmedCode:candidates.length>0,
+    matches:same.map(c=>({c,score:confidence*100})),
+    description:m.printingResolved===false?"La imagen puede corresponder a más de una impresión. Comprueba la versión.":""
+  };
+}
+function scheduleLive(serial,delay=650){
+  clearTimeout(liveTimer);
+  if(!valid()||locked||source!=="live"||serial!==liveSerial)return;
+  liveTimer=setTimeout(()=>sendLive(serial),delay);
+}
+function sendLive(serial){
+  if(serial!==liveSerial||source!=="live"||!valid()||locked||liveBusy||document.hidden)return;
+  if(!liveSocket||liveSocket.readyState!==WebSocket.OPEN)return;
+  const image=takePhoto();
+  if(!image){scheduleLive(serial,500);return}
+  frame=image;scanCount++;
+  try{
+    const binary=atob(image.slice(image.indexOf(",")+1));
+    const bytes=new Uint8Array(binary.length);
+    for(let i=0;i<binary.length;i++)bytes[i]=binary.charCodeAt(i);
+    liveBusy=true;
+    liveSocket.send(bytes.buffer);
+    say("Escáner visual en directo · fotograma "+scanCount+" · buscando…");
+  }catch(e){
+    liveBusy=false;
+    say("No se pudo enviar un fotograma. Reintentando…");
+    scheduleLive(serial,1200);
+  }
+}
+async function startLive(turn){
+  if(!valid()||locked||turn!==generation)return;
+  stopLive();
+  const serial=liveSerial;
+  const ctrl=new AbortController();providerAbort=ctrl;
+  say("Conectando reconocimiento especializado…");
+  try{
+    const session=await state.sb.auth.getSession();
+    if(serial!==liveSerial||turn!==generation||!valid()||locked)return;
+    const token=session?.data?.session?.access_token;
+    if(!token){fallbackVision("Sesión del escáner caducada.");return}
+    const res=await fetch("/api/scan-ticket",{
+      method:"POST",
+      headers:{Authorization:"Bearer "+token},
+      signal:ctrl.signal
+    });
+    if(serial!==liveSerial||turn!==generation||!valid()||locked)return;
+    const body=await res.json().catch(()=>({}));
+    if(serial!==liveSerial||turn!==generation||!valid()||locked)return;
+    providerAbort=null;
+    if(!res.ok||!body.ticket){
+      fallbackVision(body.code==="NOT_CONFIGURED"?"Reconocimiento especializado no configurado.":body.error||"Servicio especializado sin conexión.");
+      return;
+    }
+    liveConfigured=true;source="live";
+    const ws=new WebSocket("wss://api.tcggraph.com/v1/scan?ticket="+encodeURIComponent(body.ticket));
+    liveSocket=ws;
+    ws.onopen=()=>{
+      if(serial!==liveSerial||!valid()||locked)return;
+      liveReconnects=0;
+      ws.send(JSON.stringify({type:"config",games:["one-piece"],minConfidence:.92}));
+      say("Reconocimiento continuo de One Piece conectado. Centra una carta.");
+      scheduleLive(serial,200);
+    };
+    ws.onmessage=event=>{
+      if(serial!==liveSerial||!valid()||locked)return;
+      let result;
+      try{result=JSON.parse(event.data)}catch{return}
+      if(result.type==="ready")return;
+      if(result.type==="closing"){say("Renovando conexión del escáner…");return}
+      if(!["match","unresolved","error"].includes(result.type))return;
+      liveBusy=false;
+      if(result.type==="match"&&result.matches?.length){
+        const hit=matchLiveCard(result.matches[0]);
+        if(hit){consider(hit);if(locked)return}
+        else say("Tarjeta detectada, pero no coincide con una impresión identificable en nuestro catálogo. Sigue encuadrando.");
+      }else if(result.type==="unresolved"){
+        const reason=result.unresolved?.[0]?.reason;
+        const advice={glare:"Inclina la carta para evitar reflejos.",blurred:"Acerca la carta y mantenla quieta.",cropped:"Muestra los cuatro bordes de la carta."};
+        say("Buscando continuamente · "+(advice[reason]||"Centra la carta dentro del marco."));
+      }else say("Fotograma no procesado. Continuando reconocimiento…");
+      if(!locked)scheduleLive(serial,600);
+    };
+    ws.onerror=()=>{if(serial===liveSerial)say("Conexión del escáner interrumpida; recuperando…")};
+    ws.onclose=()=>{
+      if(serial!==liveSerial||!valid()||locked)return;
+      if(liveReconnects<2){
+        liveReconnects++;
+        const attempt=liveReconnects;
+        stopLive();
+        liveReconnects=attempt;
+        liveConfigured=true;
+        say("Restableciendo reconocimiento visual…");
+        liveTimer=setTimeout(()=>startLive(generation),1500*attempt);
+      }else fallbackVision("El reconocimiento en directo se desconectó.");
+    };
+  }catch(e){
+    if(serial===liveSerial&&valid()&&!locked)fallbackVision("No se pudo iniciar el reconocimiento continuo.");
+  }finally{
+    if(providerAbort===ctrl)providerAbort=null;
+  }
+}
 function resume(){
  generation++;locked=false;busy=false;streak=0;lastCode="";suggested=null;recognition=null;root()?.classList.remove("locked");
  $(".scanStill")?.remove();const result=$("#scanResult");if(result)result.replaceChildren();
