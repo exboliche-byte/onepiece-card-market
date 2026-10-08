@@ -14,6 +14,10 @@
       "destination": "/index.html"
     },
     {
+      "source": "/collection/:slug",
+      "destination": "/index.html"
+    },
+    {
       "source": "/auth/:path*",
       "destination": "/index.html"
     }
