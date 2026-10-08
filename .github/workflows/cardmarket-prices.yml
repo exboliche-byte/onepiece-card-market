@@ -29,8 +29,10 @@ jobs:
         with:
           node-version: 24
 
-      - name: Validate updater
-        run: node --check scripts/update-cardmarket-prices.mjs
+      - name: Validate updater and future-set compatibility
+        run: |
+          node --check scripts/update-cardmarket-prices.mjs
+          node --test scripts/catalog-guard.test.cjs scripts/expansion-aliases.test.cjs
 
       - name: Update Cardmarket prices
         run: node scripts/update-cardmarket-prices.mjs
