@@ -1785,38 +1785,57 @@ async function deleteAccount(){
   finally{state.authBusy=false;renderShell()}
 }
 // All writes are serialized per exact print ID; a newer quantity always wins.
-const collectionSyncJobs=new Map();
-async function syncOne(id){
-  if(!state.sb||!state.user)return false;
-  const userId=state.user.id,jobKey=userId+"|"+id;
-  if(collectionSyncJobs.has(jobKey))return collectionSyncJobs.get(jobKey);
-  const job=(async()=>{
-    while(state.user?.id===userId){
-      const pending=readCollectionPending(userId);
-      if(pending.replace)return false; // A full replacement must complete before individual edits.
-      const edit=pending.changes[id];
-      if(!edit)return true;
-      const q=Math.max(0,Number(edit.quantity)||0);
-      const result=q===0
-        ?await state.sb.from("collection_items").delete().eq("user_id",userId).eq("card_id",id)
-        :await state.sb.from("collection_items").upsert({user_id:userId,card_id:id,quantity:q,updated_at:new Date().toISOString()},{onConflict:"user_id,card_id"});
-      if(result.error)throw result.error;
-      const current=readCollectionPending(userId);
-      if(current.changes[id]?.token===edit.token){
-        delete current.changes[id];
-        writeCollectionPending(current,userId);
-      }
-      // If this card was changed again while writing, repeat with its latest quantity.
-    }
-    return false;
-  })().catch(error=>{
-    console.warn("No se pudo sincronizar una impresión",id,error);
-    if(state.user?.id===userId)notify("Cambio local guardado; pendiente de sincronizar con la nube");
-    return false;
-  }).finally(()=>collectionSyncJobs.delete(jobKey));
-  collectionSyncJobs.set(jobKey,job);
-  return job;
+// Collection quantities are never imported from localStorage and never merged.
+// Per-card serialized writes avoid lost updates from rapid +/- and scanner taps.
+const collectionWrites=new Map();
+let collectionBulkBusy=false;
+function collectionAvailable(){
+  return !!(state.user?.id&&state.sb&&state.collectionReady&&!collectionBulkBusy);
 }
+function collectionRequireLogin(){
+  if(!state.user){notify("Inicia sesión para utilizar tu colección.");return false}
+  if(!collectionAvailable()){notify("La colección aún no está disponible. Revisa la conexión.");return false}
+  return true;
+}
+function writeCollection(id,nextValue){
+  if(!collectionRequireLogin())return Promise.resolve(false);
+  const userId=state.user.id;
+  const prior=collectionWrites.get(id)||Promise.resolve();
+  const write=prior.catch(()=>{}).then(async()=>{
+    if(!collectionAvailable()||state.user?.id!==userId)return false;
+    const n=Math.max(0,Math.min(99,Number(typeof nextValue==="function"?nextValue(qty(id)):nextValue)||0));
+    const old=qty(id);
+    if(n===old)return true;
+    try{
+      if(n===0){
+        const deleted=await state.sb.from("collection_items").delete().eq("user_id",userId).eq("card_id",id);
+        if(deleted.error)throw deleted.error;
+        const verify=await state.sb.from("collection_items").select("card_id").eq("user_id",userId).eq("card_id",id);
+        if(verify.error)throw verify.error;
+        if(verify.data?.length)throw Error("La carta sigue guardada en la nube");
+      }else{
+        const saved=await state.sb.from("collection_items").upsert({
+          user_id:userId,card_id:id,quantity:n,updated_at:new Date().toISOString()
+        },{onConflict:"user_id,card_id"}).select("card_id,quantity");
+        if(saved.error)throw saved.error;
+        if(!saved.data?.some(c=>c.card_id===id&&Number(c.quantity)===n))throw Error("Supabase no confirmó la cantidad");
+      }
+      if(state.user?.id!==userId)return false;
+      if(n===0)delete state.owned[id];else state.owned[id]=n;
+      updateLiveCollectionCount();
+      if(state.detail)renderShell();else renderVisibleOnly();
+      notify(n?"Cantidad guardada en tu cuenta":"Carta eliminada de tu cuenta");
+      return true;
+    }catch(e){
+      console.warn("Error al guardar la colección",id,e);
+      if(state.user?.id===userId)notify("No se pudo guardar en Supabase. Tu colección no se ha modificado.");
+      return false;
+    }
+  }).finally(()=>{if(collectionWrites.get(id)===write)collectionWrites.delete(id)});
+  collectionWrites.set(id,write);
+  return write;
+}
+function syncOne(id,n){return writeCollection(id,n)}
 async function syncDeck(d){
   if(d?.draftCompetitive)return false;
   if(!state.sb||!state.user||!d)return false;
@@ -1836,68 +1855,40 @@ async function syncDeckDelete(id){
 }
 // Server state is authoritative for untouched cards; pending local edits always win.
 // In particular a deleted card must NEVER return from an older remote/legacy snapshot.
-async function reconcileCollectionCloud(userId){
-  const sb=state.sb;
-  let journal=readCollectionPending(userId);
-  if(journal.replace){
-    const replaceToken=journal.replace.token;
-    // Finish previously started single-card writes before the full replacement.
-    await Promise.all([...collectionSyncJobs.entries()].filter(([k])=>k.startsWith(userId+"|")).map(([,p])=>p));
-    if(state.user?.id!==userId)throw Error("Cuenta cambiada durante sincronización");
-    const wanted=Object.entries(state.owned).filter(([,q])=>Number(q)>0)
-      .map(([card_id,quantity])=>({user_id:userId,card_id,quantity:Number(quantity),updated_at:new Date().toISOString()}));
-    const deleted=await sb.from("collection_items").delete().eq("user_id",userId);
-    if(deleted.error)throw deleted.error;
-    for(let i=0;i<wanted.length;i+=150){
-      const saved=await sb.from("collection_items").upsert(wanted.slice(i,i+150),{onConflict:"user_id,card_id"});
-      if(saved.error)throw saved.error;
-    }
-    journal=readCollectionPending(userId);
-    if(journal.replace?.token===replaceToken){
-      journal.replace=null;writeCollectionPending(journal,userId);
-    }
-  }else{
-    const remoteOwned={};
-    // A collection can exceed Supabase's default REST row limit.
+let collectionLoadId=0;
+async function loadCollectionFromCloud(userId){
+  const requestId=++collectionLoadId;
+  state.collectionReady=false;
+  if(state.user?.id!==userId||!state.sb)return false;
+  const result={};
+  try{
+    // Paginate: the default Supabase response limit can omit cards.
     for(let start=0;start<20000;start+=500){
-      const result=await sb.from("collection_items").select("card_id,quantity").eq("user_id",userId).range(start,start+499);
-      if(result.error)throw result.error;
-      for(const item of result.data||[]){
-        const qty=Math.max(0,Number(item.quantity)||0);
-        if(qty>0)remoteOwned[item.card_id]=qty;
+      const page=await state.sb.from("collection_items")
+        .select("card_id,quantity").eq("user_id",userId)
+        .order("card_id",{ascending:true}).range(start,start+499);
+      if(page.error)throw page.error;
+      const rows=page.data||[];
+      for(const row of rows){
+        const q=Math.max(0,Number(row.quantity)||0);
+        if(q>0)result[row.card_id]=q;
       }
-      if((result.data||[]).length<500)break;
+      if(rows.length<500)break;
+      if(start===19500)throw Error("La colección excede el límite de lectura");
     }
-    if(state.user?.id!==userId)throw Error("Cuenta cambiada durante sincronización");
-    journal=readCollectionPending(userId);
-    // Importing a CSV or clearing everything while the fetch was in flight must not be overwritten.
-    if(journal.replace)return reconcileCollectionCloud(userId);
-    for(const [id,change] of Object.entries(journal.changes)){
-      if(Number(change?.quantity)>0)remoteOwned[id]=Number(change.quantity);
-      else delete remoteOwned[id]; // persistent deletion tombstone
-    }
-    // Also protect edits already committed during the remote fetch.
-    for(const [key,n] of collectionTouched){
-      if(!key.startsWith(userId+'|'))continue;
-      const id=key.slice(userId.length+1);
-      if(n>0)remoteOwned[id]=n;
-      else delete remoteOwned[id];
-    }
-    state.owned=remoteOwned;
-    saveLocal();
+    if(requestId!==collectionLoadId||state.user?.id!==userId)return false;
+    state.owned=result;
+    state.collectionReady=true;
     ensureOwnedCardsInCatalog();
+    return true;
+  }catch(e){
+    console.warn("Fallo al leer la colección desde Supabase",e);
+    if(requestId===collectionLoadId&&state.user?.id===userId){
+      state.owned={};state.collectionReady=false;
+      state.authError="No se pudo cargar tu colección desde Supabase. Inténtalo de nuevo.";
+    }
+    return false;
   }
-  if(state.user?.id!==userId)throw Error("Cuenta cambiada durante sincronización");
-  journal=readCollectionPending(userId);
-  const pendingIds=Object.keys(journal.changes);
-  let synced=true;
-  for(let i=0;i<pendingIds.length;i+=12){
-    const results=await Promise.all(pendingIds.slice(i,i+12).map(id=>syncOne(id)));
-    if(results.includes(false))synced=false;
-  }
-  // If the user imported another CSV while syncing, its replacement remains queued.
-  if(readCollectionPending(userId).replace)return false;
-  return synced;
 }
 let cloudSyncQueue=Promise.resolve();
 function syncCloud(){
@@ -1910,9 +1901,9 @@ function syncCloud(){
 async function syncCloudInternal(userId){
   if(state.user?.id!==userId)return false;
   const localDecks=state.decks.slice();
+  const loaded=await loadCollectionFromCloud(userId);
+  if(!loaded)return false;
   try{
-    const collectionOk=await reconcileCollectionCloud(userId);
-    if(!collectionOk)throw Error("Hay cambios en la colección pendientes de sincronizar.");
     const ds=await state.sb.from("decks").select("*").eq("user_id",state.user.id);if(ds.error)throw ds.error;
     const remoteIds=(ds.data||[]).map(d=>d.id);
     let dc={data:[]};
@@ -1923,10 +1914,12 @@ async function syncCloudInternal(userId){
     state.decks=[...remote,...unsynced];saveLocal();
     for(const d of unsynced)await syncDeck(d);
     if(state.user?.id===userId&&state.authError?.startsWith("Sesión iniciada, pero no se pudo sincronizar"))state.authError="";
+    if(state.user?.id===userId&&state.authError?.startsWith("No se pudo cargar tu colección"))state.authError="";
     return true;
   }catch(e){
-    console.warn("cloud sync",e);
-    if(state.user?.id===userId)state.authError="Sesión iniciada, pero no se pudo sincronizar: "+authMessage(e);
+    // The collection is already loaded; failure to sync decks must not reset it.
+    console.warn("deck cloud sync",e);
+    if(state.user?.id===userId)state.authError="Mazos sin sincronizar: "+authMessage(e);
     return false;
   }
 }
