@@ -19,7 +19,15 @@ const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&
 const norm=s=>String(s||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toUpperCase().trim();
 const idBase=id=>String(baseId(id||"")).toUpperCase();
 const stillActive=t=>running&&!locked&&t===session&&!!panel();
-const status=(msg)=>{const e=$("#scanStatus");if(e)e.textContent=msg};
+const status=msg=>{
+  const e=$("#scanStatus");
+  if(!e)return;
+  e.textContent=msg;
+  // Solo mostrar errores útiles; los contadores y estados siguen ocultos.
+  const error=/^(?:Error|No se |Sin comparación visual|Elige |Introduce |Has alcanzado|Inicia sesión|La linterna|El zoom|OCR no disponible)/i.test(String(msg));
+  e.classList.toggle("scan-error",error);
+  e.setAttribute("aria-live",error?"assertive":"off");
+};
 const hint=(msg)=>{const e=$("#scanHint");if(e)e.textContent=msg};
 const style=document.createElement("style");style.id="scanStyles";
 style.textContent=[
@@ -29,7 +37,9 @@ style.textContent=[
 "#scanPanel .scanTop{display:flex;align-items:center;justify-content:space-between;gap:10px;flex:none}#scanPanel h2{font-size:17px;line-height:1.15;margin:0}",
 "#scanPanel button{appearance:none;border:1px solid #596a84;border-radius:9px;padding:10px;background:#253145;color:#fff;font-size:13px;font-weight:750;cursor:pointer}",
 "#scanPanel button:disabled{opacity:.45;cursor:default}#scanPanel .primary{background:#ffd447;color:#121212;border-color:#ffd447}",
-"#scanPanel #scanStatus{min-height:20px;font-size:13px;line-height:1.35;color:#e5edfa;flex:none}#scanPanel #scanHint{min-height:17px;font-size:11px;color:#aebed0;flex:none}",
+"#scanPanel #scanHint,#scanPanel #scanIndex,#scanPanel .scanCounter,#scanPanel .scanHelp{display:none}",
+"#scanPanel #scanStatus{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}",
+"#scanPanel #scanStatus.scan-error{position:relative;width:auto;height:auto;min-height:20px;padding:7px 10px;margin:0;overflow:visible;clip-path:none;white-space:normal;border:1px solid #dc9c5a;border-radius:8px;font-size:12px;color:#ffe1b5;background:#322116}",
 "#scanPanel .scanStage{position:relative;flex:1;min-height:0;overflow:hidden;border:1px solid #344156;border-radius:12px;background:#000}",
 "#scanPanel .scanStage video,#scanPanel .scanFreeze{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}",
 "#scanPanel .scanGuide{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);border:2px solid #ffd447;box-shadow:0 0 0 100vmax #0006;border-radius:11px;pointer-events:none}",
@@ -179,7 +189,7 @@ function plan(){
   const tick=now=>{
     if(!running||locked||document.hidden)return;
     scanTimer=requestAnimationFrame(tick);
-    if(visionReady&&!visionPending&&now-lastVisionAt>450){
+    if(visionReady&&!visionPending&&now-lastVisionAt>300){
       lastVisionAt=now;scanVisual();
     }
     if(recognizerReady&&!ocrPending&&now-lastOCRAt>5200){
@@ -535,7 +545,7 @@ async function open(){
   const p=document.createElement("section");p.id="scanPanel";
   p.innerHTML='<div class="scanLayout">'+
     '<div class="scanTop"><h2>Escáner visual · One Piece</h2><button id="scanClose">✕ Cerrar</button></div>'+
-    '<div id="scanStatus" role="status" aria-live="polite">Preparando cámara…</div>'+
+    '<div id="scanStatus" role="status" aria-live="off"></div>'+
     '<div id="scanHint">Ilustraciones + OCR auxiliar · sin servicios de pago</div>'+
     '<div id="scanIndex" class="small">Cargando índice visual…</div>'+
     '<div class="scanStage"><video muted playsinline autoplay></video><div class="scanGuide"></div>'+
