@@ -2,7 +2,7 @@
 "use strict";
 const PERIODS=[7,30,90,365],CACHE_MS=300000;
 let days=30,revision=0,lastIdentity="",cached=new Map();
-const fmt=n=>Number.isFinite(Number(n))?Number(n).toLocaleString("es-ES",{style:"currency",currency:"EUR"}):"—";
+const fmt=n=>n!==null&&n!==undefined&&n!==""&&Number.isFinite(Number(n))?Number(n).toLocaleString("es-ES",{style:"currency",currency:"EUR"}):"—";
 const esc=s=>String(s??"").replace(/[&<>"']/g,ch=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]));
 const signed=v=>(v>0?"+":"")+fmt(v);
 const dateLabel=s=>{const d=new Date(String(s)+"T12:00:00Z");return Number.isNaN(+d)?s:d.toLocaleDateString("es-ES",{day:"numeric",month:"short",year:"numeric",timeZone:"UTC"})};
