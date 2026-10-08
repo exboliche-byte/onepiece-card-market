@@ -15,12 +15,16 @@ async function loadPrices(){
   if(!r.ok)throw new Error("Price source unavailable");
   const data=await r.json();
   if(!data||!data.cards||typeof data.cards!=="object")throw new Error("Invalid price source");
+  // This third-party mirror has been archived since August 2026. Never
+  // present its historical EUR quotes as current prices for missing prints.
+  const updated=Date.parse(String(data.updatedAt||""));
+  const fresh=Number.isFinite(updated)&&updated<=Date.now()+86400000&&Date.now()-updated<3*86400000;
   const cards=new Map();
-  for(const [id,row] of Object.entries(data.cards)){
+  for(const [id,row] of Object.entries(fresh?data.cards:{})){
     const value=priceNumber(row?.eur);
     if(value!==null)cards.set(norm(id),value);
   }
-  priceData={cards,updatedAt:data.updatedAt||null,source:data.source||"Cardmarket EUR"};
+  priceData={cards,updatedAt:data.updatedAt||null,source:fresh?(data.source||"Cardmarket EUR"):"Historical price source disabled",stale:!fresh};
   cacheAt=now;
 }
 export default {
