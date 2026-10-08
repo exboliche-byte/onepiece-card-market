@@ -1333,12 +1333,14 @@ function decksView(){
   const draftSource=d.competitiveSource||{};
   const proxyButton='<button class="secondary btn" id="generateDeckProxies" type="button" title="Proxies faltantes · A4 · 9 cartas por hoja, 63 × 88 mm.">🖨 Generar PDF de proxies</button>'+
     '<button class="secondary btn" id="shareDeckProxies" type="button" title="Compartir el PDF de proxies como documento, no como enlace temporal.">📤 Compartir PDF de proxies</button>';
+  const cardmarketButton='<button class="secondary btn" id="copyMissingWants" type="button" title="Copia las cartas pendientes y abre Mis Wants de Cardmarket.">🛒 Wants de Cardmarket</button>';
   const deckActions=draft
-    ?'<div class="deck-menu-group">'+proxyButton+'</div>'+(draftSource.url?'<div class="deck-menu-group"><a class="secondary btn" target="_blank" rel="noopener" href="'+esc(draftSource.url)+'">Fuente ↗</a></div>':'')
+    ?'<div class="deck-menu-group">'+proxyButton+'</div><div class="deck-menu-group">'+cardmarketButton+'</div>'+(draftSource.url?'<div class="deck-menu-group"><a class="secondary btn" target="_blank" rel="noopener" href="'+esc(draftSource.url)+'">Fuente ↗</a></div>':'')
     :'<div class="deck-menu-group"><button class="secondary btn" id="importDeckBtn">Importar lista</button>'+
       '<button class="secondary btn" id="exportDeck">Exportar lista</button>'+
       '<button class="secondary btn" id="shareDeck">📸 Compartir mazo (JPG)</button></div>'+
       '<div class="deck-menu-group">'+proxyButton+'</div>'+
+      '<div class="deck-menu-group">'+cardmarketButton+'</div>'+
       '<div class="deck-menu-group"><button class="secondary btn" id="editDeckMeta">Editar nombre y descripción</button>'+
       '<button class="danger btn" id="deleteDeck">Eliminar mazo</button></div>';
   const hero='<div class="deck-compact-hero">'+
@@ -1403,6 +1405,49 @@ function deckRows(d){
     r.push('<article class="card deck-owned-card '+(need?"deckcard-missing":"")+'"><span class="tag">×'+n+'</span><button class="linkbtn" data-detail="'+esc(display.id)+'" style="display:block;width:100%;padding:0">'+deckOwnedImg(display,have,n)+'</button><div class="cardbody"><div class="name">'+esc(source.name||source.id)+'</div><div class="small">'+esc(g.code)+' · '+esc(display.set||"—")+printInfo+'</div><div class="small deck-owned-status">'+info+'<br>'+ownership+'</div>'+(state.user&&state.collectionReady&&qty(display.id)<99?'<button type="button" class="secondary btn" style="width:100%;margin:6px 0 3px;font-size:11px;padding:7px 3px" data-deck-collect="'+esc(display.id)+'">＋1 a colección</button>':'')+'<div class="quick"><button class="secondary" data-deckqtygroup="'+esc(g.code)+'" data-d="-1">−</button><div class="qty">'+n+'</div><button class="primary" data-deckqtygroup="'+esc(g.code)+'" data-d="1">+</button></div></div></article>');
   }
   return r.join("")||'<div class="notice" style="grid-column:1/-1">Elige primero un líder.</div>';
+}
+
+// Cardmarket accepts: quantity + English card name + printed card number, one per line.
+// Wants are for playable card identities, so owned parallel/reprint copies count.
+function deckMissingCardmarketText(d){
+  const wants=[];
+  if(d?.leader&&deckOwnedCopies(d.leader)<1){
+    const leader=card(d.leader);
+    if(!leader||!String(leader.name||"").trim())throw Error("No se encuentra el nombre del líder");
+    wants.push({c:leader,code:deckPrintedCode(d.leader),count:1});
+  }
+  for(const group of deckCompositionGroups(d)){
+    const missing=Math.max(0,group.count-deckOwnedCopies(group.code));
+    if(!missing)continue;
+    const c=group.entries.map(entry=>card(entry.id)).find(Boolean);
+    if(!c||!String(c.name||"").trim())throw Error("Falta información de "+group.code);
+    wants.push({c,code:group.code,count:missing});
+  }
+  return wants.map(({c,code,count})=>count+"x "+String(c.name).trim()+" "+code).join("\n");
+}
+async function copyMissingDeckWantsToCardmarket(){
+  const d=state.decks.find(x=>x.id===state.deckId);
+  if(!d)return notify("Abre un mazo primero.");
+  if(!state.user||!state.collectionReady)return notify("Espera a que se sincronice tu colección para calcular las cartas que faltan.");
+  let text;
+  try{text=deckMissingCardmarketText(d)}catch(e){return notify(e.message||"No se pudo preparar la lista de Wants.");}
+  if(!text)return notify("Ya tienes todas las cartas de este mazo.");
+  let copied=false;
+  if(navigator.clipboard?.writeText){
+    try{await navigator.clipboard.writeText(text);copied=true}catch{}
+  }
+  if(!copied){
+    const area=document.createElement("textarea");
+    area.value=text;area.readOnly=true;area.style.cssText="position:fixed;left:-9999px;top:0;opacity:0";
+    document.body.appendChild(area);
+    try{area.focus();area.select();copied=!!document.execCommand("copy")}catch{}
+    area.remove();
+  }
+  if(!copied){
+    renderShareModal(text,d.name);
+    return notify("Tu navegador no permitió copiar automáticamente. Usa «Copiar lista».");
+  }
+  window.location.assign("https://www.cardmarket.com/es/OnePiece/Wants");
 }
 
 function deckListText(d){
@@ -2247,6 +2292,7 @@ function bindShell(){
     $("#backDecks")?.addEventListener("click",()=>navigateApp(()=>{state.deckLibrary=true;state.deckId=null;state.deckChoosingLeader=false}));
     $("#importDeckBtn")?.addEventListener("click",openDeckImportDialog);
     $("#exportDeck")?.addEventListener("click",exportDeckFile);
+    $("#copyMissingWants")?.addEventListener("click",copyMissingDeckWantsToCardmarket);
     $("#editDeckMeta")?.addEventListener("click",()=>{$("#deckMetaEditor").hidden=false;$("#editDeckName")?.focus()});
     $("#cancelDeckMeta")?.addEventListener("click",()=>{$("#deckMetaEditor").hidden=true});
     $("#saveDeckMeta")?.addEventListener("click",()=>{
