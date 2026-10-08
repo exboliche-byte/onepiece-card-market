@@ -226,8 +226,11 @@ function chooseVariant(variants,selected){
   const pic=$("#scanFoundImage"),count=$("#scanExactCount");
   if(count)count.textContent=current?"Tienes "+ownedCount(current.id)+" copias de esta impresión.":"Selecciona una impresión exacta para guardarla.";
   if(pic&&current){
+    pic.dataset.imageOfficial=officialImageUrl(current);
+    pic.dataset.imageFallback=fallbackImageUrl(current);
+    pic.dataset.imageRecovery="0";
     pic.src=imageCdnUrl(current);
-    pic.onerror=()=>{pic.onerror=null;pic.src=officialImageUrl(current)};
+    pic.onerror=()=>{if(pic.src!==pic.dataset.imageOfficial)pic.src=pic.dataset.imageOfficial;else if(pic.src!==pic.dataset.imageFallback)pic.src=pic.dataset.imageFallback;else pic.onerror=null};
   }
 }
 function show(hit){
@@ -246,7 +249,7 @@ function show(hit){
   ).join("");
   const area=$("#scanDecision");area.hidden=false;
   area.innerHTML='<div class="scanIdentity">'+
-    '<img id="scanFoundImage" src="'+esc(imageCdnUrl(hit.card))+'" alt="Carta reconocida">'+
+    '<img id="scanFoundImage" src="'+esc(imageCdnUrl(hit.card))+'" data-image-official="'+esc(officialImageUrl(hit.card))+'" data-image-fallback="'+esc(fallbackImageUrl(hit.card))+'" alt="Carta reconocida">'+
     '<div><strong>'+esc(hit.card.name)+'</strong><div class="small">'+esc(hit.code)+' · '+esc(hit.source)+'</div>'+
     '<div class="small">Tienes '+owned+' copias de esta carta · '+Math.max(0,limit-owned)+' para el playset</div></div></div>'+
     '<p class="small">Confirma la impresión. Las paralelas y reimpresiones comparten código y no son intercambiables.</p>'+
