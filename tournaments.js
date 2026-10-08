@@ -181,13 +181,12 @@
   function tournamentList(){
     const arr=(state.tournaments||[]).slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))||String(b.createdAt).localeCompare(String(a.createdAt)));
     return '<div class="tourney-wrap"><div class="tourney-header"><div><h1>🏆 Mis torneos</h1><div class="tourney-muted">Registra tus partidas, resultados y posiciones.</div></div><div class="tourney-actions"><button class="secondary btn" id="tourneyStatsOpen">📊 Estadísticas</button><button class="primary btn" id="tourneyNew">＋ Nuevo</button></div></div>'+
-      '<p class="tourney-hint">Los torneos se guardan en este dispositivo y en esta cuenta local. Para conservarlos o pasarlos a otro dispositivo, utiliza la copia de seguridad.</p>'+
+      '<p class="tourney-hint">Los torneos se guardan solo en este navegador. No se sincronizan entre dispositivos; evita borrar los datos del navegador.</p>'+
       (arr.length?'<div class="tourney-grid">'+arr.map(t=>{const r=tournamentRecord(t);return '<button type="button" class="tourney-tile" data-tourney-open="'+esc(t.id)+'">'+
         (portrait(t.leaderId)?'<img class="tourney-portrait" src="'+esc(portrait(t.leaderId))+'" alt="">':'<div class="tourney-portrait"></div>')+
         '<div class="tourney-tile-info"><strong>'+esc(t.title)+'</strong><div class="tourney-sub">'+esc(dateLabel(t.date))+'</div><div class="tourney-pills"><span class="tourney-pill">'+esc(t.set||"Libre")+'</span><span class="tourney-pill green">'+esc(t.type||"Local Store")+'</span></div></div>'+
         '<div class="tourney-score">'+r.wins+' - '+r.losses+'<small>'+(t.finished?'#'+Number(t.placement)+' / '+Number(t.players):"En curso")+'</small></div></button>'}).join("")+'</div>':
-        '<div class="tourney-empty">Todavía no tienes torneos.<p>Crea el primero para ir registrando las rondas.</p></div>')+
-      '<div class="tourney-actions"><button class="secondary btn" id="tourneyBackup">Exportar torneos (JSON)</button><button class="secondary btn" id="tourneyRestore">Importar copia</button><input hidden id="tourneyBackupInput" type="file" accept=".json,application/json"></div></div>';
+        '<div class="tourney-empty">Todavía no tienes torneos.<p>Crea el primero para ir registrando las rondas.</p></div>')+'</div>';
   }
   // Las estadísticas de juego excluyen BYEs y No Shows para no inflar el win rate.
   // Los récords oficiales de un torneo conservan sus BYEs.
@@ -432,23 +431,6 @@
   function downloadBlob(blob,name){
     const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),15000);
   }
-  function backup(){
-    const content=JSON.stringify({format:"mialbumonepiece-tournaments-v1",tournaments:state.tournaments},null,2);
-    downloadBlob(new Blob([content],{type:"application/json"}),"mis-torneos-"+new Date().toISOString().slice(0,10)+".json");
-  }
-  async function restore(file){
-    if(!file)return;
-    try{
-      const content=JSON.parse(await file.text());
-      if(content?.format!=="mialbumonepiece-tournaments-v1"||!Array.isArray(content.tournaments))throw Error("Formato de copia no válido");
-      if(content.tournaments.length>2000)throw Error("Demasiados torneos");
-      if(!content.tournaments.every(t=>t&&typeof t.id==="string"&&typeof t.title==="string"&&Array.isArray(t.rounds)))throw Error("Datos de torneos incorrectos");
-      if(!confirm("¿Importar "+content.tournaments.length+" torneos? Se combinarán con los existentes usando el identificador de cada torneo."))return;
-      const merged=new Map(state.tournaments.map(t=>[t.id,t]));
-      for(const t of content.tournaments)merged.set(t.id,t);
-      state.tournaments=[...merged.values()];save();rerender();notify("Copia importada");
-    }catch(e){alert("No se pudo importar: "+e.message)}
-  }
   function truncate(ctx,str,max){
     let s=String(str||"");if(ctx.measureText(s).width<=max)return s;
     while(s.length&&ctx.measureText(s+"…").width>max)s=s.slice(0,-1);
@@ -548,9 +530,6 @@
     document.querySelectorAll("[data-tourney-open]").forEach(b=>b.onclick=()=>navigateApp(()=>{state.tournamentId=b.dataset.tourneyOpen}));
     on("#tourneyFormBack","click",exitForm);
     on("#tourneyBack","click",()=>navigateApp(()=>{state.tournamentId=null;state.tournamentRoundDraft=null;state.tournamentFinishDraft=null}));
-    on("#tourneyBackup","click",backup);
-    on("#tourneyRestore","click",()=>document.querySelector("#tourneyBackupInput")?.click());
-    on("#tourneyBackupInput","change",e=>restore(e.target.files?.[0]));
     if(state.tournamentDraft){
       on("#tourneyCreate","click",saveTournament);
       document.querySelectorAll("[data-tourney-type]").forEach(b=>b.onclick=()=>{captureForm();state.tournamentDraft.type=b.dataset.tourneyType;rerender()});
