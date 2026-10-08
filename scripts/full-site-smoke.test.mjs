@@ -47,9 +47,9 @@ test("meta group disclosure thresholds are present",()=>{
  assert.ok(sql.includes("fu>=3 and fg>=6"));
  assert.ok(sql.includes("su>=3 and sg>=6"));
 });
-test("scanner confirmation, minimum zoom and photo frame are implemented",()=>{
+test("scanner manual confirmation, minimum zoom and photo frame are implemented",()=>{
  const scanner=read("scanner.js");
- for(const token of ['"#scanPanel .scanDecision{position:absolute;z-index:10','$("#scanAddOne").onclick=()=>save(1);','$("#scanDiscard").onclick=resume;','{zoom:cap.zoom.min}','object-fit:contain'])assert.ok(scanner.includes(token),token);
+ for(const token of ['"#scanPanel .scanDecision{position:absolute;z-index:10','$("#scanAddOne").onclick=()=>void save(1);','$("#scanDiscard").onclick=resume;','{zoom:cap.zoom.min}','object-fit:contain'])assert.ok(scanner.includes(token),token);
 });
 test("proxy layout is fixed to A4 with nine prints",()=>{
  const code=read("proxy-generator.js");
