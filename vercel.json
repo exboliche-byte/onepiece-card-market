@@ -51,5 +51,5 @@
       ]
     }
   ],
-  "buildCommand": "mkdir -p public && cp index.html public/index.html"
+  "buildCommand": "mkdir -p public && cp index.html scanner.js image-visibility.js public/"
 }
