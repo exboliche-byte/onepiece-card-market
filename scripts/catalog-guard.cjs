@@ -22,8 +22,11 @@ function protectCatalog(cards,packs,previousCards=[],previousPacks=[]){
  }
  const previous=new Map(previousCards.filter(x=>x?.id).map(x=>[String(x.id).trim(),x]));
  const missing=[...previous].filter(([id])=>!byId.has(id));
- if(previousCards.length>=100&&missing.length>Math.max(35,Math.floor(previous.size*.015)))
-   throw Error("Catalog safety: upstream dropped "+missing.length+" known exact prints; old catalog remains active");
+ // Limitless-verified image printings are intentionally absent from the two
+ // underlying catalogs. Carry them forward without treating them as data loss.
+ const missingFromUpstream=missing.filter(([,card])=>card.catalogSource!=="Limitless exact English print verified by image filename");
+ if(previousCards.length>=100&&missingFromUpstream.length>Math.max(35,Math.floor(previous.size*.015)))
+   throw Error("Catalog safety: upstream dropped "+missingFromUpstream.length+" known exact prints; old catalog remains active");
  for(const [id,prior] of previous){
    const current=byId.get(id);
    if(!current||!/_([prc]\d+)$/i.test(id))continue;
