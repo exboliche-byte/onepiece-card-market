@@ -1,7 +1,7 @@
 // Hosted Supabase Edge Function; service role is supplied only by the Supabase runtime.
 // Deliberately not exposed to the browser. Vercel Cron presents a high-entropy bearer token.
 const EXPECTED_SHA256="0faa98064f4daac631533fb341346f0e0bc80050e02fdcd5a802b43499fbf7a7";
-const SOURCE="https://raw.githubusercontent.com/michalkiral/optcg-data/main/data/prices/summary.json";
+const SOURCE="https://onepiece-card-market.vercel.app/data/cardmarket-prices.json";
 const LIMIT=100000,CHUNK=300;
 const send=(body,status=200)=>new Response(JSON.stringify(body),{status,headers:{"content-type":"application/json","cache-control":"no-store"}});
 const parseId=x=>{const id=String(x||"").trim().toLowerCase();return /^(?:[a-z]{1,6}-?\d{1,3}-\d{3}|p-\d{3})(?:_(?:p|r|c|jp)\d+)?$/.test(id)?id:null};
@@ -37,7 +37,7 @@ Deno.serve(async request=>{
   const unique=new Map();
   for(const [rawId,entry] of Object.entries(raw.cards)){
    const id=parseId(rawId),price=Number(entry?.eur);
-   if(!id||entry?.eur==null||entry?.eur===""||!Number.isFinite(price)||price<=0||price>=1000000)continue;
+   if(!id||entry?.stalePrice||entry?.eur==null||entry?.eur===""||!Number.isFinite(price)||price<=0||price>=1000000)continue;
    if(unique.has(id))continue;
    unique.set(id,{print_id:id,price_day:day,eur:Number(price.toFixed(4)),source_updated_at:updated.toISOString()});
    if(unique.size>LIMIT)throw Error("Unexpectedly large source");
