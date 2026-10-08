@@ -739,12 +739,31 @@ function catalogCoverCard(g){
     return aa-bb||String(a.id).localeCompare(String(b.id),"es",{numeric:true});
   })[0];
 }
+// An expansion cover uses only printings from the selected expansion:
+// standard versions first, then the cheapest one with an exact price.
+function albumCoverCard(g){
+  const versions=(g?.versions||[]).filter(c=>sameExpansion(cardExpansionCode(c),state.album.set));
+  if(!versions.length)return g?.card||null;
+  const standard=versions.filter(c=>!c.isParallel&&
+    !/_(?:p|c)\d+$/i.test(String(c.id||""))&&
+    !/parallel|alternate|alt.?art|special|manga/i.test(variantKindOf(c)));
+  const candidates=standard.length?standard:versions;
+  return candidates.slice().sort((a,b)=>{
+    const ap=priceOf(a),bp=priceOf(b);
+    if(ap!==null&&bp!==null&&ap!==bp)return ap-bp;
+    if(ap===null&&bp!==null)return 1;
+    if(ap!==null&&bp===null)return -1;
+    const aa=a.id===baseId(a.id)?0:1,bb=b.id===baseId(b.id)?0:1;
+    return aa-bb||String(a.id).localeCompare(String(b.id),"es",{numeric:true});
+  })[0];
+}
 function groupedTile(g){
-  const c=state.tab==="catalog"?catalogCoverCard(g):g.card,q=logicalQty(c);
+  const c=state.tab==="catalog"?catalogCoverCard(g):state.tab==="album"?albumCoverCard(g):g.card,q=logicalQty(c);
   const albumMissing=state.tab==="album"&&!q;
   const priceStats=groupPriceStats(g),minPrice=priceStats.min,maxPrice=priceStats.max;
-  const coverPrice=state.tab==="catalog"?priceOf(c):null;
-  const priceLabel=state.tab==="catalog"?(coverPrice===null?"Precio —":money(coverPrice)):
+  const useCoverPrice=state.tab==="catalog"||state.tab==="album";
+  const coverPrice=useCoverPrice?priceOf(c):null;
+  const priceLabel=useCoverPrice?(coverPrice===null?"Precio —":money(coverPrice)):
     minPrice===null?"Precio —":
     state.catalog.sort==="price"&&state.catalog.dir==="desc"?"Hasta "+money(maxPrice):
     maxPrice!==minPrice?"Desde "+money(minPrice):money(minPrice);
@@ -934,14 +953,18 @@ function renderAlbumResults(){
   const host=$("#albumResults");if(!host)return;
   const list=filteredCards("album"),groups=groupCardList(list),pages=Math.max(1,Math.ceil(groups.length/PAGE));state.album.page=Math.min(state.album.page,pages);
   const start=(state.album.page-1)*PAGE,visible=groups.slice(start,start+PAGE);
+  const coverSnapshot=visible.map(g=>{const c=albumCoverCard(g);return c?.id+":"+priceOf(c)}).join("|");
+  const expansion=state.album.set;
+  visible.slice(0,12).forEach(g=>preloadCardImage(albumCoverCard(g)));
   const owned=groups.filter(g=>logicalQty(g.card)>0).length, none=groups.filter(g=>logicalQty(g.card)===0).length, missing=groups.filter(g=>logicalQty(g.card)>0&&logicalQty(g.card)<playsetTarget(g.card)).length;
   host.innerHTML='<div class="stats"><div class="stat"><b>'+groups.length+'</b><span>Cartas de '+esc(packLabel({code:state.album.set}))+'</span></div><div class="stat"><b>'+owned+'</b><span>Tengo</span></div><div class="stat"><b>'+none+'</b><span>No tengo</span></div><div class="stat"><b>'+missing+'</b><span>Me faltan copias</span></div></div>'+(groups.length?'<div class="grid">'+visible.map(g=>groupedTile(g)).join("")+'</div>'+pagination(groups.length,state.album.page,"album"):'<div class="section center"><b>No hay cartas con esta búsqueda.</b><p class="muted">La expansión sí está cargada. Limpia la búsqueda o el filtro de colección.</p><button class="secondary btn" id="resetAlbumFilters">Mostrar todas las cartas</button></div>');
   bindResultEvents(host);
   $("#resetAlbumFilters")?.addEventListener("click",()=>{state.album.query="";state.album.ownership="Todas";state.album.page=1;renderShell()});
   {
-    const hadPrices=Object.keys(state.prices||{}).length>0;
     ensurePrices(visible.flatMap(g=>g.versions).map(c=>c.id)).then(()=>{
-      if(!hadPrices&&state.tab==="album"&&state.album.set&&!state.detail)renderAlbumResults();
+      if(state.tab!=="album"||state.album.set!==expansion||state.detail)return;
+      const nextSnapshot=visible.map(g=>{const c=albumCoverCard(g);return c?.id+":"+priceOf(c)}).join("|");
+      if(nextSnapshot!==coverSnapshot)renderAlbumResults();
     }).catch(()=>{});
   }
 }
