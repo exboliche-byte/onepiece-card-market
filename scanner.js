@@ -157,7 +157,7 @@ function snapshot(freeze=false){
   const cropW=Math.min(b.w-left,g.width/b.factor),cropH=Math.min(b.h-top,g.height/b.factor);
   if(cropW<100||cropH<100)return null;
   const crop=document.createElement("canvas");
-  crop.width=Math.min(900,Math.round(cropW*1.25));
+  crop.width=Math.min(500,Math.round(cropW*1.25));
   crop.height=Math.round(crop.width*cropH/cropW);
   crop.getContext("2d").drawImage(camera,left,top,cropW,cropH,0,0,crop.width,crop.height);
   if(!freeze)return {card:crop,still:""};
