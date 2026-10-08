@@ -28,6 +28,32 @@
 .proxy-picked-meta .small{overflow-wrap:anywhere}
 @media(max-width:800px){.proxy-layout{grid-template-columns:1fr}.proxy-result .cardbody{padding:7px}}
 @media(max-width:500px){.nav{grid-template-columns:repeat(6,1fr)}.nav span{font-size:9px}.proxy-results{grid-template-columns:repeat(3,minmax(0,1fr))}}
+
+/* Compact controls for a single deck: actions and detailed numbers stay available on demand. */
+.deck-compact-hero{display:flex;justify-content:space-between;align-items:center;gap:12px;min-width:0;margin:6px 0 12px}
+.deck-compact-title{min-width:0;flex:1}
+.deck-compact-title h1{font-size:clamp(26px,6vw,38px);margin:5px 0 0;line-height:1.12;overflow-wrap:anywhere}
+.deck-compact-title .linkbtn{font-size:13px}
+.deck-action-menu{position:relative;flex:none}
+.deck-action-menu>summary{display:flex;align-items:center;gap:6px;list-style:none;white-space:nowrap;user-select:none}
+.deck-action-menu>summary::-webkit-details-marker,.deck-stats-toggle>summary::-webkit-details-marker{display:none}
+.deck-action-menu[open]>summary{border-color:var(--accent);color:var(--accent)}
+.deck-action-menu-panel{position:absolute;right:0;top:calc(100% + 7px);z-index:25;display:grid;gap:7px;width:min(300px,calc(100vw - 30px));padding:10px;background:#151c2a;border:1px solid var(--line);border-radius:14px;box-shadow:0 14px 40px #000b}
+.deck-action-menu-panel .btn{width:100%;text-align:left;font-size:13px;line-height:1.25}
+.deck-action-menu-panel .danger{margin-top:3px}
+.deck-draft-save{margin-bottom:12px}
+.deck-stats-toggle{margin:0 0 12px;border:1px solid var(--line);border-radius:13px;background:var(--panel)}
+.deck-stats-toggle>summary{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:10px 12px;cursor:pointer;list-style:none;user-select:none}
+.deck-stats-badge{padding:5px 8px;border-radius:8px;background:var(--panel2);font-size:12px;font-weight:750;white-space:nowrap}
+.deck-stats-badge.valid{color:var(--ok)}
+.deck-stats-badge.invalid{color:var(--danger)}
+.deck-stats-expand{margin-left:auto;color:var(--muted);font-size:12px;white-space:nowrap}
+.deck-stats-expand::after{content:" ▾"}
+.deck-stats-toggle[open] .deck-stats-expand::after{content:" ▴"}
+.deck-stats-content{padding:0 11px 11px}
+.deck-stats-content .stats{margin-bottom:8px}
+.deck-stats-content .validation{margin-bottom:0}
+@media(max-width:500px){.deck-compact-hero{align-items:center}.deck-compact-title h1{font-size:clamp(24px,7vw,32px)}.deck-action-menu>summary{padding:9px 10px;font-size:13px}.deck-stats-badge{font-size:11px}.deck-stats-expand{font-size:11px}}
 </style>
 </head>
 <body>
@@ -1241,16 +1267,31 @@ function decksView(){
   const draftSource=d.competitiveSource||{};
   const proxyButton='<button class="secondary btn" id="generateDeckProxies" type="button" title="A4, 9 cartas de 63 × 88 mm por hoja. Imprimir al 100%.">🖨 Generar proxies (PDF A4)</button>'+
     '<button class="secondary btn" id="shareDeckProxies" type="button" title="Envía el archivo PDF real por WhatsApp u otra aplicación, no un enlace temporal.">📤 Compartir archivo PDF</button>';
-  const hero=draft
-    ?'<div class="hero"><div><button class="linkbtn" id="backCompetitiveResults">← Volver a resultados</button><h1>'+esc(d.name)+'</h1></div><div class="inline-actions"><button class="primary btn" id="saveCompetitiveDraft">Guardar en mis mazos</button>'+proxyButton+(draftSource.url?'<a class="secondary btn" target="_blank" rel="noopener" href="'+esc(draftSource.url)+'">Fuente ↗</a>':'')+'</div></div>'
-    :'<div class="hero"><div><button class="linkbtn" id="backDecks">← Mis mazos</button><h1>'+esc(d.name)+'</h1></div><div class="inline-actions"><button class="secondary btn" id="importDeckBtn">Importar lista</button><button class="secondary btn" id="exportDeck">Exportar lista</button>'+proxyButton+'<button class="secondary btn" id="editDeckMeta">Editar nombre y descripción</button><button class="secondary btn" id="shareDeck">Compartir lista</button><button class="danger btn" id="deleteDeck">Eliminar</button></div></div>';
+  const deckActions=draft
+    ?proxyButton+(draftSource.url?'<a class="secondary btn" target="_blank" rel="noopener" href="'+esc(draftSource.url)+'">Fuente ↗</a>':'')
+    :'<button class="secondary btn" id="importDeckBtn">Importar lista</button>'+
+      '<button class="secondary btn" id="exportDeck">Exportar lista</button>'+proxyButton+
+      '<button class="secondary btn" id="editDeckMeta">Editar nombre y descripción</button>'+
+      '<button class="secondary btn" id="shareDeck">Compartir lista</button>'+
+      '<button class="danger btn" id="deleteDeck">Eliminar mazo</button>';
+  const hero='<div class="deck-compact-hero">'+
+    '<div class="deck-compact-title"><button class="linkbtn" id="'+(draft?'backCompetitiveResults':'backDecks')+'">← '+(draft?'Volver a resultados':'Mis mazos')+'</button><h1>'+esc(d.name)+'</h1></div>'+
+    '<details class="deck-action-menu" id="deckActionsMenu"><summary class="secondary btn" aria-label="Mostrar acciones del mazo">⋯ Acciones</summary><div class="deck-action-menu-panel">'+deckActions+'</div></details></div>'+
+    (draft?'<div class="deck-draft-save"><button class="primary btn" id="saveCompetitiveDraft">Guardar en mis mazos</button></div>':'');
+  const deckStats='<details class="deck-stats-toggle"><summary>'+
+    '<span class="deck-stats-badge">'+v.total+'/50 cartas</span>'+
+    '<span class="deck-stats-badge '+(v.valid?'valid':'invalid')+'">'+(v.valid?'✓ Mazo válido':'⚠ Mazo no válido')+'</span>'+
+    '<span class="deck-stats-expand">Precio y detalles</span></summary>'+
+    '<div class="deck-stats-content">'+
+    '<div class="stats"><div class="stat"><b>'+v.total+'/50</b><span>Cartas</span></div><div class="stat"><b>'+money(deckTotalValue(d))+'</b><span>Valor del mazo</span></div><div class="stat"><b>'+money(deckMissingCost(d))+'</b><span>Te falta comprar</span></div><div class="stat"><b>'+(v.valid?'✓':'⚠')+'</b><span>Legalidad</span></div></div>'+
+    '<div class="validation '+(v.valid?'ok':'bad')+'"><b>'+(v.valid?'✓ Mazo válido':'⚠ Mazo no válido')+'</b><div class="small">'+esc(v.messages.join(' · ')||'Cumple las reglas configuradas.')+'</div></div>'+
+    '</div></details>';
   const draftNotice=draft?'<div class="notice competitive-draft-note"><b>Vista previa — todavía no está guardado.</b> Puedes cambiar líder, cartas y cantidades con el creador de abajo. Pulsa “Guardar en mis mazos” solo cuando quieras conservarlo.'+(draftSource.unresolved?'<br>'+Number(draftSource.unresolved)+' copia(s) de la lista original no se pudieron resolver en el catálogo actual.':'')+'</div>':"";
   const deckMeta=draft?'': '<div class="section" id="deckMetaEditor" hidden><h2>Editar mazo</h2><label class="filter-label" for="editDeckName">Nombre</label><input class="field" id="editDeckName" maxlength="120" value="'+esc(d.name)+'"><label class="filter-label" for="editDeckDescription" style="display:block;margin-top:12px">Descripción</label><textarea class="field" id="editDeckDescription" rows="4" maxlength="2000" placeholder="Descripción del mazo...">'+esc(d.description||"")+'</textarea><div class="inline-actions" style="margin-top:12px"><button class="primary btn" id="saveDeckMeta">Guardar cambios</button><button class="secondary btn" id="cancelDeckMeta">Cancelar</button></div></div>';
   const deckDescription=d.description?'<div class="section" style="white-space:pre-wrap;overflow-wrap:anywhere">'+esc(d.description)+'</div>':'';
   return '<div class="wrap">'+hero+deckMeta+deckDescription+draftNotice+
     '<div class="section">'+(l?'<div class="deck-leader-row">'+cardImg(preferredOwnedDeckPrinting(l),"thumb")+'<div class="grow"><b>Líder · '+esc(l.name)+'</b><div class="small">'+esc(preferredOwnedDeckPrinting(l).id)+' · '+(priceOf(l)!==null?money(priceOf(l)):"Precio —")+' · '+(deckOwnedCopies(l)?"en colección":"te falta")+'</div></div><button class="secondary btn" id="changeLeader">Cambiar</button><button class="danger btn" id="removeLeader">Quitar</button></div>':'<div class="notice"><b>1. Elige el líder.</b> Hasta que no selecciones uno, aquí solo aparecen líderes.</div>')+'</div>'+
-    '<div class="stats"><div class="stat"><b>'+v.total+'/50</b><span>Cartas</span></div><div class="stat"><b>'+money(deckTotalValue(d))+'</b><span>Valor del mazo</span></div><div class="stat"><b>'+money(deckMissingCost(d))+'</b><span>Te falta comprar</span></div><div class="stat"><b>'+(v.valid?"✓":"⚠")+'</b><span>Legalidad</span></div></div>'+
-    '<div class="validation '+(v.valid?"ok":"bad")+'"><b>'+(v.valid?"✓ Mazo válido":"⚠ Mazo no válido")+'</b><div class="small">'+esc(v.messages.join(" · ")||"Cumple las reglas configuradas.")+'</div></div>'+
+    deckStats+
     deckCompositionView(d)+
     '<div class="section"><div class="sectionhead"><h2>'+(choosingLeader?"Elige líder":"Creador del mazo")+'</h2><span class="small">'+(choosingLeader?"Solo líderes":"Busca y añade cartas compatibles con el líder")+'</span></div><div class="catalog-controls"><input id="deckSearch" class="field" inputmode="search" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="🔎 Buscar por nombre, ID o expansión..." value="'+esc(state.deckQuery)+'"><div class="sort-controls">'+filterLabel("Ordenar por",'<select id="deckSort" class="field"><option value="id" '+(state.deckFilters.sort==="id"?"selected":"")+'>Número de carta</option><option value="name" '+(state.deckFilters.sort==="name"?"selected":"")+'>Nombre</option><option value="set" '+(state.deckFilters.sort==="set"?"selected":"")+'>Expansión</option><option value="rarity" '+(state.deckFilters.sort==="rarity"?"selected":"")+'>Rareza</option><option value="cost" '+(state.deckFilters.sort==="cost"?"selected":"")+'>Coste</option><option value="power" '+(state.deckFilters.sort==="power"?"selected":"")+'>Poder</option><option value="price" '+(state.deckFilters.sort==="price"?"selected":"")+'>Precio</option><option value="quantity" '+(state.deckFilters.sort==="quantity"?"selected":"")+'>Cantidad que tengo</option></select>')+filterLabel("Orden",'<select id="deckDir" class="field"><option value="asc" '+(state.deckFilters.dir==="asc"?"selected":"")+'>Ascendente</option><option value="desc" '+(state.deckFilters.dir==="desc"?"selected":"")+'>Descendente</option></select>')+'</div><button class="secondary btn filter-toggle" id="deckFilterToggle">🔽 FILTRO'+(n?' ('+n+')':'')+'</button></div>'+deckFilterPanel()+'<div id="deckResults"></div></div></div>';
 }
