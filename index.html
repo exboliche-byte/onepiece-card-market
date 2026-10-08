@@ -1215,8 +1215,22 @@ function deckCompositionView(d){
   const total=deckCardTotal(d),unique=deckUniqueCount(d);
   return '<div class="section"><div class="sectionhead"><div><h2>Tu mazo</h2><div class="small">'+total+'/50 cartas · '+unique+' cartas diferentes'+(d.leader?' · 1 líder':'')+'</div></div></div><div class="deck-owned-grid" id="deckRows">'+deckRows(d)+'</div></div>';
 }
+// A playable card appears once in the deck even if several exact printings
+// are listed. Keep saved deck print IDs untouched: this groups presentation only.
+function deckCompositionGroups(d){
+  const groups=new Map();
+  for(const [id,raw] of Object.entries(d?.cards||{})){
+    const count=Number(raw)||0;
+    if(count<=0)continue;
+    const code=deckPrintedCode(id);
+    if(!groups.has(code))groups.set(code,{code,count:0,entries:[]});
+    const g=groups.get(code);
+    g.count+=count;g.entries.push({id,count});
+  }
+  return [...groups.values()].sort((a,b)=>a.code.localeCompare(b.code,"es",{numeric:true}));
+}
 function deckRows(d){
-  const r=[],allocation=deckAvailableByPrinting(d);
+  const r=[];
   if(d.leader){
     const l=card(d.leader);
     if(l){
@@ -1224,14 +1238,17 @@ function deckRows(d){
       r.push('<article class="card deck-owned-card '+(missing?"deckcard-missing":"")+'"><span class="tag">Líder</span><button class="linkbtn" data-detail="'+esc(display.id)+'" style="display:block;width:100%;padding:0">'+deckOwnedImg(display,have,1)+'</button><div class="cardbody"><div class="name">'+esc(l.name||l.id)+'</div><div class="small">'+esc(display.id)+' · '+esc(l.colors?.join("/")||"—")+'</div><div class="small deck-owned-status">'+(lp!==null?money(lp)+' · ':"")+(missing?"te falta 1":"en colección")+'</div>'+(state.user&&state.collectionReady&&qty(display.id)<99?'<button type="button" class="secondary btn" style="width:100%;margin:6px 0 3px;font-size:11px;padding:7px 3px" data-deck-collect="'+esc(display.id)+'">＋1 a colección</button>':'')+'<button class="danger btn" style="width:100%;margin-top:6px" data-removeleader>Quitar líder</button></div></article>');
     }
   }
-  for(const [id,nRaw] of Object.entries(d.cards||{}).sort(([a],[b])=>String(a).localeCompare(String(b),"es",{numeric:true}))){
-    const n=Number(nRaw)||0;if(n<=0)continue;
-    const cc=card(id);if(!cc)continue;
-    const display=preferredOwnedDeckPrinting(cc),have=Math.min(n,Number(allocation[id]||0));
-    const need=Math.max(0,n-have),unit=priceOf(cc),total=unit===null?null:n*Number(unit);
-    const info=(unit!==null?money(unit)+(n>1?' · '+money(total):''):'Precio —');
-    const ownership=need?('Tienes '+have+'/'+n+' · faltan '+need):('Tienes '+have+'/'+n);
-    r.push('<article class="card deck-owned-card '+(need?"deckcard-missing":"")+'"><span class="tag">×'+n+'</span><button class="linkbtn" data-detail="'+esc(display.id)+'" style="display:block;width:100%;padding:0">'+deckOwnedImg(display,have,n)+'</button><div class="cardbody"><div class="name">'+esc(cc.name||cc.id)+'</div><div class="small">'+esc(display.id)+' · '+esc(display.set||"—")+' · '+esc(cc.rarity||"—")+'</div><div class="small deck-owned-status">'+info+'<br>'+ownership+'</div>'+(state.user&&state.collectionReady&&qty(display.id)<99?'<button type="button" class="secondary btn" style="width:100%;margin:6px 0 3px;font-size:11px;padding:7px 3px" data-deck-collect="'+esc(display.id)+'">＋1 a colección</button>':'')+'<div class="quick"><button class="secondary" data-deckqty="'+esc(id)+'" data-d="-1">−</button><div class="qty">'+n+'</div><button class="primary" data-deckqty="'+esc(id)+'" data-d="1">+</button></div></div></article>');
+  for(const g of deckCompositionGroups(d)){
+    const source=g.entries.map(e=>card(e.id)).find(Boolean);
+    if(!source)continue;
+    const display=preferredOwnedDeckPrinting(source),n=g.count;
+    const have=Math.min(n,deckOwnedCopies(g.code)),need=Math.max(0,n-have);
+    const amounts=g.entries.map(e=>{const c=card(e.id);return c?priceOf(c):null});
+    const total=amounts.every(p=>p!==null)?g.entries.reduce((sum,e,i)=>sum+e.count*amounts[i],0):null;
+    const info=total===null?"Precio —":money(total);
+    const ownership=need?'Tienes '+have+'/'+n+' · faltan '+need:'Tienes '+have+'/'+n;
+    const printInfo=g.entries.length>1?' · '+g.entries.length+' impresiones en el mazo':'';
+    r.push('<article class="card deck-owned-card '+(need?"deckcard-missing":"")+'"><span class="tag">×'+n+'</span><button class="linkbtn" data-detail="'+esc(display.id)+'" style="display:block;width:100%;padding:0">'+deckOwnedImg(display,have,n)+'</button><div class="cardbody"><div class="name">'+esc(source.name||source.id)+'</div><div class="small">'+esc(g.code)+' · '+esc(display.set||"—")+printInfo+'</div><div class="small deck-owned-status">'+info+'<br>'+ownership+'</div>'+(state.user&&state.collectionReady&&qty(display.id)<99?'<button type="button" class="secondary btn" style="width:100%;margin:6px 0 3px;font-size:11px;padding:7px 3px" data-deck-collect="'+esc(display.id)+'">＋1 a colección</button>':'')+'<div class="quick"><button class="secondary" data-deckqtygroup="'+esc(g.code)+'" data-d="-1">−</button><div class="qty">'+n+'</div><button class="primary" data-deckqtygroup="'+esc(g.code)+'" data-d="1">+</button></div></div></article>');
   }
   return r.join("")||'<div class="notice" style="grid-column:1/-1">Elige primero un líder.</div>';
 }
@@ -1469,16 +1486,30 @@ async function replaceCollectionFromCSV(imported){
 function deckCardTotal(d){return Object.values(d?.cards||{}).reduce((s,n)=>s+Number(n||0),0)}
 function addDeckCardToCollection(id){
   const d=state.decks.find(x=>x.id===state.deckId);
-  if(!d||(d.leader!==id&&Number(d.cards?.[id]||0)<=0))return;
+  if(!d)return;
+  const code=deckPrintedCode(id);
+  const shown=d.leader&&deckPrintedCode(d.leader)===code||
+    Object.entries(d.cards||{}).some(([printId,n])=>Number(n)>0&&deckPrintedCode(printId)===code);
+  if(!shown)return;
   if(!collectionRequireLogin())return;
   if(!card(id)||qty(id)>=99)return notify("No se pueden añadir más copias de esta impresión.");
   return changeQty(id,1);
+}
+function changeDeckGroupQty(code,delta){
+  const d=state.decks.find(x=>x.id===state.deckId);if(!d)return;
+  const entries=Object.entries(d.cards||{}).filter(([id,n])=>Number(n)>0&&deckPrintedCode(id)===code);
+  if(!entries.length)return;
+  // Removing first from an unowned printing keeps available copies visible;
+  // adding first to an already-owned printing is intuitive.
+  entries.sort(([a],[b])=>qty(a)-qty(b)||a.localeCompare(b,"es",{numeric:true}));
+  const chosen=Number(delta)<0?entries[0][0]:entries[entries.length-1][0];
+  changeDeckQty(chosen,delta);
 }
 function changeDeckQty(id,delta){
   const d=state.decks.find(x=>x.id===state.deckId);if(!d)return;
   const cc=card(id);if(!cc||cc.category==="Leader")return;
   const limit=deckCopyLimitForId(id);
-  const used=Object.entries(d.cards||{}).filter(([x])=>baseId(x)===baseId(id)).reduce((sum,[,q])=>sum+Number(q||0),0);
+  const used=Object.entries(d.cards||{}).filter(([x])=>deckPrintedCode(x)===deckPrintedCode(id)).reduce((sum,[,q])=>sum+Number(q||0),0);
   if(Number(delta)>0){
     const leader=card(d.leader);if(!leader)return notify("Elige primero un líder");
     if(!deckCardAllowedByLeader(cc,leader))return notify("Esa carta no coincide con el color o colores del líder");
@@ -1637,6 +1668,7 @@ function bindResultEvents(root){
   root.querySelectorAll("[data-adddeck]").forEach(b=>b.onclick=()=>addToDeck(b.dataset.adddeck));
   root.querySelectorAll("[data-deckremovegroup]").forEach(b=>b.onclick=()=>removeFromDeckGroup(b.dataset.deckremovegroup));
   root.querySelectorAll("[data-deckqty]").forEach(b=>b.onclick=()=>changeDeckQty(b.dataset.deckqty,Number(b.dataset.d)));
+  root.querySelectorAll("[data-deckqtygroup]").forEach(b=>b.onclick=()=>changeDeckGroupQty(b.dataset.deckqtygroup,Number(b.dataset.d)));
   root.querySelectorAll("[data-setleader]").forEach(b=>b.onclick=()=>setLeader(b.dataset.setleader));
   root.querySelectorAll("[data-removeleader]").forEach(b=>b.onclick=removeLeader);
 }
