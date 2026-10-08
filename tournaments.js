@@ -92,7 +92,7 @@
   function getTournament(){return (state.tournaments||[]).find(t=>t.id===state.tournamentId)}
   function save(){const key=ownerKey();if(!key)return false;try{localStorage.setItem(key,JSON.stringify(state.tournaments));return true}catch(e){notify("No se pudo guardar: almacenamiento lleno");return false}}
   function load(){
-    state.tournaments=[];state.tournamentId=null;state.tournamentDraft=null;state.tournamentRoundDraft=null;
+    state.tournaments=[];state.tournamentId=null;state.tournamentDraft=null;state.tournamentRoundDraft=null;state.tournamentFinishDraft=null;
     const key=ownerKey();if(!key)return;
     try{
       const data=JSON.parse(localStorage.getItem(key)||"[]");
@@ -103,22 +103,47 @@
   function portrait(id){const c=byId(id);return c?imageCdnUrl(c):""}
   function leaderName(id){return byId(id)?.name||id||"Sin líder"}
   function setName(id){return String(id||"").replace(/^(OP)(\d{2})$/i,"$1-$2")}
-  function uniqueLeaders(query,set,alt){
+  // El líder rival se agrupa por carta lógica, conservando un único
+  // representante: la impresión con menor precio de mercado disponible.
+  function cheaperLeader(a,b){
+    if(!a)return b;
+    const pa=priceOf(a),pb=priceOf(b);
+    if(pb!==null&&(pa===null||pb<pa))return b;
+    if(pa!==null&&(pb===null||pa<pb))return a;
+    const aBase=a.id===baseId(a.id),bBase=b.id===baseId(b.id);
+    if(aBase!==bBase)return bBase?b:a;
+    return String(a.id).localeCompare(String(b.id),"es",{numeric:true})<=0?a:b;
+  }
+  function cheapestLeader(id){
+    if(!id)return null;
+    const target=norm(baseId(id));
+    let best=null;
+    for(const c of state.cards){
+      if(norm(baseId(c.id))!==target)continue;
+      if(c.category!=="Leader"&&c.rarity!=="Leader"&&c.rarity!=="L")continue;
+      best=cheaperLeader(best,c);
+    }
+    return best;
+  }
+  function uniqueLeaders(query,set,alt,cheapestOnly=false){
     const map=new Map(),q=norm(query||"").trim(),selected=setName(set);
     for(const c of state.cards){
       if(c.category!=="Leader"&&c.rarity!=="Leader"&&c.rarity!=="L")continue;
-      if(!alt&&c.id!==baseId(c.id))continue;
-      if(q&&!norm(c.name+" "+c.id+" "+c.set).includes(q))continue;
-      if(!q&&selected&&selected!=="Todas"&&!String(c.set||c.id).replace(/-/g,"").startsWith(selected.replace(/-/g,"")))continue;
-      const key=alt?c.id:baseId(c.id);
-      if(!map.has(key))map.set(key,c);
+      if(!cheapestOnly&&!alt&&c.id!==baseId(c.id))continue;
+      const key=cheapestOnly?norm(baseId(c.id)):(alt?c.id:baseId(c.id));
+      if(cheapestOnly)map.set(key,cheaperLeader(map.get(key),c));
+      else if(!map.has(key))map.set(key,c);
     }
-    return [...map.values()].slice(0,q?60:24);
+    return [...map.values()].filter(c=>{
+      if(q&&!norm(c.name+" "+c.id+" "+baseId(c.id)+" "+c.set).includes(q))return false;
+      if(!q&&selected&&selected!=="Todas"&&!String(c.set||c.id).replace(/-/g,"").startsWith(selected.replace(/-/g,"")))return false;
+      return true;
+    }).slice(0,q?60:24);
   }
-  function leadersHtml(query,set,alt,chosen){
-    const leaders=uniqueLeaders(query,set,alt);
+  function leadersHtml(query,set,alt,chosen,cheapestOnly=false){
+    const leaders=uniqueLeaders(query,set,alt,cheapestOnly);
     if(!leaders.length)return '<p class="tourney-muted">No se encontraron líderes. Busca por nombre o código.</p>';
-    return leaders.map(c=>'<button type="button" class="tourney-leader'+(chosen===c.id?" active":"")+'" data-tourney-leader="'+esc(c.id)+'">'+cardImg(c,"tourney-leader-img")+'<b>'+esc(c.name)+'</b><small>'+esc(c.set||baseId(c.id))+'</small></button>').join("");
+    return leaders.map(c=>'<button type="button" class="tourney-leader'+((cheapestOnly?norm(baseId(chosen))===norm(baseId(c.id)):chosen===c.id)?" active":"")+'" data-tourney-leader="'+esc(c.id)+'">'+cardImg(c,"tourney-leader-img")+'<b>'+esc(c.name)+'</b><small>'+esc(c.set||baseId(c.id))+'</small></button>').join("");
   }
   function choices(values,selected,attr){return values.map(v=>'<button type="button" class="tourney-choice'+(v===selected?" active":"")+'" '+attr+'="'+esc(v)+'">'+esc(v)+'</button>').join("")}
   function tournamentRecord(t){
@@ -138,7 +163,7 @@
       (arr.length?'<div class="tourney-grid">'+arr.map(t=>{const r=tournamentRecord(t);return '<button type="button" class="tourney-tile" data-tourney-open="'+esc(t.id)+'">'+
         (portrait(t.leaderId)?'<img class="tourney-portrait" src="'+esc(portrait(t.leaderId))+'" alt="">':'<div class="tourney-portrait"></div>')+
         '<div class="tourney-tile-info"><strong>'+esc(t.title)+'</strong><div class="tourney-sub">'+esc(dateLabel(t.date))+'</div><div class="tourney-pills"><span class="tourney-pill">'+esc(t.set||"Libre")+'</span><span class="tourney-pill green">'+esc(t.type||"Local Store")+'</span></div></div>'+
-        '<div class="tourney-score">'+r.wins+' - '+r.losses+'<small>'+(t.placement?'#'+Number(t.placement):"—")+(t.players?' / '+Number(t.players):"")+'</small></div></button>'}).join("")+'</div>':
+        '<div class="tourney-score">'+r.wins+' - '+r.losses+'<small>'+(t.finished?'#'+Number(t.placement)+' / '+Number(t.players):"En curso")+'</small></div></button>'}).join("")+'</div>':
         '<div class="tourney-empty">Todavía no tienes torneos.<p>Crea el primero para ir registrando las rondas.</p></div>')+
       '<div class="tourney-actions"><button class="secondary btn" id="tourneyBackup">Exportar torneos (JSON)</button><button class="secondary btn" id="tourneyRestore">Importar copia</button><input hidden id="tourneyBackupInput" type="file" accept=".json,application/json"></div></div>';
   }
@@ -147,15 +172,13 @@
     const decks=state.decks.filter(x=>!x.draftCompetitive);
     const selectedDeck=decks.find(x=>x.id===d.deckId);
     const allSets=["OP-17","OP-16","OP-15","OP-14","OP-13","OP-12","OP-11","OP-10",...state.packs.map(p=>setName(p.code))].filter((v,i,a)=>a.indexOf(v)===i);
-    return '<div class="tourney-wrap"><div class="tourney-header"><button class="tourney-back" id="tourneyFormBack">← Volver</button><h1>Nuevo torneo</h1></div>'+
+    return '<div class="tourney-wrap"><div class="tourney-header"><button class="tourney-back" id="tourneyFormBack">← Volver</button><h1>'+(d.id?"Editar torneo":"Nuevo torneo")+'</h1></div>'+
       '<div class="tourney-panel"><label class="tourney-field">Nombre del torneo<input maxlength="100" class="field" id="tourneyTitle" placeholder="Ej. Torneo de tienda" value="'+esc(d.title||"")+'"></label>'+
       '<div class="tourney-muted" style="margin-bottom:8px">Tipo de torneo</div><div class="tourney-selectrow">'+choices(TYPES,d.type||"Local Store","data-tourney-type")+'</div>'+
       '<div class="tourney-fields2"><label class="tourney-field">Fecha<input class="field" type="date" id="tourneyDate" value="'+esc(d.date)+'"></label>'+
       '<label class="tourney-field">Set<select id="tourneySet" class="field"><option value="">Sin especificar</option>'+allSets.map(v=>'<option '+(d.set===v?"selected":"")+' value="'+esc(v)+'">'+esc(v)+'</option>').join("")+'</select></label></div>'+
       '<label class="tourney-field">Mi mazo (opcional)<select class="field" id="tourneyDeck"><option value="">Seleccionar líder manualmente</option>'+decks.map(x=>'<option value="'+esc(x.id)+'" '+(x.id===d.deckId?"selected":"")+'>'+esc(x.name)+'</option>').join("")+'</select></label>'+
       (selectedDeck?'<div class="tourney-hint">Se usará el líder de «'+esc(selectedDeck.name)+'». Puedes cambiarlo manualmente abajo.</div>':'')+
-      '<div class="tourney-fields2"><label class="tourney-field">Puesto final (opcional)<input class="field" type="number" inputmode="numeric" min="1" id="tourneyPlace" value="'+esc(d.placement||"")+'"></label>'+
-      '<label class="tourney-field">Participantes (opcional)<input class="field" type="number" inputmode="numeric" min="1" id="tourneyPlayers" value="'+esc(d.players||"")+'"></label></div>'+
       '<div class="row"><h2 style="margin:10px 0">Líder jugado</h2><label class="tourney-muted"><input type="checkbox" id="tourneyAlt" '+(d.alt?"checked":"")+'> Incluir artes alternativos</label></div>'+
       '<input class="field" id="tourneyLeaderSearch" type="search" placeholder="Buscar líder por nombre o código" value="'+esc(d.search||"")+'" style="margin-bottom:10px"><div class="tourney-leaders" id="tourneyLeaderGrid">'+leadersHtml(d.search,d.set,d.alt,d.leaderId)+'</div>'+
       '<div class="tourney-actions"><button class="primary btn" id="tourneyCreate">Crear torneo</button></div></div></div>';
@@ -166,13 +189,13 @@
       '<div class="tourney-panel"><div class="tourney-hero">'+(portrait(t.leaderId)?'<img class="tourney-portrait" alt="" src="'+esc(portrait(t.leaderId))+'">':'<div class="tourney-portrait"></div>')+
       '<div><div class="tourney-pills"><span class="tourney-pill">'+esc(t.set||"Set libre")+'</span><span class="tourney-pill green">'+esc(t.type)+'</span></div>'+
       '<h2>'+r.wins+' - '+r.losses+'</h2><div class="tourney-muted">'+esc(leaderName(t.leaderId))+'</div>'+
-      '<div class="tourney-sub">'+(t.placement?'Puesto '+t.placement:"Sin clasificación")+(t.players?' de '+t.players+" jugadores":"")+'</div></div></div>'+
+      '<div class="tourney-sub">'+(t.finished?('Puesto '+t.placement+' de '+t.players+' jugadores'):"Torneo en curso · clasificación pendiente")+'</div></div></div>'+
       '<div class="tourney-actions"><button class="secondary btn" id="tourneyEdit">Editar torneo</button><button class="primary btn" id="tourneyShare">📤 Compartir JPG</button></div>'+
-      '<label class="tourney-muted"><input id="tourneyFinished" type="checkbox" '+(t.finished?"checked":"")+'> Torneo finalizado (puedes reabrirlo)</label></div>'+
+      '<div class="tourney-actions">'+(t.finished?'<button class="secondary btn" id="tourneyReopen">↻ Reabrir torneo</button>':'<button class="primary btn" id="tourneyFinish">✓ Finalizar torneo</button>')+'</div></div>'+
       '<div class="tourney-header"><h2 style="margin:0">Rondas ('+t.rounds.length+')</h2>'+(t.finished?'':'<button class="primary btn" id="tourneyAddRound">＋ Añadir ronda</button>')+'</div>'+
       (t.rounds.length?'<div class="tourney-rounds">'+t.rounds.map((round,i)=>
         '<div class="tourney-round"><div class="tourney-round-main"><span class="tourney-muted">'+(i+1)+'</span>'+
-        (portrait(round.opponentId)?'<img alt="" src="'+esc(portrait(round.opponentId))+'">':'<div style="width:59px">🏁</div>')+
+        (portrait(cheapestLeader(round.opponentId)?.id||round.opponentId)?'<img alt="" src="'+esc(portrait(cheapestLeader(round.opponentId)?.id||round.opponentId))+'">':'<div style="width:59px">🏁</div>')+
         '<div class="tourney-round-name"><strong>'+esc(round.opponentId?leaderName(round.opponentId):roundTypes[round.kind]||"Ronda")+'</strong>'+
         '<small>'+esc(roundTypes[round.kind]||"Suiza")+(round.kind==="bye"||round.kind==="noshow"?"":' · '+(round.start==="1"?"Empecé 1º":"Empecé 2º")+' · Dados: '+(round.dice==="W"?"ganados":"perdidos"))+'</small></div>'+
         '<span class="tourney-round-result '+(round.result==="W"?"win":round.result==="L"?"loss":"neutral")+'">'+esc(round.result==="W"?"W":round.result==="L"?"L":"—")+'</span></div>'+
@@ -180,7 +203,18 @@
         (t.finished?"":'<div class="tourney-round-footer"><button data-tourney-edit-round="'+i+'">Editar</button><button data-tourney-delete-round="'+i+'">Eliminar</button></div>')+
         '</div>').join("")+'</div>':'<div class="tourney-empty">Añade rondas para calcular tu resultado automáticamente.</div>')+
       '<div class="tourney-actions"><button class="secondary btn" id="tourneyDelete">Eliminar torneo</button></div>'+
-      (state.tournamentRoundDraft?roundDialog(t):"")+'</div>';
+      (state.tournamentRoundDraft?roundDialog(t):"")+
+      (state.tournamentFinishDraft?finishDialog(t):"")+'</div>';
+  }
+  function finishDialog(t){
+    const d=state.tournamentFinishDraft;
+    return '<div class="tourney-dialogback"><div class="tourney-dialog" role="dialog" aria-modal="true" aria-labelledby="tourneyFinishTitle">'+
+      '<h2 id="tourneyFinishTitle">Finalizar torneo</h2>'+
+      '<p class="tourney-muted">Indica tu posición final y cuántos jugadores participaron.</p>'+
+      '<div class="tourney-fields2"><label class="tourney-field">Puesto final<input required class="field" type="number" inputmode="numeric" min="1" step="1" id="tourneyFinalPlace" placeholder="Ej. 5" value="'+esc(d.placement??"")+'"></label>'+
+      '<label class="tourney-field">Participantes<input required class="field" type="number" inputmode="numeric" min="1" step="1" id="tourneyFinalPlayers" placeholder="Ej. 20" value="'+esc(d.players??"")+'"></label></div>'+
+      '<div class="tourney-actions"><button class="secondary btn" id="tourneyCancelFinish">Cancelar</button><button class="primary btn" id="tourneyConfirmFinish">Guardar y finalizar</button></div>'+
+      '</div></div>';
   }
   function roundDialog(t){
     const d=state.tournamentRoundDraft;
@@ -191,7 +225,7 @@
     return '<div class="tourney-dialogback"><div class="tourney-dialog"><div class="tourney-header"><h2>'+(d.editIndex===null?"Añadir":"Editar")+' ronda · '+esc(roundTypes[d.kind])+'</h2><button class="tourney-back" id="tourneyCancelRound">✕</button></div>'+
       (special?'<p class="tourney-hint">'+(d.kind==="bye"?"Un BYE cuenta como una victoria.":"No Show se registra sin sumar victoria ni derrota.")+'</p>':
       '<label class="tourney-field">Mazo del rival<input class="field" id="tourneyOpponentSearch" placeholder="Buscar líder rival" value="'+esc(d.search||"")+'"></label>'+
-      '<div class="tourney-leaders" id="tourneyOpponentGrid">'+leadersHtml(d.search,"",true,d.opponentId)+'</div>'+
+      '<div class="tourney-leaders" id="tourneyOpponentGrid">'+leadersHtml(d.search,"",true,d.opponentId,true)+'</div>'+
       '<div class="tourney-fields2" style="margin-top:15px"><div><p class="tourney-muted">Tirada de dados</p><div class="tourney-optionbar">'+toggle("dice","W","Gané",d.dice)+toggle("dice","L","Perdí",d.dice)+'</div></div>'+
       '<div><p class="tourney-muted">Inicio</p><div class="tourney-optionbar">'+toggle("start","1","1º",d.start)+toggle("start","2","2º",d.start)+'</div></div></div>'+
       '<p class="tourney-muted" style="margin-top:15px">Resultado</p><div class="tourney-optionbar">'+toggle("result","W","Victoria",d.result)+toggle("result","L","Derrota",d.result)+'</div>')+
@@ -213,8 +247,6 @@
     d.date=document.querySelector("#tourneyDate")?.value||d.date;
     d.set=document.querySelector("#tourneySet")?.value??d.set;
     d.deckId=document.querySelector("#tourneyDeck")?.value??d.deckId;
-    d.placement=document.querySelector("#tourneyPlace")?.value??d.placement;
-    d.players=document.querySelector("#tourneyPlayers")?.value??d.players;
     d.search=document.querySelector("#tourneyLeaderSearch")?.value??d.search;
     d.alt=!!document.querySelector("#tourneyAlt")?.checked;
   }
@@ -230,17 +262,27 @@
     const deck=state.decks.find(x=>x.id===d.deckId);
     const leaderId=d.leaderId||deck?.leader||"";
     if(!leaderId){notify("Selecciona un líder");return}
-    const players=Number(d.players),placement=Number(d.placement);
-    if(d.players&&(!Number.isInteger(players)||players<1)||d.placement&&(!Number.isInteger(placement)||placement<1)){notify("Revisa puesto y participantes");return}
-    if(d.players&&d.placement&&placement>players){notify("El puesto no puede superar los participantes");return}
     if(d.id){
       const t=state.tournaments.find(x=>x.id===d.id);if(!t)return;
-      Object.assign(t,{title:d.title.trim(),date:d.date,set:d.set,type:d.type,leaderId,deckId:d.deckId||"",players:players||null,placement:placement||null,updatedAt:new Date().toISOString()});
+      Object.assign(t,{title:d.title.trim(),date:d.date,set:d.set,type:d.type,leaderId,deckId:d.deckId||"",updatedAt:new Date().toISOString()});
     }else{
-      const t={id:crypto.randomUUID(),title:d.title.trim(),date:d.date,set:d.set,type:d.type||"Local Store",leaderId,deckId:d.deckId||"",players:players||null,placement:placement||null,rounds:[],finished:false,createdAt:new Date().toISOString()};
+      const t={id:crypto.randomUUID(),title:d.title.trim(),date:d.date,set:d.set,type:d.type||"Local Store",leaderId,deckId:d.deckId||"",players:null,placement:null,rounds:[],finished:false,createdAt:new Date().toISOString()};
       state.tournaments.unshift(t);state.tournamentId=t.id;
     }
     state.tournamentDraft=null;save();rerender();notify("Torneo guardado");
+  }
+  function confirmFinish(){
+    const t=getTournament();
+    if(!t||t.finished||!state.tournamentFinishDraft)return;
+    const placeRaw=String(document.querySelector("#tourneyFinalPlace")?.value??"").trim();
+    const playersRaw=String(document.querySelector("#tourneyFinalPlayers")?.value??"").trim();
+    const placement=Number(placeRaw),players=Number(playersRaw);
+    if(!placeRaw||!playersRaw||!Number.isSafeInteger(placement)||!Number.isSafeInteger(players)||placement<1||players<1){
+      notify("Introduce un puesto y un número de participantes válidos");return;
+    }
+    if(placement>players){notify("El puesto no puede superar el número de participantes");return}
+    t.placement=placement;t.players=players;t.finished=true;t.updatedAt=new Date().toISOString();
+    state.tournamentFinishDraft=null;save();rerender();notify("Torneo finalizado");
   }
   function selectRoundKind(kind){
     if(!roundTypes[kind])return;
@@ -313,7 +355,7 @@
     drawText(c,"MI ALBUM ONE PIECE",76,102,25,"#ffd447","800");
     drawText(c,"TOURNAMENT REPORT",76,159,44,"#ffffff","800");
     const record=tournamentRecord(t);
-    const imgs=await Promise.all([loadPortrait(t.leaderId),...(t.rounds||[]).slice(0,7).map(r=>loadPortrait(r.opponentId))]);
+    const imgs=await Promise.all([loadPortrait(t.leaderId),...(t.rounds||[]).slice(0,7).map(r=>loadPortrait(cheapestLeader(r.opponentId)?.id||r.opponentId))]);
     function paintAvatar(img,x,y,w,h){
       rounded(c,x,y,w,h,20,"#354152");
       if(!img)return;
@@ -327,8 +369,8 @@
     rounded(c,76,465,928,145,18,"#222e3c");
     drawText(c,"VICTORIAS / DERROTAS",106,506,21,"#a6b4c9","650");
     drawText(c,record.wins+" - "+record.losses,106,580,66,"#ffffff","850");
-    drawText(c,t.placement?"PUESTO #"+t.placement:"SIN CLASIFICACIÓN",555,535,30,"#ffd447","800",430);
-    drawText(c,t.players?"/ "+t.players+" participantes":"",557,578,22,"#bdc6d7","600");
+    drawText(c,t.finished&&t.placement?"PUESTO #"+t.placement:"EN CURSO",555,535,30,"#ffd447","800",430);
+    drawText(c,t.finished&&t.players?"/ "+t.players+" participantes":"",557,578,22,"#bdc6d7","600");
     drawText(c,"RONDAS",77,667,27,"#ffffff","800");
     const rows=(t.rounds||[]).slice(0,7);
     let y=690;
@@ -361,7 +403,7 @@
     on("#tourneyNew","click",()=>{state.tournamentDraft={title:"",date:new Date(Date.now()-new Date().getTimezoneOffset()*60000).toISOString().slice(0,10),type:"Local Store",set:"OP-17",deckId:"",leaderId:"",alt:false,search:""};rerender()});
     document.querySelectorAll("[data-tourney-open]").forEach(b=>b.onclick=()=>navigateApp(()=>{state.tournamentId=b.dataset.tourneyOpen}));
     on("#tourneyFormBack","click",exitForm);
-    on("#tourneyBack","click",()=>navigateApp(()=>{state.tournamentId=null;state.tournamentRoundDraft=null}));
+    on("#tourneyBack","click",()=>navigateApp(()=>{state.tournamentId=null;state.tournamentRoundDraft=null;state.tournamentFinishDraft=null}));
     on("#tourneyBackup","click",backup);
     on("#tourneyRestore","click",()=>document.querySelector("#tourneyBackupInput")?.click());
     on("#tourneyBackupInput","change",e=>restore(e.target.files?.[0]));
@@ -382,7 +424,10 @@
     const t=getTournament();if(!t)return;
     on("#tourneyEdit","click",()=>{state.tournamentDraft={...t,search:"",alt:false};rerender()});
     on("#tourneyShare","click",()=>share(t));
-    on("#tourneyFinished","change",e=>{t.finished=e.target.checked;save();rerender()});
+    on("#tourneyFinish","click",()=>{if(t.finished)return;state.tournamentFinishDraft={placement:t.placement||"",players:t.players||""};rerender()});
+    on("#tourneyReopen","click",()=>{if(!t.finished)return;t.finished=false;t.updatedAt=new Date().toISOString();state.tournamentFinishDraft=null;save();rerender();notify("Torneo reabierto")});
+    on("#tourneyCancelFinish","click",()=>{state.tournamentFinishDraft=null;rerender()});
+    on("#tourneyConfirmFinish","click",confirmFinish);
     on("#tourneyDelete","click",()=>{if(!confirm("¿Eliminar este torneo y todas sus rondas?"))return;state.tournaments=state.tournaments.filter(x=>x.id!==t.id);state.tournamentId=null;save();rerender();notify("Torneo eliminado")});
     on("#tourneyAddRound","click",()=>{state.tournamentRoundDraft={kind:null,editIndex:null};rerender()});
     document.querySelectorAll("[data-tourney-edit-round]").forEach(b=>b.onclick=()=>{const i=Number(b.dataset.tourneyEditRound);state.tournamentRoundDraft={...t.rounds[i],editIndex:i,search:""};rerender()});
@@ -394,14 +439,14 @@
     document.querySelectorAll("[data-tourney-toggle]").forEach(b=>b.onclick=()=>{captureRound();state.tournamentRoundDraft[b.dataset.tourneyToggle]=b.dataset.value;rerender()});
     on("#tourneyOpponentSearch","input",e=>{
       state.tournamentRoundDraft.search=e.target.value;
-      const grid=document.querySelector("#tourneyOpponentGrid");if(grid){grid.innerHTML=leadersHtml(e.target.value,"",true,state.tournamentRoundDraft.opponentId);bindLeaderChoices(grid,state.tournamentRoundDraft,true)}
+      const grid=document.querySelector("#tourneyOpponentGrid");if(grid){grid.innerHTML=leadersHtml(e.target.value,"",true,state.tournamentRoundDraft.opponentId,true);bindLeaderChoices(grid,state.tournamentRoundDraft,true)}
     });
     bindLeaderChoices(document.querySelector("#tourneyOpponentGrid"),state.tournamentRoundDraft,true);
   }
   function bindLeaderChoices(grid,form,opponent){
     grid?.querySelectorAll("[data-tourney-leader]").forEach(b=>b.onclick=()=>{
       if(opponent)captureRound();else captureForm();
-      form[opponent?"opponentId":"leaderId"]=b.dataset.tourneyLeader;
+      form[opponent?"opponentId":"leaderId"]=opponent?(cheapestLeader(b.dataset.tourneyLeader)?.id||b.dataset.tourneyLeader):b.dataset.tourneyLeader;
       rerender();
     });
   }
