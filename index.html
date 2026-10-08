@@ -1868,9 +1868,9 @@ function writeCollection(id,nextValue,permission){
     if(n===old)return true;
     // Emergency safeguard against silent additions: every increase requires
     // an affirmative confirmation specifying the exact printing and amount.
-    if(n>old&&!window.confirm("CONFIRMAR ALTA DE CARTAS\\n\\n"+
-      id+"\\nCopias actuales: "+old+"\\nSe van a añadir: "+(n-old)+
-      "\\nTotal nuevo: "+n+"\\n\\nSolo acepta si tú has solicitado esta operación."))return false;
+    if(n>old&&!window.confirm("CONFIRMAR ALTA DE CARTAS\n\n"+
+      id+"\nCopias actuales: "+old+"\nSe van a añadir: "+(n-old)+
+      "\nTotal nuevo: "+n+"\n\nSolo acepta si tú has solicitado esta operación."))return false;
     if(!collectionAvailable()||state.user?.id!==userId||state.sb!==client||document.hidden)return false;
     try{
       const session=await client.auth.getSession();
