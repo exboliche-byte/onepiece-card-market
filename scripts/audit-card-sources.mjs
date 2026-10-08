@@ -64,7 +64,10 @@ if(secondary.status==="ok"){
 }
 const complete=new Set([...primaryIds,...secondaryIds]);
 for(const id of complete)if(!ids.has(id))problems.sourceGaps.push(id);
-const prices=reference.data?.cards||{};
+const referenceStamp=Date.parse(String(reference.data?.updatedAt||""));
+const referenceFresh=Number.isFinite(referenceStamp)&&Date.now()-referenceStamp<3*86400000;
+const prices=referenceFresh?(reference.data?.cards||{}):{};
+if(!referenceFresh)console.warn("Historical/archived price comparison skipped; updatedAt=",reference.data?.updatedAt);
 let disagreement=0,compared=0;
 for(const [id,p] of Object.entries(market.cards||{})){
  const external=Number(prices[id]?.eur||0),actual=Number(p?.eur||0);
@@ -73,6 +76,6 @@ for(const [id,p] of Object.entries(market.cards||{})){
  const ratio=Math.max(external,actual)/Math.min(external,actual);
  if(ratio>4){disagreement++;if(problems.disagree.length<40)problems.disagree.push({id,market:actual,oracle:external,ratio:Number(ratio.toFixed(1))})}
 }
-console.log("FULL_AUDIT "+JSON.stringify({counts,source:{primary:primaryIds.size,secondary:secondaryIds.size,union:complete.size,local:ids.size,missing:problems.sourceGaps.length,upstreamStatuses:results.map(x=>({name:x.name,status:x.status,message:x.message||""}))},comparison:{compared,significantDisagreement:disagreement}}));
+console.log("FULL_AUDIT "+JSON.stringify({counts,source:{primary:primaryIds.size,secondary:secondaryIds.size,union:complete.size,local:ids.size,missing:problems.sourceGaps.length,upstreamStatuses:results.map(x=>({name:x.name,status:x.status,message:x.message||""}))},comparison:{compared,significantDisagreement:disagreement,referenceFresh,referenceUpdatedAt:reference.data?.updatedAt}}));
 for(const [key,items] of Object.entries(problems))console.log("FULL_AUDIT_PROBLEM "+key+" count="+items.length+" samples="+JSON.stringify(items.slice(0,25)));
 if(problems.sourceGaps.length>0)process.exitCode=2;
