@@ -3065,8 +3065,23 @@ async function openCollectionShare(){
   modal.querySelector("[data-close-share]").onclick=close;
   modal.addEventListener("click",e=>{if(e.target===modal)close()});
   const area=modal.querySelector("#collectionShareControls");
-  const showError=msg=>{if(area)area.innerHTML='<p class="notice">'+esc(msg)+'</p><button type="button" class="secondary btn" id="retryCollectionShare">Reintentar</button>';area?.querySelector("#retryCollectionShare")?.addEventListener("click",refresh)};
-  const setBusy=msg=>{area.innerHTML='<p class="notice">'+esc(msg)+'</p>'};
+  const shareError=e=>{
+    console.warn("No se pudo compartir la colección",e);
+    const message=String(e?.message||e||"Error desconocido"),code=String(e?.code||"");
+    if(code==="42P01"||code==="PGRST205"||/collection_share_links|schema cache|public_collection_snapshot/i.test(message)){
+      return "Compartir colección todavía no está habilitado en la base de datos. Contacta con el administrador para activar los enlaces públicos.";
+    }
+    if(code==="42501"||/permission denied|row-level security/i.test(message)){
+      return "Tu cuenta no tiene permiso para gestionar enlaces públicos. Contacta con el administrador.";
+    }
+    return message;
+  };
+  const showError=msg=>{
+    if(!modal.isConnected)return;
+    area.innerHTML='<p class="notice" role="alert">'+esc(msg)+'</p><button type="button" class="secondary btn" id="retryCollectionShare">Reintentar</button>';
+    area.querySelector("#retryCollectionShare").addEventListener("click",refresh);
+  };
+  const setBusy=msg=>{if(modal.isConnected)area.innerHTML='<p class="notice">'+esc(msg)+'</p>'};
   const refresh=async()=>{
     if(state.user?.id!==ownerId)return close();
     try{
@@ -3085,7 +3100,7 @@ async function openCollectionShare(){
             const result=await state.sb.from("collection_share_links").insert({user_id:ownerId,share_slug:slug}).select("share_slug").single();
             if(result.error)throw result.error;
             await refresh();
-          }catch(e){showError("No se pudo activar el enlace: "+(e.message||"error"))}
+          }catch(e){showError("No se pudo activar el enlace: "+shareError(e))}
         };
         return;
       }
@@ -3096,13 +3111,27 @@ async function openCollectionShare(){
         '<button type="button" class="secondary btn" id="sendCollectionUrl">Compartir</button>'+
         '<button type="button" class="danger btn" id="revokeCollectionUrl">Desactivar enlace</button></div>'+
         '<p class="small" style="margin-top:10px">La vista pública reflejará los cambios de tu colección. Desactivarlo hace que ese enlace deje de funcionar.</p>';
-      area.querySelector("#copyCollectionUrl").onclick=async()=>{
-        try{await navigator.clipboard.writeText(url);notify("Enlace copiado")}
-        catch{const inp=area.querySelector("#collectionPublicUrl");inp.focus();inp.select();document.execCommand?.("copy");notify("Enlace seleccionado para copiar")}
+      const copyCollectionUrl=async()=>{
+        try{
+          if(!navigator.clipboard?.writeText)throw Error("Clipboard API unavailable");
+          await navigator.clipboard.writeText(url);
+          notify("Enlace copiado");
+        }catch{
+          const input=area.querySelector("#collectionPublicUrl");
+          if(!input)return;
+          input.focus();input.select();
+          let copied=false;
+          try{copied=document.execCommand?.("copy")===true}catch{}
+          notify(copied?"Enlace copiado":"Enlace seleccionado. Cópialo manualmente.");
+        }
       };
+      area.querySelector("#copyCollectionUrl").onclick=copyCollectionUrl;
       area.querySelector("#sendCollectionUrl").onclick=async()=>{
-        if(navigator.share){try{await navigator.share({title:"Mi colección One Piece",url});return}catch(e){if(e?.name==="AbortError")return}}
-        area.querySelector("#copyCollectionUrl").click();
+        if(navigator.share){
+          try{await navigator.share({title:"Mi colección One Piece",url});return}
+          catch(e){if(e?.name==="AbortError")return;console.warn("Compartir enlace",e)}
+        }
+        await copyCollectionUrl();
       };
       area.querySelector("#revokeCollectionUrl").onclick=async()=>{
         if(!confirm("¿Desactivar el enlace público? Quienes lo tengan dejarán de ver tu colección."))return;
@@ -3113,9 +3142,9 @@ async function openCollectionShare(){
             .eq("user_id",ownerId).eq("share_slug",data.share_slug).select("share_slug");
           if(removed.error||!removed.data?.length)throw Error("No se pudo confirmar la desactivación");
           await refresh();
-        }catch(e){showError("No se pudo desactivar el enlace: "+(e.message||"error"))}
+        }catch(e){showError("No se pudo desactivar el enlace: "+shareError(e))}
       };
-    }catch(e){showError("No se pudo consultar el enlace: "+(e.message||"error"))}
+    }catch(e){showError("No se pudo consultar el enlace: "+shareError(e))}
   };
   await refresh();
 }

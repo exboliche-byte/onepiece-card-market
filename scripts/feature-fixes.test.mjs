@@ -1,0 +1,67 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import {fileURLToPath} from "node:url";
+
+const root=fileURLToPath(new URL("..",import.meta.url));
+const read=name=>fs.readFileSync(path.join(root,name),"utf8");
+function between(source,start,end){
+  const a=source.indexOf(start),b=source.indexOf(end,a);
+  assert.ok(a>=0&&b>a,"Missing expected implementation block "+start);
+  return source.slice(a,b);
+}
+
+const jpg=read("deck-image-share.js");
+const colorsBlock=between(jpg,"const LEADER_PALETTE=","function darkTint(");
+const cards={
+  mono:{colors:["Red"]},
+  multi:{colors:["Red","Purple"]},
+  spanish:{colors:["Azul","Amarillo"]},
+  image:{colors:["Green"]}
+};
+const getColors=new Function("card",colorsBlock+"\nreturn deckLeaderColors;")(id=>cards[id]);
+
+test("deck JPG uses leader identity, including multicolor leaders",()=>{
+  assert.deepEqual(getColors({leader:"mono"}),[[220,52,65]]);
+  assert.deepEqual(getColors({leader:"multi"}),[[220,52,65],[131,81,186]]);
+  assert.deepEqual(getColors({leader:"spanish"}),[[40,111,191],[221,169,35]]);
+  assert.deepEqual(getColors({leader:"image",colors:["Black"]}),[[33,147,101]]);
+  assert.deepEqual(getColors({colors:["Black","Black"]}),[[58,66,82]]);
+  assert.ok(!jpg.includes("leaderArtworkColor"),"Artwork colors must never decide the JPG background");
+  assert.match(jpg,/background\.addColorStop\(i\/\(palette\.length-1\)/);
+});
+
+const scanner=read("scanner.js");
+const lensBlock=between(scanner,"const frontLabel=","async function startCamera(turn){");
+const lenses=new Function("facing",lensBlock+"\nreturn {cameraPriority,camerasForFacing};");
+const candidates=[
+  {kind:"videoinput",deviceId:"front",label:"Front Camera"},
+  {kind:"videoinput",deviceId:"macro",label:"Back Macro Camera"},
+  {kind:"videoinput",deviceId:"ultra",label:"Back Ultra Wide Camera"},
+  {kind:"videoinput",deviceId:"normal",label:"Back Camera"}
+];
+
+test("scanner prefers wide angle and keeps macro/front separate",()=>{
+  const rear=lenses("environment");
+  assert.deepEqual(rear.camerasForFacing(candidates).map(d=>d.deviceId),["macro","ultra","normal"]);
+  assert.ok(rear.cameraPriority(candidates[2])>rear.cameraPriority(candidates[3]));
+  assert.ok(rear.cameraPriority(candidates[3])>rear.cameraPriority(candidates[1]));
+  assert.deepEqual(lenses("user").camerasForFacing(candidates).map(d=>d.deviceId),["front"]);
+  assert.match(scanner,/deviceId:\{exact:targetId\}/);
+  assert.match(scanner,/id="scanCameraSelect"/);
+  assert.match(scanner,/selectCamera\(e\.target\.value\)/);
+});
+
+test("collection sharing is wired with explicit public opt-in, retry, copy and revocation",()=>{
+  const html=read("index.html");
+  const sql=read("supabase/migrations/20261009_public_collection_share_links.sql");
+  assert.match(html,/id="openCollectionShare"/);
+  assert.match(html,/\$\("#openCollectionShare"\)\?\.addEventListener\("click",openCollectionShare\)/);
+  for(const name of ["enableCollectionSharing","copyCollectionUrl","sendCollectionUrl","revokeCollectionUrl","retryCollectionShare"]){
+    assert.ok(html.includes(name),"Missing collection share action "+name);
+  }
+  assert.match(sql,/ENABLE ROW LEVEL SECURITY/);
+  assert.match(sql,/public_collection_snapshot/);
+  assert.match(sql,/GRANT EXECUTE ON FUNCTION public\.public_collection_snapshot\(text\) TO anon,authenticated/);
+});
