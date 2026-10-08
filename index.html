@@ -1853,9 +1853,38 @@ async function deleteAccount(){
   }catch(e){state.authError=authMessage(e);notify(state.authError)}
   finally{state.authBusy=false;renderShell()}
 }
-async function syncOne(id,n){
-  if(!state.sb||!state.user)return;
-  try{if(n<=0)await state.sb.from("collection_items").delete().eq("user_id",state.user.id).eq("card_id",id);else await state.sb.from("collection_items").upsert({user_id:state.user.id,card_id:id,quantity:n,updated_at:new Date().toISOString()},{onConflict:"user_id,card_id"})}catch(e){console.warn("collection sync",e)}
+// All writes are serialized per exact print ID; a newer quantity always wins.
+const collectionSyncJobs=new Map();
+async function syncOne(id){
+  if(!state.sb||!state.user)return false;
+  const userId=state.user.id,jobKey=userId+"|"+id;
+  if(collectionSyncJobs.has(jobKey))return collectionSyncJobs.get(jobKey);
+  const job=(async()=>{
+    while(state.user?.id===userId){
+      const pending=readCollectionPending(userId);
+      if(pending.replace)return false; // A full replacement must complete before individual edits.
+      const edit=pending.changes[id];
+      if(!edit)return true;
+      const q=Math.max(0,Number(edit.quantity)||0);
+      const result=q===0
+        ?await state.sb.from("collection_items").delete().eq("user_id",userId).eq("card_id",id)
+        :await state.sb.from("collection_items").upsert({user_id:userId,card_id:id,quantity:q,updated_at:new Date().toISOString()},{onConflict:"user_id,card_id"});
+      if(result.error)throw result.error;
+      const current=readCollectionPending(userId);
+      if(current.changes[id]?.token===edit.token){
+        delete current.changes[id];
+        writeCollectionPending(current,userId);
+      }
+      // If this card was changed again while writing, repeat with its latest quantity.
+    }
+    return false;
+  })().catch(error=>{
+    console.warn("No se pudo sincronizar una impresión",id,error);
+    if(state.user?.id===userId)notify("Cambio local guardado; pendiente de sincronizar con la nube");
+    return false;
+  }).finally(()=>collectionSyncJobs.delete(jobKey));
+  collectionSyncJobs.set(jobKey,job);
+  return job;
 }
 async function syncDeck(d){
   if(d?.draftCompetitive)return false;
@@ -1874,21 +1903,83 @@ async function syncDeckDelete(id){
   if(!state.sb||!state.user)return;
   try{const r=await state.sb.from("decks").delete().eq("id",id).eq("user_id",state.user.id);if(r.error)throw r.error}catch(e){console.warn("deck delete",e)}
 }
-async function syncCloud(){
-  if(!state.sb||!state.user)return;
-  loadAccountLocal({migrateLegacy:true});
-  const localOwned={...state.owned},localDecks=state.decks.slice();
-  try{
-    const ci=await state.sb.from("collection_items").select("card_id,quantity,updated_at").eq("user_id",state.user.id);if(ci.error)throw ci.error;
-    const remoteOwned={};for(const r of ci.data||[])remoteOwned[r.card_id]=Number(r.quantity||0);
-    state.owned=mergeOwnedCollections(remoteOwned,localOwned);
-    ensureOwnedCardsInCatalog();
-    const collectionUpserts=Object.entries(localOwned)
-      .filter(([id,q])=>Number(q)>Number(remoteOwned[id]||0))
-      .map(([card_id,quantity])=>({user_id:state.user.id,card_id,quantity:Number(quantity),updated_at:new Date().toISOString()}));
-    if(collectionUpserts.length){
-      const up=await state.sb.from("collection_items").upsert(collectionUpserts,{onConflict:"user_id,card_id"});if(up.error)throw up.error;
+// Server state is authoritative for untouched cards; pending local edits always win.
+// In particular a deleted card must NEVER return from an older remote/legacy snapshot.
+async function reconcileCollectionCloud(userId){
+  const sb=state.sb;
+  let journal=readCollectionPending(userId);
+  if(journal.replace){
+    const replaceToken=journal.replace.token;
+    // Finish previously started single-card writes before the full replacement.
+    await Promise.all([...collectionSyncJobs.entries()].filter(([k])=>k.startsWith(userId+"|")).map(([,p])=>p));
+    if(state.user?.id!==userId)throw Error("Cuenta cambiada durante sincronización");
+    const wanted=Object.entries(state.owned).filter(([,q])=>Number(q)>0)
+      .map(([card_id,quantity])=>({user_id:userId,card_id,quantity:Number(quantity),updated_at:new Date().toISOString()}));
+    const deleted=await sb.from("collection_items").delete().eq("user_id",userId);
+    if(deleted.error)throw deleted.error;
+    for(let i=0;i<wanted.length;i+=150){
+      const saved=await sb.from("collection_items").upsert(wanted.slice(i,i+150),{onConflict:"user_id,card_id"});
+      if(saved.error)throw saved.error;
     }
+    journal=readCollectionPending(userId);
+    if(journal.replace?.token===replaceToken){
+      journal.replace=null;writeCollectionPending(journal,userId);
+    }
+  }else{
+    const remoteOwned={};
+    // A collection can exceed Supabase's default REST row limit.
+    for(let start=0;start<20000;start+=500){
+      const result=await sb.from("collection_items").select("card_id,quantity").eq("user_id",userId).range(start,start+499);
+      if(result.error)throw result.error;
+      for(const item of result.data||[]){
+        const qty=Math.max(0,Number(item.quantity)||0);
+        if(qty>0)remoteOwned[item.card_id]=qty;
+      }
+      if((result.data||[]).length<500)break;
+    }
+    if(state.user?.id!==userId)throw Error("Cuenta cambiada durante sincronización");
+    journal=readCollectionPending(userId);
+    // Importing a CSV or clearing everything while the fetch was in flight must not be overwritten.
+    if(journal.replace)return reconcileCollectionCloud(userId);
+    for(const [id,change] of Object.entries(journal.changes)){
+      if(Number(change?.quantity)>0)remoteOwned[id]=Number(change.quantity);
+      else delete remoteOwned[id]; // persistent deletion tombstone
+    }
+    // Also protect edits already committed during the remote fetch.
+    for(const [id,n] of collectionTouched){
+      if(n>0)remoteOwned[id]=n;
+      else delete remoteOwned[id];
+    }
+    state.owned=remoteOwned;
+    saveLocal();
+    ensureOwnedCardsInCatalog();
+  }
+  if(state.user?.id!==userId)throw Error("Cuenta cambiada durante sincronización");
+  journal=readCollectionPending(userId);
+  const pendingIds=Object.keys(journal.changes);
+  let synced=true;
+  for(let i=0;i<pendingIds.length;i+=12){
+    const results=await Promise.all(pendingIds.slice(i,i+12).map(id=>syncOne(id)));
+    if(results.includes(false))synced=false;
+  }
+  // If the user imported another CSV while syncing, its replacement remains queued.
+  if(readCollectionPending(userId).replace)return false;
+  return synced;
+}
+let cloudSyncQueue=Promise.resolve();
+function syncCloud(){
+  if(!state.sb||!state.user)return Promise.resolve(false);
+  const userId=state.user.id;
+  const operation=cloudSyncQueue.catch(()=>{}).then(()=>syncCloudInternal(userId));
+  cloudSyncQueue=operation.catch(()=>{});
+  return operation;
+}
+async function syncCloudInternal(userId){
+  if(state.user?.id!==userId)return false;
+  const localDecks=state.decks.slice();
+  try{
+    const collectionOk=await reconcileCollectionCloud(userId);
+    if(!collectionOk)throw Error("Hay cambios en la colección pendientes de sincronizar.");
     const ds=await state.sb.from("decks").select("*").eq("user_id",state.user.id);if(ds.error)throw ds.error;
     const remoteIds=(ds.data||[]).map(d=>d.id);
     let dc={data:[]};
@@ -1898,7 +1989,12 @@ async function syncCloud(){
     const remoteIdsSet=new Set(remote.map(d=>d.id)),unsynced=localDecks.filter(d=>!remoteIdsSet.has(d.id)).map(d=>({...d,owner_id:state.user.id}));
     state.decks=[...remote,...unsynced];saveLocal();
     for(const d of unsynced)await syncDeck(d);
-  }catch(e){console.warn("cloud sync",e);state.authError="Sesión iniciada, pero no se pudo sincronizar: "+authMessage(e)}
+    return true;
+  }catch(e){
+    console.warn("cloud sync",e);
+    if(state.user?.id===userId)state.authError="Sesión iniciada, pero no se pudo sincronizar: "+authMessage(e);
+    return false;
+  }
 }
 let supabaseInitPromise=null;
 async function handleAuthCallback(sb){
