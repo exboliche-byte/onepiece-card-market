@@ -165,7 +165,7 @@ function show(hit){
  const alts=[...new Map(matches.map(x=>[x.c.id,x.c])).values()].filter(x=>normalize(baseId(x.id))!==normalize(baseId(c.id))).slice(0,5);
  const selector='<option value="">Selecciona la impresión exacta…</option>'+versions.map(x=>'<option value="'+esc(x.id)+'" '+(versions.length===1?'selected':'')+'>'+esc(x.id)+' · '+esc(variantKindOf(x))+' · '+esc(printSetOf(x))+' · tengo '+qty(x.id)+'</option>').join("");
  const host=$("#scanResult");
- host.innerHTML='<div class="result"><div class="found"><img id="scanCardPicture" src="'+esc(imageCdnUrl(c))+'" alt="Carta candidata"><div><b>'+esc(c.name)+'</b><div>'+esc(baseId(c.id))+'</div><div>Copias del mismo número: <b>'+total+'</b></div><div>'+(need?'Faltan <b>'+need+'</b> para el playset':'<b>Playset completo</b>')+' ('+target+')</div><div class="muted">'+esc(hit.engine)+' · '+esc(hit.confidence||"manual")+'</div></div></div>'+
+ host.innerHTML='<div class="result"><div class="found"><img id="scanCardPicture" src="'+esc(imageCdnUrl(c))+'" data-image-official="'+esc(officialImageUrl(c))+'" data-image-fallback="'+esc(fallbackImageUrl(c))+'" alt="Carta candidata"><div><b>'+esc(c.name)+'</b><div>'+esc(baseId(c.id))+'</div><div>Copias del mismo número: <b>'+total+'</b></div><div>'+(need?'Faltan <b>'+need+'</b> para el playset':'<b>Playset completo</b>')+' ('+target+')</div><div class="muted">'+esc(hit.engine)+' · '+esc(hit.confidence||"manual")+'</div></div></div>'+
  (hit.description?'<p class="muted">La IA ve: '+esc(hit.description)+'</p>':'')+
  '<label for="scanVariant">Elige la impresión exacta:</label><br><select id="scanVariant">'+selector+'</select><div id="scanExactCount" class="muted" style="margin:7px 0"></div>'+
  (versions.length>1?'<div class="muted">Existen varias versiones: comprueba la ilustración antes de guardar.</div>':'')+
@@ -179,7 +179,7 @@ function show(hit){
  const display=()=>{
    const x=selected(),node=$("#scanExactCount"),pic=$("#scanCardPicture");
    if(node)node.textContent=x?"Tienes "+qty(x.id)+" copias de esta impresión.":"Debes elegir una impresión antes de añadir.";
-   if(x&&pic)pic.src=imageCdnUrl(x);
+   if(x&&pic){pic.dataset.imageRecovery="0";pic.dataset.imageStep="";pic.dataset.imageOfficial=officialImageUrl(x);pic.dataset.imageFallback=fallbackImageUrl(x);pic.src=imageCdnUrl(x);}
  };
  $("#scanVariant").onchange=display;display();
  const add=count=>{
