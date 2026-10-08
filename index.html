@@ -2297,6 +2297,7 @@ function restoreReloadView(saved){
   restoreFields(state.expansions,saved.expansions);
   restoreFields(state.deckFilters,saved.deckFilters);
   state.tab=view.tab;
+  state.collectionStatsOpen=state.tab==="collection"&&!!view.collectionStatsOpen;
   state.album.set=String(view.albumSet||"");
   state.deckLibrary=view.deckLibrary!==false;
   state.deckId=state.user&&state.decks.some(d=>d.id===view.deckId)?view.deckId:null;
