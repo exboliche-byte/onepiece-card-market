@@ -229,8 +229,14 @@ function chooseVariant(variants,selected){
     pic.dataset.imageOfficial=officialImageUrl(current);
     pic.dataset.imageFallback=fallbackImageUrl(current);
     pic.dataset.imageRecovery="0";
+    pic.dataset.imageStep="0";
     pic.src=imageCdnUrl(current);
-    pic.onerror=()=>{if(pic.src!==pic.dataset.imageOfficial)pic.src=pic.dataset.imageOfficial;else if(pic.src!==pic.dataset.imageFallback)pic.src=pic.dataset.imageFallback;else pic.onerror=null};
+    pic.onerror=()=>{
+      const step=Number(pic.dataset.imageStep||0);
+      if(step===0){pic.dataset.imageStep="1";pic.src=pic.dataset.imageOfficial}
+      else if(step===1){pic.dataset.imageStep="2";pic.src=pic.dataset.imageFallback}
+      else pic.onerror=null;
+    };
   }
 }
 function show(hit){
