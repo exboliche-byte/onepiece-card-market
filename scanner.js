@@ -11,10 +11,10 @@ style.textContent=[
 "#scanPanel h2{font-size:17px;margin:3px 0;display:flex;justify-content:space-between;align-items:center;gap:8px}",
 "#scanPanel .scanFrame{position:relative;flex:none;height:clamp(300px,calc(100dvh - 235px),1050px);width:100%;margin:0;background:#050505;overflow:hidden;border-radius:11px;border:1px solid #4b5465}",
 "#scanPanel .scanFrame video,#scanPanel .scanFrame .scanStill{position:absolute;inset:0;display:block;width:100%;height:100%;object-fit:cover}",
-"#scanPanel .aim{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);height:min(87%,calc(78vw / 0.716));max-width:85%;aspect-ratio:0.716;border:2px dashed #ffd447c8;border-radius:13px;pointer-events:none;box-shadow:0 0 0 200vmax #0000002b}",
+"#scanPanel .aim{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);height:min(87%,109vw);max-width:85%;aspect-ratio:0.716;border:2px dashed #ffd447c8;border-radius:13px;pointer-events:none;box-shadow:0 0 0 200vmax #0000002b}",
 "#scanPanel.locked .aim{display:none}",
 "#scanPanel .result{position:absolute;left:5px;right:5px;bottom:5px;max-height:88%;overflow-y:auto;background:#101724f4;border-radius:12px;padding:10px;border:1px solid #ffd447}",
-"@media (min-width:720px){#scanPanel .scanFrame{height:clamp(400px,calc(100dvh - 210px),1100px)}#scanPanel .aim{height:min(88%,calc(40vw / 0.716))}}",
+"@media (min-width:720px){#scanPanel .scanFrame{height:clamp(400px,calc(100dvh - 210px),1100px)}#scanPanel .aim{height:min(88%,56vw)}}",
 
 
 
@@ -225,7 +225,6 @@ async function startLive(turn){
     liveSocket=ws;
     ws.onopen=()=>{
       if(serial!==liveSerial||!valid()||locked)return;
-      liveReconnects=0;
       ws.send(JSON.stringify({type:"config",games:["one-piece"],minConfidence:.92}));
       say("Reconocimiento continuo de One Piece conectado. Centra una carta.");
       scheduleLive(serial,200);
@@ -239,6 +238,7 @@ async function startLive(turn){
       if(!["match","unresolved","error"].includes(result.type))return;
       liveBusy=false;
       if(result.type==="match"&&result.matches?.length){
+        liveReconnects=0;
         const hit=matchLiveCard(result.matches[0]);
         if(hit){consider(hit);if(locked)return}
         else say("Tarjeta detectada, pero no coincide con una impresión identificable en nuestro catálogo. Sigue encuadrando.");
@@ -320,7 +320,7 @@ async function scan(){
    }
  }catch(e){
    if(valid()&&turn===generation){say("Error de reconocimiento: "+(e.name==="AbortError"?"consulta agotada":e.message));console.warn("scanner",e);}
- }finally{busy=false;if(valid()&&!locked)plan()}
+ }finally{if(turn===generation){busy=false;if(valid()&&!locked)plan()}}
 }
 function show(hit){
  if(!valid()||!hit?.c)return;
@@ -418,5 +418,10 @@ function init(){
  if(document.getElementById("scanLaunch"))return;
  const b=document.createElement("button");b.id="scanLaunch";b.textContent="📷 Escanear con IA";b.onclick=open;document.body.appendChild(b);
 }
+document.addEventListener("visibilitychange",()=>{
+ if(document.hidden||!valid()||locked)return;
+ if(source==="live"&&!liveBusy)scheduleLive(liveSerial,250);
+ else if(source==="vision"&&!busy)plan(500);
+});
 if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",init,{once:true});else init();
 })();
