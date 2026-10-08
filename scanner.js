@@ -10,6 +10,7 @@ visionCanvas.width=160;visionCanvas.height=224;
 const visionContext=visionCanvas.getContext("2d",{willReadFrequently:true});
 
 let running=false,locked=false,processing=false,scanTimer=null,session=0;
+let scannerHistoryActive=false;
 let lastCode="",lastSeenAt=0,repeatCount=0,attempts=0,shot=null,activeHit=null;
 let torch=false,facing="environment",cameraStarting=false,resizeWatcher=null,wakeLock=null;
 const $=q=>document.querySelector("#scanPanel "+q);
@@ -204,6 +205,7 @@ function handleVisualResults(ranked){
   }
   const best=visualResults[0],second=visualResults[1];
   if(!best){
+    lastVisualId="";visualStable=0;
     if(attempts%4===0)status("Buscando ilustración. Alinea los cuatro bordes y evita reflejos.");
     return;
   }
@@ -218,8 +220,12 @@ function handleVisualResults(ranked){
       show({card,code,variants:cardByCode(code),
         source:"Reconocimiento visual; comprueba la impresión",confidence:"visual"});
     }
+  }else if(visualStable>=4&&best.score<=104&&best.art<=110){
+    // Cuatro coincidencias visuales consecutivas: abrir candidatos automáticamente.
+    // Los resultados aproximados requieren confirmación humana.
+    showVisualChoices("Coincidencia visual aproximada: elige tu carta");
   }else if(attempts%2===0){
-    status("Comparando arte… Posible "+best.id+". Pulsa «Ver posibles cartas» para comprobar.");
+    status("Comparando arte… Posible "+best.id+" · comprobando coincidencia visual.");
   }
 }
 async function scanOCR(){
@@ -289,14 +295,6 @@ function showVisualChoices(heading="Posibles cartas según la ilustración"){
   });
   $("#scanBackVisual").onclick=resume;
   status("Selecciona la impresión que se corresponde con tu carta.");
-}
-function scanImmediately(){
-  if(!running)return;
-  if(locked)resume();
-  if(visualResults.length){showVisualChoices();return}
-  if(visionReady){lastVisionAt=0;scanVisual();status("Analizando ilustración…");return}
-  if(recognizerReady){lastOCRAt=0;void scanOCR();return}
-  status("Motor preparando. También puedes utilizar la búsqueda manual.");
 }
 function ownedCount(id){return Number(qty(id)||0)}
 function chooseVariant(variants,selected){
@@ -524,16 +522,15 @@ async function open(){
     '<div class="scanTools"><button id="scanTorch" hidden>Linterna</button>'+
     '<label id="scanZoomWrap" hidden>Zoom <input id="scanZoom" type="range" min="1" max="2" step=".1"></label>'+
     '<button id="scanFlip">Cambiar cámara</button></div>'+
-    '<div class="scanActions"><button class="primary" id="scanNow">Analizar ahora</button>'+ 
+    '<div class="scanActions">'+
     '<button id="scanCandidates" hidden disabled>Ver posibles cartas</button><button id="scanRetry">Reiniciar motores</button><button id="scanResume">Continuar</button>'+
     '<button id="scanManual">Buscar manualmente</button></div>'+
     '<div class="scanHelp">Llena el recuadro con la carta y evita reflejos. Confirma siempre la impresión.</div>'+
     '</div>';
   document.body.appendChild(p);
   camera=$(".scanStage video");
-  $("#scanClose").onclick=close;
+  $("#scanClose").onclick=()=>close();
   $("#scanResume").onclick=resume;
-  $("#scanNow").onclick=scanImmediately;
   $("#scanCandidates").onclick=()=>showVisualChoices();
   $("#scanRetry").onclick=()=>{if(running)void startRecognition()};
   $("#scanManual").onclick=manual;
@@ -543,11 +540,25 @@ async function open(){
   if("ResizeObserver" in window){
     resizeWatcher=new ResizeObserver(fitGuide);resizeWatcher.observe($(".scanStage"));
   }else window.addEventListener("resize",fitGuide);
+  // Una entrada temporal para que Atrás en Android cierre el escáner
+  // manteniendo la página, pestaña y detalle originales.
+  const previousHistory=history.state&&typeof history.state==="object"?history.state:{};
+  try{
+    history.pushState({...previousHistory,mialbumScanner:true},"",location.href);
+    scannerHistoryActive=true;
+  }catch(error){
+    console.warn("No se pudo registrar historial del escáner",error);
+  }
   fitGuide();await startCamera(turn);
   if(running&&panel())void startRecognition();
 }
-function close(){
+function close({fromHistory=false}={}){
   if(!running&&!panel())return;
+  if(!fromHistory&&scannerHistoryActive){
+    history.back();
+    return;
+  }
+  scannerHistoryActive=false;
   running=false;locked=false;session++;
   cancelAnimationFrame(scanTimer);scanTimer=null;
   if(resizeWatcher){resizeWatcher.disconnect();resizeWatcher=null}
@@ -559,6 +570,12 @@ function close(){
   stopRecognition();
   panel()?.remove();
 }
+// Captura el Atrás antes de que la navegación del álbum cambie de vista.
+window.addEventListener("popstate",event=>{
+  if(!scannerHistoryActive||!panel())return;
+  event.stopImmediatePropagation();
+  close({fromHistory:true});
+},true);
 document.addEventListener("visibilitychange",()=>{
   if(!running||locked)return;
   if(document.hidden)cancelAnimationFrame(scanTimer);
