@@ -2,7 +2,7 @@
 "use strict";
 // ORB local con indexación progresiva del catálogo y caché IndexedDB.
 let camera=null,stream=null,track=null;
-let orb=null,orbGeneration=0,orbReady=false,orbCount=0,orbFailed=0,lastFrameAt=0,orbScope="owned";
+let orb=null,orbGeneration=0,orbReady=false,orbCount=0,orbFailed=0,lastFrameAt=0,orbScope="all";
 let cvModulePromise=null;
 let running=false,locked=false,processing=false,scanTimer=null,session=0;
 let lastCode="",lastSeenAt=0,repeatCount=0,attempts=0,shot=null,activeHit=null;
@@ -52,6 +52,10 @@ function orbCandidates(){
   }else if(orbScope.startsWith("set:")){
     const chosen=orbScope.slice(4);
     subset=cards.filter(c=>String(c.source_set||c.set||"")===chosen);
+  }
+  if(orbScope==="all"){
+    const owned=new Set(Object.entries(state.owned||{}).filter(x=>Number(x[1])>0).map(x=>x[0]));
+    subset=subset.slice().sort((a,b)=>Number(owned.has(b.id))-Number(owned.has(a.id)));
   }
   return [...new Map(subset.map(c=>[c.id,{id:c.id,baseId:idBase(c.id),
     name:c.name,printSet:printSetOf(c)}])).values()];

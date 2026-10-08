@@ -47,11 +47,15 @@ function hash(gray,cv){
     return num.toString(16).padStart(16,"0");
   }finally{tiny.delete()}
 }
+function countBits(v){
+  v>>>=0;v-=(v>>>1)&0x55555555;
+  v=(v&0x33333333)+((v>>>2)&0x33333333);
+  return (((v+(v>>>4))&0x0f0f0f)*0x01010101)>>>24;
+}
 function hdist(a,b){
   if(!a||!b)return 64;
-  let x=BigInt("0x"+a)^BigInt("0x"+b),count=0;
-  while(x){x&=x-1n;count++}
-  return count;
+  return countBits(parseInt(a.slice(0,8),16)^parseInt(b.slice(0,8),16))+
+         countBits(parseInt(a.slice(8),16)^parseInt(b.slice(8),16));
 }
 function dbOpen(){
   return new Promise(resolve=>{
@@ -89,7 +93,7 @@ function loadImage(url){
 }
 export class OrbEngine {
   constructor(cv){
-    this.cv=cv;
+    this.cv=cv;this.disposed=false;
     this.orb=new cv.ORB(1000);
     this.matcher=new cv.BFMatcher(cv.NORM_HAMMING,true);
     this.mask=new cv.Mat();
@@ -102,6 +106,7 @@ export class OrbEngine {
   }
   async prepareCache(){this.db=await dbOpen()}
   add(item, card){
+    if(this.disposed)return false;
     if(!item||item.rows<30||!item.descriptorBase64)return false;
     const bytes=decode(item.descriptorBase64);
     if(bytes.length!==item.rows*32)return false;
@@ -130,11 +135,13 @@ export class OrbEngine {
   }
   async indexCard(card){
     let saved=await dbRead(this.db,card.id);
+    if(this.disposed)return false;
     if(saved&&this.add(saved,card))return true;
     for(const url of ["/orb-image/"+encodeURIComponent(card.id),"/orb-official/"+encodeURIComponent(card.id)]){
       let image;
       try{
         image=await loadImage(url);
+        if(this.disposed)return false;
         this.refCtx.clearRect(0,0,320,448);
         this.refCtx.drawImage(image,0,0,320,448);
         saved=this.extract(this.ref);
@@ -188,6 +195,8 @@ export class OrbEngine {
     }finally{desc.delete();kp.delete();enhanced.delete();gray.delete();src.delete()}
   }
   dispose(){
+    if(this.disposed)return;
+    this.disposed=true;
     this.cards.forEach(x=>x.descriptors.delete());
     this.cards=[];this.postings.clear();
     this.db?.close();this.db=null;
