@@ -15,7 +15,7 @@ const GLOBAL_META_CACHE="mialbumonepiece_meta_public_";
 function savedGlobalMeta(key){
   try{
     const entry=JSON.parse(localStorage.getItem(GLOBAL_META_CACHE+key)||"null");
-    if(entry&&Date.now()-Number(entry.savedAt||0)<7*86400000&&
+    if(entry&&Number(entry.data?.coverageLimit||0)>=100&&Date.now()-Number(entry.savedAt||0)<7*86400000&&
        Array.isArray(entry.data?.leaders)&&Array.isArray(entry.data?.matchups))return entry.data;
   }catch(error){console.warn("Meta: caché local no disponible",error)}
   return null;
@@ -175,7 +175,13 @@ function ranking(d){
 }
 const nav=(value,label)=>'<button data-meta-section="'+value+'" class="'+(m.section===value?"active":"")+'">'+label+'</button>';
 function view(){
- const community=m.scope==="community",d=active(),loading=community?m.communityLoading:m.loading,error=community?m.communityError:m.error;
+ const community=m.scope==="community";
+ const independent=simulatorData();
+ const d=active()||(!community&&independent?{
+   leaders:[],matchups:[],games:0,includedEvents:0,eligibleEvents:0,
+   updatedAt:m.independent?.updatedAt||new Date().toISOString(),days:m.days
+ }:null);
+ const loading=community?m.communityLoading:m.loading,error=community?m.communityError:m.error;
  const formats=[["auto","Formato más reciente"],["all","Todos los formatos"],...(m.global?.formats||[]).map(x=>[x,x])];
  const top='<div class="wrap meta-page"><div class="hero"><div><h1>⚔️ Meta</h1>'+
    '<p>Quién gana, contra quién y si importa salir primero.</p></div></div>'+
@@ -192,8 +198,8 @@ function view(){
    (d?'<p class="small">Actualizado '+esc(new Date(d.updatedAt||Date.now()).toLocaleString("es-ES"))+
        (!community?' · '+esc(d.formatUsed||"formato sin identificar"):"")+
        (d.stale?' · copia anterior':"")+'</p>'+
-      statCards(d)+
-      (community?"":'<div class="meta-sample-note"><b>'+integer(d.includedEvents)+' torneos analizados</b> de '+
+      (community||m.global?statCards(d):'<p class="small">🎮 Datos de OPlay cargados. Limitless sigue consultando torneos…</p>')+
+      (community||!m.global?"":'<div class="meta-sample-note"><b>'+integer(d.includedEvents)+' torneos analizados</b> de '+
        integer(d.eligibleEvents)+' elegibles'+
        ((d.partial||d.truncated)?' · Muestra parcial':' · Cobertura completa de la selección')+
        (d.rateLimited?' · Límite de la fuente':"")+'</div>')+
