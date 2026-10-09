@@ -1514,7 +1514,9 @@ function competitiveResultHtml(result,index){
   return '<article class="competitive-deck"><div class="competitive-result-main">'+
     (leader?'<div class="competitive-result-leader">'+cardImg(leader,"cardimg")+'</div>':'')+
     '<div class="competitive-result-copy"><div class="competitive-deck-head"><div><h3>'+esc(result.leaderName||result.leaderId)+'</h3><div class="small">'+esc(result.tournament||"Torneo")+' · '+date+'</div></div><div><b>'+place+field+'</b></div></div>'+
-    '<div class="competitive-badges"><span class="competitive-badge good">'+esc(result.quality||"Resultado")+'</span><span class="competitive-badge">'+esc(result.player||"Jugador")+'</span><span class="competitive-badge">Récord '+esc(record)+'</span>'+(result.country?'<span class="competitive-badge">'+esc(result.country)+'</span>':'')+'</div>'+
+    '<div class="competitive-badges">'+(state.deckDiscoverMode==="card"&&state.deckDiscoverCard?
+   '<span class="competitive-badge good">'+(deckPrintedCode(result.leaderId)===state.deckDiscoverCard?1:Number(result.cards?.[state.deckDiscoverCard]||0))+' copia(s) de '+esc(state.deckDiscoverCard)+'</span>':'')+
+   '<span class="competitive-badge good">'+esc(result.quality||"Resultado")+'</span><span class="competitive-badge">'+esc(result.player||"Jugador")+'</span><span class="competitive-badge">Récord '+esc(record)+'</span>'+(result.country?'<span class="competitive-badge">'+esc(result.country)+'</span>':'')+'</div>'+
     '<div class="small"><b>Tu colección:</b> '+stats.owned+'/'+stats.total+' cartas cubiertas · faltan '+stats.missing+(stats.cost>0?' · aprox. '+money(stats.cost):'')+'</div>'+
     '<div class="competitive-actions"><button class="primary btn" data-preview-competitive="'+index+'">Ver mazo</button><button class="secondary btn" data-compare-competitive="'+index+'">Comparar</button>'+(result.sourceUrl?'<a class="secondary btn" target="_blank" rel="noopener" href="'+esc(result.sourceUrl)+'">Limitless ↗</a>':'')+'</div></div></div>'+
     '<div class="competitive-source">Fuente: Limitless Tournament Platform.</div></article>';
@@ -1557,32 +1559,47 @@ function savedDecksWithCompetitiveCard(code){
  }).filter(x=>x.copies>0);
 }
 function competitiveDeckSearchView(){
-  let results="";
-  if(state.deckDiscoverLoading)results='<div class="notice">Buscando resultados recientes y listas públicas en Limitless…</div>';
-  else if(state.deckDiscoverError)results='<div class="notice">'+esc(state.deckDiscoverError)+'</div>';
-  else if(state.deckDiscoverResults.length)results='<div class="notice">'+state.deckDiscoverResults.length+' mazo(s) encontrados'+(state.deckDiscoverMeta?.scannedEvents?' · '+state.deckDiscoverMeta.scannedEvents+' torneos consultados':'')+(state.deckDiscoverMeta?.rateLimited?' · resultados parciales por límite temporal de la fuente':'')+'</div><div class="competitive-results">'+state.deckDiscoverResults.map(competitiveResultHtml).join("")+'</div>';
-  else if(state.deckDiscoverMeta)results='<div class="notice">No encontré listas públicas de ese líder con estos filtros. Prueba ampliando el periodo o bajando el mínimo de jugadores.</div>';
-  return '<div class="competitive-panel"><div class="sectionhead"><div><h2>Buscar mazos competitivos</h2><div class="small">Elige el líder por su imagen y consulta resultados de torneos.</div></div><button class="secondary btn" id="closeCompetitiveSearch">← Mis mazos</button></div>'+
-    '<div class="competitive-leader-picker"><input id="competitiveLeaderSearch" class="field competitive-leader-search" inputmode="search" autocomplete="off" placeholder="🔎 Buscar líder por nombre o ID..." value="'+esc(state.deckDiscoverLeaderQuery)+'"><div id="competitiveLeaderGrid" class="competitive-leader-grid">'+competitiveLeaderGridHtml()+'</div></div>'+
-    (state.deckDiscoverLeader?'<div class="notice">Líder seleccionado: <b>'+esc(state.deckDiscoverLeader)+'</b></div>':'<div class="notice">Selecciona un líder para buscar mazos.</div>')+
-    '<div class="competitive-controls">'+
-      '<label class="filter-label"><span>Periodo</span><select id="competitiveDays" class="field"><option value="90" '+(state.deckDiscoverDays===90?"selected":"")+'>90 días</option><option value="180" '+(state.deckDiscoverDays===180?"selected":"")+'>180 días</option><option value="365" '+(state.deckDiscoverDays===365?"selected":"")+'>1 año</option></select></label>'+
-      '<label class="filter-label"><span>Torneo mínimo</span><select id="competitiveMinPlayers" class="field"><option value="16" '+(state.deckDiscoverMinPlayers===16?"selected":"")+'>16 jugadores</option><option value="32" '+(state.deckDiscoverMinPlayers===32?"selected":"")+'>32 jugadores</option><option value="64" '+(state.deckDiscoverMinPlayers===64?"selected":"")+'>64 jugadores</option></select></label>'+
-      '<button class="primary btn" id="runCompetitiveSearch" '+(state.deckDiscoverLoading?"disabled":"")+'>Buscar mazos</button>'+
-    '</div>'+results+'</div>';
+ const byCard=state.deckDiscoverMode==="card";
+ let results="";
+ if(state.deckDiscoverLoading)results='<div class="notice">Consultando listas públicas de torneos recientes…</div>';
+ else if(state.deckDiscoverError)results='<div class="notice">'+esc(state.deckDiscoverError)+'</div>';
+ else if(state.deckDiscoverResults.length)results='<div class="notice">'+state.deckDiscoverResults.length+' mazo(s) encontrado(s)'+(state.deckDiscoverMeta?.scannedEvents?' · '+state.deckDiscoverMeta.scannedEvents+' torneos consultados':'')+(state.deckDiscoverMeta?.rateLimited?' · resultados parciales por límite de la fuente':'')+'</div><div class="competitive-results">'+state.deckDiscoverResults.map(competitiveResultHtml).join("")+'</div>';
+ else if(state.deckDiscoverMeta)results='<div class="notice">No se encontraron listas públicas legales que incluyan '+(byCard?'esa carta':'ese líder')+' con estos filtros. Prueba ampliar el periodo o bajar el mínimo de jugadores.</div>';
+ const saved=byCard?savedDecksWithCompetitiveCard(state.deckDiscoverCard):[];
+ const mine=saved.length?'<section class="section"><h3>Mis mazos que incluyen esta carta ('+saved.length+')</h3><div class="competitive-results">'+
+   saved.map(x=>'<article class="competitive-deck"><div class="competitive-deck-head"><div><b>'+esc(x.deck.name)+'</b><div class="small">'+
+   x.copies+' copia(s) · '+esc(card(x.deck.leader)?.name||"Sin líder")+'</div></div><button type="button" class="secondary btn" data-open-card-deck="'+esc(x.deck.id)+'">Abrir mazo</button></div></article>').join("")+
+   '</div></section>':'';
+ const picker=byCard?
+   '<div class="competitive-leader-picker"><input id="competitiveCardSearch" class="field competitive-leader-search" type="search" autocomplete="off" placeholder="🔎 Buscar carta por nombre o código (OP05-119…)" value="'+esc(state.deckDiscoverCardQuery)+'">'+
+   '<div id="competitiveCardGrid" class="competitive-leader-grid">'+competitiveCardGridHtml()+'</div></div>'+
+   (state.deckDiscoverCard?'<div class="notice">Carta seleccionada: <b>'+esc(state.deckDiscoverCard)+'</b> · '+esc(state.cards.find(c=>deckPrintedCode(c)===state.deckDiscoverCard)?.name||"")+'</div>':'<div class="notice">Selecciona una carta del catálogo para consultar los mazos que la juegan.</div>'):
+   '<div class="competitive-leader-picker"><input id="competitiveLeaderSearch" class="field competitive-leader-search" inputmode="search" autocomplete="off" placeholder="🔎 Buscar líder por nombre o ID..." value="'+esc(state.deckDiscoverLeaderQuery)+'"><div id="competitiveLeaderGrid" class="competitive-leader-grid">'+competitiveLeaderGridHtml()+'</div></div>'+
+   (state.deckDiscoverLeader?'<div class="notice">Líder seleccionado: <b>'+esc(state.deckDiscoverLeader)+'</b></div>':'<div class="notice">Selecciona un líder para buscar mazos.</div>');
+ return '<div class="competitive-panel"><div class="sectionhead"><div><h2>Buscar mazos competitivos</h2><div class="small">Consulta listas legales de torneos de Limitless '+(byCard?'que incluyen una carta':'por líder')+'.</div></div><button class="secondary btn" id="closeCompetitiveSearch">← Mis mazos</button></div>'+
+   '<div class="competitive-mode-tabs"><button type="button" class="secondary btn'+(!byCard?' competitive-mode-active':'')+'" data-competitive-mode="leader">Por líder</button><button type="button" class="secondary btn'+(byCard?' competitive-mode-active':'')+'" data-competitive-mode="card">Por carta</button></div>'+
+   picker+
+   '<div class="competitive-controls">'+
+     '<label class="filter-label"><span>Periodo</span><select id="competitiveDays" class="field"><option value="90" '+(state.deckDiscoverDays===90?"selected":"")+'>90 días</option><option value="180" '+(state.deckDiscoverDays===180?"selected":"")+'>180 días</option><option value="365" '+(state.deckDiscoverDays===365?"selected":"")+'>1 año</option></select></label>'+
+     '<label class="filter-label"><span>Torneo mínimo</span><select id="competitiveMinPlayers" class="field"><option value="16" '+(state.deckDiscoverMinPlayers===16?"selected":"")+'>16 jugadores</option><option value="32" '+(state.deckDiscoverMinPlayers===32?"selected":"")+'>32 jugadores</option><option value="64" '+(state.deckDiscoverMinPlayers===64?"selected":"")+'>64 jugadores</option></select></label>'+
+     '<button class="primary btn" id="runCompetitiveSearch" '+(state.deckDiscoverLoading?"disabled":"")+'>Buscar mazos</button>'+
+   '</div>'+ (byCard?mine:'')+results+'</div>';
 }
 async function searchCompetitiveDecks(){
-  const leader=String(state.deckDiscoverLeader||"").trim();
-  if(!leader)return notify("Selecciona un líder");
+  const byCard=state.deckDiscoverMode==="card";
+  const leader=byCard?"all":String(state.deckDiscoverLeader||"").trim();
+  if(!byCard&&!leader)return notify("Selecciona un líder");
+  if(byCard&&!state.deckDiscoverCard)return notify("Selecciona una carta");
   state.deckDiscoverDays=Number($("#competitiveDays")?.value||state.deckDiscoverDays||90);
   state.deckDiscoverMinPlayers=Number($("#competitiveMinPlayers")?.value||state.deckDiscoverMinPlayers||32);
   state.deckDiscoverLoading=true;state.deckDiscoverError="";state.deckDiscoverResults=[];state.deckDiscoverMeta=null;renderShell();
   try{
-    const qs=new URLSearchParams({leader,days:String(state.deckDiscoverDays),minPlayers:String(state.deckDiscoverMinPlayers),limit:"20"});
+    const qs=new URLSearchParams({leader,days:String(state.deckDiscoverDays),minPlayers:String(state.deckDiscoverMinPlayers),limit:byCard?"40":"20"});
+    if(byCard)qs.set("card",state.deckDiscoverCard);
     const r=await fetch("/api/competitive-decks?"+qs.toString(),{headers:{accept:"application/json"}});
     const data=await r.json().catch(()=>({}));
     if(!r.ok)throw Error(data.error||"No se pudieron cargar los mazos");
-    state.deckDiscoverResults=(Array.isArray(data.results)?data.results:[]).filter(x=>standardCompetitiveDeckPlayable(x.leaderId,x.cards));
+    state.deckDiscoverResults=(Array.isArray(data.results)?data.results:[]).filter(x=>standardCompetitiveDeckPlayable(x.leaderId,x.cards)&&(!byCard||deckPrintedCode(x.leaderId)===state.deckDiscoverCard||Object.entries(x.cards||{}).some(([id,n])=>deckPrintedCode(id)===state.deckDiscoverCard&&Number(n)>0)));
     state.deckDiscoverMeta={scannedEvents:Number(data.scannedEvents||0),availableMatches:Number(data.availableMatches||0),rateLimited:!!data.rateLimited};
   }catch(e){
     state.deckDiscoverError=e.message||"No se pudieron consultar los mazos competitivos.";
