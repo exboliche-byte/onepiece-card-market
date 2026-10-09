@@ -23,7 +23,8 @@ function setup(saved={}){
       createElement:()=>({textContent:""}),
       head:{appendChild:()=>{}},
       querySelector:()=>null,
-      querySelectorAll:selector=>selector==="[data-tools-tab]"?buttons:[]
+      querySelectorAll:selector=>selector==="[data-tools-tab]"?buttons:[],
+      addEventListener:()=>{}
     },
     localStorage:{getItem:k=>written[k]||null,setItem:(k,v)=>{written[k]=v}},
     esc:s=>String(s),money:n=>n===null||n===undefined?"—":Number(n).toFixed(2)+" €",
@@ -34,7 +35,8 @@ function setup(saved={}){
     deckAvailableByPrinting:()=>({}),deckOwnedCopies:()=>0,
     resolveDeckImportCard:id=>cards.find(c=>c.id===id),
     competitiveLeaderOptions:()=>[{id:"OP01-003",name:"Sanji"}],
-    renderShell:()=>{},notify:s=>notices.push(s),console,fetch:async()=>({ok:false,json:async()=>({})})
+    renderShell:()=>{},notify:s=>notices.push(s),console,fetch:async()=>({ok:false,json:async()=>({})}),
+    setTimeout:()=>1,clearTimeout:()=>{}
   };
   vm.runInNewContext(source,root,{timeout:2500});
   const hub=root.window.OnePieceTools;
@@ -79,11 +81,14 @@ test("All tools render and the tournament panel reads personal rounds",()=>{
   assert.match(t.tab("coach"),/2 rondas personales/);
   assert.match(t.tab("trade"),/Intercambio manual/);
 });
-test("Exact-print alerts warn only once for the same current price",()=>{
+test("Exact-print alerts warn only once for the same current price",async()=>{
   const t=setup({"mialbumonepiece_tools_u1":JSON.stringify({watch:[
     {id:"OP01-001",target:15,direction:"below"},
     {id:"OP01-002",target:6,direction:"above"}
   ]})});
+  const cloud=mockDb(null);
+  t.state.sb=cloud.client;
+  await t.hub.loadCloud();
   assert.match(t.tab("alerts"),/1 objetivos alcanzados/);
   t.hub.checkAlerts();t.hub.checkAlerts();
   assert.equal(t.notices.length,1);
@@ -94,4 +99,89 @@ test("Competitive endpoint adds optional multi-leader mode without removing exac
   assert.match(api,/leader==="all"\?120:30/);
   assert.match(api,/const perLeader=new Map/);
   assert.match(api,/if\(n>=3\)return false/);
+});
+
+function mockDb(initial){
+  let row=initial?structuredClone(initial):null,reads=0,writes=0;
+  const client={from(name){
+    assert.equal(name,"user_tools");
+    return {
+      select(){return {eq(){return {maybeSingle:async()=>{
+        reads++;return {data:row?structuredClone(row):null,error:null};
+      }}}}},
+      insert(v){return {select(){return {single:async()=>{
+        if(row)return {data:null,error:{code:"23505",message:"duplicate"}};
+        row={...structuredClone(v),revision:1};writes++;
+        return {data:{revision:1},error:null};
+      }}}}},
+      update(v){const filters={};return {
+        eq(k,value){filters[k]=value;return this},
+        select(){return this},
+        async maybeSingle(){
+          if(!row||row.revision!==filters.revision||row.user_id!==filters.user_id)
+            return {data:null,error:null};
+          row={...row,...structuredClone(v)};writes++;
+          return {data:{revision:row.revision},error:null};
+        }
+      }}
+    };
+  }};
+  return {client,row:()=>structuredClone(row),reads:()=>reads,writes:()=>writes};
+}
+test("Cloud migration preserves old local trade and alert settings",async()=>{
+  const saved={trade:[[{id:"OP01-001",q:2,manual:10}],[]],
+    watch:[{id:"OP01-002",target:7,direction:"above"}]};
+  const t=setup({"mialbumonepiece_tools_u1":JSON.stringify(saved)});
+  const cloud=mockDb(null);t.state.sb=cloud.client;
+  assert.equal(await t.hub.loadCloud(),true);
+  assert.equal(cloud.writes(),1);
+  assert.equal(cloud.row().trade[0][0].q,2);
+  assert.equal(cloud.row().watch[0].id,"OP01-002");
+  assert.match(t.hub.view(),/Guardado en Supabase/);
+});
+test("Cloud load prefers existing remote settings to stale browser cache",async()=>{
+  const t=setup({"mialbumonepiece_tools_u1":JSON.stringify({
+    trade:[[{id:"OP01-001",q:100,manual:50}],[]],watch:[],revision:9})});
+  const cloud=mockDb({user_id:"u1",trade:[[{id:"OP01-002",q:1,manual:5}],[]],
+    watch:[],revision:9});t.state.sb=cloud.client;
+  assert.equal(await t.hub.loadCloud(),true);
+  const page=t.hub.view();
+  assert.match(page,/Zoro/);
+  assert.doesNotMatch(page,/5000\.00 €/);
+  assert.equal(cloud.writes(),0);
+});
+test("Offline pending changes with same revision save; conflicts never overwrite",async()=>{
+  const data={trade:[[{id:"OP01-001",q:2,manual:12}],[]],watch:[],pending:true,revision:2};
+  const t=setup({"mialbumonepiece_tools_u1":JSON.stringify(data)});
+  const cloud=mockDb({user_id:"u1",trade:[[],[]],watch:[],revision:2});
+  t.state.sb=cloud.client;
+  await t.hub.loadCloud();await t.hub.flushCloud();
+  assert.equal(cloud.row().revision,3);
+  assert.equal(cloud.row().trade[0][0].q,2);
+  const other=setup({"mialbumonepiece_tools_u1":JSON.stringify({...data,revision:1})});
+  const cloud2=mockDb({user_id:"u1",trade:[[],[]],watch:[],revision:3});
+  other.state.sb=cloud2.client;
+  await other.hub.loadCloud();await other.hub.flushCloud();
+  assert.equal(cloud2.writes(),0);
+  assert.match(other.hub.view(),/Decide cuál conservar/);
+  assert.match(other.hub.view(),/Reemplazar datos de Supabase/);
+});
+test("Own-account SQL permissions are enabled for the tools table",()=>{
+  const sql=fs.readFileSync(path.join(root,"supabase/migrations/20261009_user_tools_sync.sql"),"utf8");
+  assert.match(sql,/alter table public\.user_tools enable row level security/i);
+  assert.match(sql,/for select to authenticated using \(\(select auth\.uid\(\)\) = user_id\)/i);
+  assert.match(sql,/for update to authenticated using \(\(select auth\.uid\(\)\) = user_id\)/i);
+});
+
+test("Legacy browser drafts conflict visibly if another device already has cloud settings",async()=>{
+  const cached={trade:[[{id:"OP01-001",q:1,manual:8}],[]],watch:[]};
+  const t=setup({"mialbumonepiece_tools_u1":JSON.stringify(cached)});
+  const remote=mockDb({user_id:"u1",trade:[[],[]],watch:[],revision:4});
+  t.state.sb=remote.client;
+  assert.equal(await t.hub.loadCloud(),true);
+  assert.equal(remote.writes(),0);
+  assert.match(t.hub.view(),/datos guardados antes de la sincronización/);
+  assert.match(t.hub.view(),/Reemplazar datos de Supabase/);
+  const local=JSON.parse(t.written["mialbumonepiece_tools_u1"]);
+  assert.equal(local.trade[0][0].manual,8);
 });

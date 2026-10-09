@@ -3025,7 +3025,8 @@ async function initSupabase(){
       if(location.pathname==="/auth/reset"){state.authRecovery=true;state.tab="account"}
       if(state.user){loadAccountLocal({migrateLegacy:true});await syncCloud()}
       else loadAccountLocal();
-      state.authReady=true;if(!state.authError)state.authError="";renderShell();
+      state.authReady=true;if(!state.authError)state.authError="";
+      void window.OnePieceTools?.loadCloud?.();renderShell();
       state.sb.auth.onAuthStateChange((event,session)=>setTimeout(async()=>{
         const previous=state.user?.id||null;state.user=session?.user||null;
         const returnedType=new URLSearchParams(location.hash.replace(/^#/,"")).get("type")||new URL(location.href).searchParams.get("type");
@@ -3042,7 +3043,8 @@ async function initSupabase(){
         }else if(next&&!state.collectionReady){
           await syncCloud();
         }
-        state.authReady=true;renderShell();
+        state.authReady=true;
+        void window.OnePieceTools?.loadCloud?.();renderShell();
       },0));
       return state.sb;
     }catch(e){state.authReady=true;state.authError="No se pudo conectar con la cuenta: "+authMessage(e);console.warn("supabase",e);renderShell();return null}

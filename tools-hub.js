@@ -2,7 +2,8 @@
 "use strict";
 /* This module never changes collection quantities or deck records. */
 const h={tab:"trade",owner:null,trade:[[],[]],watch:[],q:"",wq:"",list:[],meta:{},loaded:false,busy:false,error:"",
-  sort:"missing",maxMissing:"12",maxCost:"",coach:null,coachBusy:false,coachError:"",coachLeader:"",days:90,alertMemo:new Set()};
+  sort:"missing",maxMissing:"12",maxCost:"",coach:null,coachBusy:false,coachError:"",coachLeader:"",days:90,alertMemo:new Set(),cloudReady:false,cloudLoading:false,cloudError:"",cloudConflict:false,
+  revision:null,pending:false,localRevision:null,hasCache:false,serial:0,saveTimer:null,writing:false,lastCloudAt:0};
 const key=id=>"mialbumonepiece_tools_"+id;
 const text=s=>esc(s);
 const price=c=>c?priceOf(c):null;
@@ -12,20 +13,185 @@ const printed=id=>deckPrintedCode(id);
 function account(){
   const id=state.user?.id||null;
   if(h.owner===id)return;
+  if(h.saveTimer){clearTimeout(h.saveTimer);h.saveTimer=null}
   h.owner=id;h.trade=[[],[]];h.watch=[];h.alertMemo.clear();
+  h.cloudReady=false;h.cloudLoading=false;h.cloudError="";h.cloudConflict=false;
+  h.revision=null;h.pending=false;h.localRevision=null;h.hasCache=false;h.serial=0;h.writing=false;h.lastCloudAt=0;
   if(!id)return;
   try{
-    const v=JSON.parse(localStorage.getItem(key(id))||"{}");
+    const raw=localStorage.getItem(key(id));
+    h.hasCache=!!raw;
+    const v=JSON.parse(raw||"{}");
+    h.pending=v.pending===true;h.localRevision=Number.isSafeInteger(v.revision)?v.revision:null;
     for(let i=0;i<2;i++)h.trade[i]=(Array.isArray(v.trade?.[i])?v.trade[i]:[]).slice(0,100)
       .filter(x=>typeof x.id==="string").map(x=>({id:x.id,q:num(x.q),manual:positive(x.manual)}));
     h.watch=(Array.isArray(v.watch)?v.watch:[]).slice(0,200).filter(x=>typeof x.id==="string"&&positive(x.target))
       .map(x=>({id:x.id,target:positive(x.target),direction:x.direction==="above"?"above":"below"}));
   }catch(err){console.warn("Herramientas locales",err)}
 }
-function save(){
+function sanitizeTrade(raw){
+  return [0,1].map(i=>(Array.isArray(raw?.[i])?raw[i]:[]).slice(0,100)
+    .filter(x=>typeof x?.id==="string"&&x.id.length<=140)
+    .map(x=>({id:x.id,q:num(x.q),manual:positive(x.manual)})));
+}
+function sanitizeWatches(raw){
+  return (Array.isArray(raw)?raw:[]).slice(0,200)
+    .filter(x=>typeof x?.id==="string"&&x.id.length<=140&&positive(x.target))
+    .map(x=>({id:x.id,target:positive(x.target),direction:x.direction==="above"?"above":"below"}));
+}
+function cache(){
   if(!h.owner)return;
-  try{localStorage.setItem(key(h.owner),JSON.stringify({trade:h.trade,watch:h.watch}))}
-  catch(err){console.warn("Herramientas: almacenamiento lleno",err);notify("No se han podido guardar las herramientas en este navegador")}
+  try{localStorage.setItem(key(h.owner),JSON.stringify({
+    trade:h.trade,watch:h.watch,pending:h.pending,revision:h.revision
+  }))}catch(err){console.warn("Herramientas: error de caché local",err)}
+}
+function save(){
+  if(!h.owner){notify("Inicia sesión para guardar estas herramientas");return}
+  h.pending=true;h.serial++;cache();scheduleSave();
+}
+function scheduleSave(){
+  if(!h.owner||!state.sb||!h.cloudReady||h.cloudConflict)return;
+  if(h.saveTimer)clearTimeout(h.saveTimer);
+  h.saveTimer=setTimeout(()=>{h.saveTimer=null;void flushCloud()},300);
+}
+async function flushCloud(){
+  if(h.writing||h.cloudConflict||!h.pending||!h.cloudReady||!h.owner||!state.sb)return false;
+  const userId=h.owner,client=state.sb,rev=h.revision,snapshot=h.serial;
+  const trade=sanitizeTrade(h.trade),watch=sanitizeWatches(h.watch);
+  h.writing=true;
+  try{
+    const result=await client.from("user_tools").update({
+      trade,watch,revision:rev+1,updated_at:new Date().toISOString()
+    }).eq("user_id",userId).eq("revision",rev).select("revision").maybeSingle();
+    if(result.error)throw result.error;
+    if(h.owner!==userId)return false;
+    if(!result.data){
+      h.cloudConflict=true;
+      h.cloudError="Otro dispositivo ha modificado estas herramientas. Tus cambios se conservan aquí, sin sobrescribir los de la nube.";
+      cache();if(state.tab==="tools")renderShell();
+      return false;
+    }
+    h.revision=Number(result.data.revision)||rev+1;
+    h.pending=h.serial!==snapshot;
+    h.cloudError="";
+    cache();
+    return true;
+  }catch(err){
+    if(h.owner===userId){
+      h.cloudError="No se pudieron guardar las herramientas en Supabase: "+(err.message||err);
+      cache();
+    }
+    console.warn("Herramientas Supabase: guardado",err);
+    return false;
+  }finally{
+    if(h.owner===userId){
+      h.writing=false;
+      if(h.pending&&!h.cloudError&&!h.cloudConflict)scheduleSave();
+      if(state.tab==="tools")renderShell();
+    }
+  }
+}
+async function loadCloud(force=false){
+  account();
+  if(!h.owner||!state.sb)return false;
+  if(h.cloudLoading||(!force&&h.cloudReady))return h.cloudReady;
+  // Never overwrite unsaved local changes with a background refresh.
+  if(force&&(h.pending||h.writing||h.cloudConflict))return false;
+  const id=h.owner,client=state.sb,at=h.serial;
+  h.cloudLoading=true;h.cloudError="";
+  try{
+    const r=await client.from("user_tools").select("trade,watch,revision").eq("user_id",id).maybeSingle();
+    if(r.error)throw r.error;
+    if(h.owner!==id)return false;
+    if(r.data){
+      const revision=Number(r.data.revision)||1;
+      const legacy=h.hasCache&&h.localRevision===null&&
+        (h.trade.some(side=>side.length)||h.watch.length)&&
+        JSON.stringify([sanitizeTrade(h.trade),sanitizeWatches(h.watch)])!==
+          JSON.stringify([sanitizeTrade(r.data.trade),sanitizeWatches(r.data.watch)]);
+      if(legacy&&!force){
+        h.revision=revision;h.cloudReady=true;h.pending=true;h.cloudConflict=true;
+        h.cloudError="Este navegador tiene datos guardados antes de la sincronización y Supabase ya contiene otros. Elige cuál conservar.";
+        cache();
+      }else if(h.pending&&h.localRevision===revision&&!force){
+        h.revision=revision;h.cloudReady=true;h.cloudConflict=false;scheduleSave();
+      }else if(h.pending&&h.localRevision!==revision&&!force){
+        // Offline edits cannot silently supersede newer writes from another device.
+        h.revision=revision;h.cloudReady=true;h.cloudConflict=true;
+        h.cloudError="Hay cambios pendientes en este navegador y una versión distinta en Supabase. Decide cuál conservar.";
+      }else if(at===h.serial){
+        h.trade=sanitizeTrade(r.data.trade);h.watch=sanitizeWatches(r.data.watch);
+        h.revision=revision;h.pending=false;h.cloudReady=true;h.cloudConflict=false;cache();
+      }
+    }else{
+      // First visit to the cloud feature: migrate the account's existing local data.
+      // There was no remote row to overwrite.
+      const trade=sanitizeTrade(h.trade),watch=sanitizeWatches(h.watch);
+      const write=await client.from("user_tools").insert({
+        user_id:id,trade,watch,revision:1
+      }).select("revision").single();
+      if(write.error){
+        if(write.error.code==="23505"){h.cloudLoading=false;return loadCloud(true)}
+        throw write.error;
+      }
+      if(h.owner!==id)return false;
+      h.revision=Number(write.data.revision)||1;
+      h.cloudReady=true;h.cloudConflict=false;
+      h.pending=h.serial!==at;cache();
+      if(h.pending)scheduleSave();
+    }
+    h.lastCloudAt=Date.now();
+    return h.cloudReady;
+  }catch(err){
+    if(h.owner===id){
+      h.cloudError="No se pudo leer Supabase: "+(err.message||err);
+      console.warn("Herramientas Supabase: carga",err);
+    }
+    return false;
+  }finally{
+    if(h.owner===id){h.cloudLoading=false;if(state.tab==="tools")renderShell()}
+  }
+}
+async function resolveConflict(useLocal){
+  if(!h.owner||!state.sb)return;
+  if(!useLocal){
+    if(h.pending&&!confirm("¿Descartar los cambios locales pendientes y recuperar los datos de Supabase?"))return;
+    h.pending=false;h.cloudConflict=false;h.revision=null;
+    cache();await loadCloud(true);return;
+  }
+  if(!confirm("¿Reemplazar los datos de la nube con los de este navegador? Los cambios de otros dispositivos podrían perderse."))return;
+  const id=h.owner;
+  try{
+    const r=await state.sb.from("user_tools").select("revision").eq("user_id",id).single();
+    if(r.error)throw r.error;
+    if(h.owner!==id)return;
+    h.revision=Number(r.data.revision);
+    h.cloudConflict=false;h.cloudError="";h.cloudReady=true;
+    h.pending=true;cache();await flushCloud();
+  }catch(err){if(h.owner===id)h.cloudError=String(err.message||err);renderShell()}
+}
+function cloudMessage(){
+  if(!h.owner)return '<div class="notice">Inicia sesión para guardar y sincronizar intercambios y alertas.</div>';
+  if(!state.sb)return '<div class="notice">Esperando conexión a Supabase. Los cambios no están disponibles hasta conectar.</div>';
+  if(h.cloudLoading||!h.cloudReady){
+    return '<div class="notice">Sincronizando herramientas con Supabase… '+
+      (h.cloudError?text(h.cloudError):"")+
+      '<button class="secondary btn" id="toolsCloudRetry">Reintentar</button></div>';
+  }
+  return '<div class="tools-cloud-status">'+
+    (h.cloudError?'<div class="notice">'+text(h.cloudError)+'</div>':
+      '<div class="small">'+(h.pending?"Guardado pendiente · ":"✓ Guardado en Supabase · ")+
+        'Intercambios y alertas disponibles en tus dispositivos</div>')+
+    (h.pending?'<button class="secondary btn" id="toolsCloudRetry">Reintentar guardado</button>':"")+
+    (h.cloudConflict?'<div class="tools-controls"><button class="secondary btn" id="toolsCloudKeepRemote">Usar datos de Supabase</button>'+
+      '<button class="danger btn" id="toolsCloudKeepLocal">Reemplazar datos de Supabase</button></div>':"")+
+    '</div>';
+}
+function readyToEdit(){
+  if(!h.owner){notify("Inicia sesión");return false}
+  if(!h.cloudReady){notify("Espera a que termine la sincronización con Supabase");return false}
+  if(h.cloudConflict){notify("Resuelve primero el conflicto entre dispositivos");return false}
+  return true;
 }
 function matches(q){
   q=norm(String(q||"").trim());if(q.length<2)return [];
@@ -80,7 +246,7 @@ function tradeView(){
     '<div class="small">'+(a.unknown||b.unknown?'Hay copias sin precio; la diferencia no es completa.':'Valor orientativo de mercado.')+'</div></div>'+
     '<div class="tools-controls"><button class="secondary btn" id="toolsSwap">⇄ Cambiar lados</button>'+
     '<button class="secondary btn" id="toolsCopy">Copiar trato</button><button class="danger btn" id="toolsClear">Vaciar</button></div></div>'+
-    '<p class="small">El intercambio se guarda solo en este navegador, separado por cuenta. Puedes copiar el resumen para enviárselo a otra persona.</p>';
+    '<p class="small">El intercambio se guarda en tu cuenta de Supabase y se sincroniza entre dispositivos. Puedes copiar el resumen para enviárselo a otra persona.</p>';
 }
 function cheapest(){
   const out=new Map();
@@ -168,7 +334,7 @@ function alertsView(){
         '<div><b class="'+(s.hit?"tools-good":"small")+'">'+(s.hit?"¡Objetivo!":s.p?"En espera":"Sin precio")+'</b>'+
         '<div><button class="danger btn" data-watch-delete="'+i+'">✕</button></div></div></div>';
     }).join(""):'<div class="notice">Todavía no tienes avisos.</div>')+'</section>'+
-    '<p class="small">Los avisos se guardan solo en este navegador y se separan por cuenta.</p>';
+    '<p class="small">Los avisos se guardan en Supabase y se sincronizan entre tus dispositivos.</p>';
 }
 function rate(w,l){
   const n=Number(w||0)+Number(l||0);
@@ -221,10 +387,15 @@ function coachView(){
 }
 function view(){
   account();
+  if(h.owner&&state.sb&&!h.cloudLoading){
+    if(!h.cloudReady&&!h.cloudError)void loadCloud();
+    else if(h.cloudReady&&!h.pending&&!h.writing&&!h.cloudConflict&&Date.now()-h.lastCloudAt>30000)void loadCloud(true);
+  }
   const links=[["trade","⇄ Intercambio"],["decks","🃏 Mazos accesibles"],["alerts","€ Alertas"],["coach","🏆 Torneos"]];
   return '<div class="wrap tools-wrap"><div class="hero"><div><h1>Herramientas</h1>'+
     '<p>Intercambios, mazos accesibles, alertas y preparación.</p></div></div><div class="tools-tabs">'+
     links.map(([id,label])=>'<button class="secondary btn '+(h.tab===id?"tools-selected":"")+'" data-tools-tab="'+id+'">'+label+'</button>').join("")+'</div>'+
+    (h.tab==="trade"||h.tab==="alerts"?cloudMessage():"")+
     (h.tab==="trade"?tradeView():h.tab==="decks"?decksView():h.tab==="alerts"?alertsView():coachView())+'</div>';
 }
 function bindSearch(input,host,mode){
@@ -232,6 +403,7 @@ function bindSearch(input,host,mode){
   if(!el||!target)return;
   const wire=()=>{
     target.querySelectorAll("[data-trade-add]").forEach(b=>b.onclick=()=>{
+      if(!readyToEdit())return;
       const i=Number(b.dataset.tradeAdd),id=b.dataset.card;
       if(!card(id))return;
       const found=h.trade[i].find(x=>x.id===id);
@@ -239,7 +411,7 @@ function bindSearch(input,host,mode){
       save();renderShell();
     });
     target.querySelectorAll("[data-watch-add]").forEach(b=>b.onclick=()=>{
-      if(!h.owner)return notify("Inicia sesión para vigilar cartas");
+      if(!readyToEdit())return;
       const id=b.dataset.watchAdd,c=card(id),p=positive(price(c));
       if(!c||h.watch.some(x=>x.id===id))return notify("Esta impresión ya está vigilada");
       h.watch.push({id,target:p?Math.round(p*90)/100:1,direction:"below"});save();renderShell();
@@ -281,7 +453,7 @@ async function loadCoach(){
   finally{h.coachBusy=false;if(state.tab==="tools")renderShell()}
 }
 function checkAlerts(){
-  account();if(!state.user||!state.collectionReady||state.loading)return;
+  account();if(!state.user||!h.cloudReady||!state.collectionReady||state.loading)return;
   let n=0;
   for(const w of h.watch){
     const x=watchState(w);if(!x.p||!x.hit)continue;
@@ -291,24 +463,31 @@ function checkAlerts(){
   if(n)notify(n===1?"Una carta vigilada ha alcanzado su precio objetivo":n+" cartas vigiladas han alcanzado su precio objetivo");
 }
 function bind(){
+  document.querySelector("#toolsCloudRetry")?.addEventListener("click",()=>h.cloudReady?void flushCloud():void loadCloud(true));
+  document.querySelector("#toolsCloudKeepRemote")?.addEventListener("click",()=>void resolveConflict(false));
+  document.querySelector("#toolsCloudKeepLocal")?.addEventListener("click",()=>void resolveConflict(true));
   document.querySelectorAll("[data-tools-tab]").forEach(b=>b.onclick=()=>{h.tab=b.dataset.toolsTab;renderShell()});
   if(h.tab==="trade"){
     bindSearch("#toolsSearch","#toolsSearchResults","trade");
     document.querySelectorAll("[data-trade-change]").forEach(b=>b.onclick=()=>{
+      if(!readyToEdit())return;
       const [i,j,step]=b.dataset.tradeChange.split(":").map(Number),x=h.trade[i]?.[j];
       if(!x)return;x.q+=step;if(x.q<=0)h.trade[i].splice(j,1);else x.q=Math.min(100,x.q);
       save();renderShell();
     });
     document.querySelectorAll("[data-trade-price]").forEach(b=>b.onchange=()=>{
+      if(!readyToEdit())return;
       const [i,j]=b.dataset.tradePrice.split(":").map(Number);
       if(!h.trade[i]?.[j])return;
       h.trade[i][j].manual=positive(b.value);save();renderShell();
     });
     document.querySelectorAll("[data-trade-delete]").forEach(b=>b.onclick=()=>{
+      if(!readyToEdit())return;
       const [i,j]=b.dataset.tradeDelete.split(":").map(Number);h.trade[i]?.splice(j,1);save();renderShell();
     });
-    document.querySelector("#toolsSwap")?.addEventListener("click",()=>{h.trade.reverse();save();renderShell()});
+    document.querySelector("#toolsSwap")?.addEventListener("click",()=>{if(!readyToEdit())return;h.trade.reverse();save();renderShell()});
     document.querySelector("#toolsClear")?.addEventListener("click",()=>{
+      if(!readyToEdit())return;
       if(confirm("¿Vaciar ambos lados del intercambio?")){h.trade=[[],[]];save();renderShell()}
     });
     document.querySelector("#toolsCopy")?.addEventListener("click",async()=>{
@@ -330,15 +509,18 @@ function bind(){
   if(h.tab==="alerts"){
     bindSearch("#toolsWatchSearch","#toolsWatchResults","watch");
     document.querySelectorAll("[data-watch-dir]").forEach(b=>b.onchange=()=>{
+      if(!readyToEdit())return;
       const w=h.watch[Number(b.dataset.watchDir)];if(w){w.direction=b.value;save();renderShell()}
     });
     document.querySelectorAll("[data-watch-target]").forEach(b=>b.onchange=()=>{
+      if(!readyToEdit())return;
       const w=h.watch[Number(b.dataset.watchTarget)];
       if(!w)return;
       const n=positive(b.value);if(!n)return notify("Introduce un objetivo mayor que cero");
       w.target=n;save();renderShell();
     });
     document.querySelectorAll("[data-watch-delete]").forEach(b=>b.onclick=()=>{
+      if(!readyToEdit())return;
       h.watch.splice(Number(b.dataset.watchDelete),1);save();renderShell();
     });
   }
@@ -351,5 +533,11 @@ function bind(){
 const style=document.createElement("style");
 style.textContent=".tools-tabs,.tools-controls,.tools-total{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.tools-tabs{margin-bottom:13px}.tools-selected{border-color:var(--accent)!important;color:var(--accent)!important}.tools-results{display:grid;gap:5px;max-height:300px;overflow:auto;margin-top:9px}.tools-found,.tools-item,.tools-match{display:flex;align-items:center;gap:9px;padding:8px;background:var(--panel2);border:1px solid var(--line);border-radius:11px;margin:7px 0;min-width:0}.tools-found .thumb,.tools-item .thumb{width:48px;height:67px;flex:none;object-fit:cover}.tools-item .grow,.tools-found .grow{min-width:0}.tools-controls{margin:7px 0}.tools-controls .btn{padding:6px 9px}.tools-price{width:92px!important;padding:7px!important}.tools-direction{width:auto!important;padding:7px!important}.tools-cols{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.tools-total{justify-content:space-between}.tools-filters{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:12px 0}.tools-deckgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.tools-numbers{display:flex;gap:8px;flex-wrap:wrap;color:var(--accent);margin:5px 0}.tools-deckgrid .btn{margin-top:7px}.tools-hit{border-color:var(--ok)}.tools-good{color:var(--ok)}.tools-match>div:not(.grow){min-width:70px;text-align:right}.tools-match .small{line-height:1.5}@media(max-width:760px){.tools-cols,.tools-deckgrid{grid-template-columns:1fr}.tools-filters{grid-template-columns:repeat(2,minmax(0,1fr))}.tools-match{flex-wrap:wrap}.tools-match .grow{flex-basis:100%}}@media(max-width:430px){.tools-filters{grid-template-columns:1fr}.tools-tabs button{flex:1 1 42%}.tools-item{flex-wrap:wrap}.tools-match>div:not(.grow){flex:1;text-align:left}}";
 document.head.appendChild(style);
-window.OnePieceTools={view,bind,checkAlerts};
+document.addEventListener?.("visibilitychange",()=>{
+  if(!document.hidden&&h.owner&&state.user?.id===h.owner&&state.sb){
+    if(h.pending&&!h.cloudConflict)void flushCloud();
+    else if(!h.pending&&!h.writing&&h.cloudReady&&Date.now()-h.lastCloudAt>10000)void loadCloud(true);
+  }
+});
+window.OnePieceTools={view,bind,checkAlerts,loadCloud,flushCloud};
 })();
