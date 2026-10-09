@@ -2165,8 +2165,17 @@ function removeFromDeckGroup(id){
   const exact=ids.includes(id)?id:ids[ids.length-1];
   changeDeckQty(exact,-1);
 }
+// The deck builder displays the normal leader printing, not the first variant
+// in the catalog (which may be a parallel). Other card groups are unchanged.
+function deckLeaderStandardPrinting(g){
+  const sample=g?.card;
+  if(!sample||sample.category!=="Leader")return sample;
+  const code=deckPrintedCode(sample);
+  const standard=state.cards.find(c=>c.category==="Leader"&&c.id===code&&!c.isParallel);
+  return standard||g.versions.find(c=>c.id===code)||sample;
+}
 function deckGroupedTile(g){
-  const c=g.card,q=deckOwnedCopies(c),d=state.decks.find(x=>x.id===state.deckId),isLeader=c.category==="Leader",leaderInGroup=isLeader&&d?.leader&&g.versions.some(v=>v.id===d.leader),inDeck=isLeader?(leaderInGroup?1:0):g.versions.reduce((s,v)=>s+Number(d?.cards?.[v.id]||0),0),ps=groupPriceStats(g);
+  const c=deckLeaderStandardPrinting(g),q=deckOwnedCopies(c),d=state.decks.find(x=>x.id===state.deckId),isLeader=c.category==="Leader",leaderInGroup=isLeader&&d?.leader&&g.versions.some(v=>v.id===d.leader),inDeck=isLeader?(leaderInGroup?1:0):g.versions.reduce((s,v)=>s+Number(d?.cards?.[v.id]||0),0),ps=groupPriceStats(g);
   const controls=isLeader?'<div class="quick"><button class="secondary" disabled>−</button><div class="qty">'+inDeck+'</div><button class="primary" data-setleader="'+esc(c.id)+'">+</button></div>':'<div class="quick"><button class="secondary" data-deckremovegroup="'+esc(c.id)+'">−</button><div class="qty">'+inDeck+'</div><button class="primary" data-adddeck="'+esc(c.id)+'">+</button></div>';
   return '<article class="card">'+(q?'<span class="tag">×'+q+' total</span>':'<span class="tag missing">Falta</span>')+
     '<button class="linkbtn" data-detail="'+esc(c.id)+'" style="display:block;width:100%;padding:0">'+cardImg(c,"cardimg")+'</button>'+
