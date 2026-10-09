@@ -2,7 +2,7 @@ name: Verify multi-source Meta and automatic decks
 on:
   push:
     branches: [feat-meta-visual-deep-coverage-20261009, main]
-    paths: [index.html, meta.js, meta-report.js, api/meta-comparison.js, scripts/**, .github/workflows/verify-metasources-autosync.yml]
+    paths: [index.html, meta.js, meta-report.js, api/meta.js, api/meta-comparison.js, scripts/**, .github/workflows/verify-metasources-autosync.yml]
   workflow_dispatch:
 permissions:
   contents: read
@@ -40,4 +40,5 @@ jobs:
             pages:d.pagesScanned,cap:d.coverageLimit,games:d.games,elapsedSeconds:(Date.now()-start)/1000
           }));
           if(!response.ok||!Array.isArray(d.leaders)||!d.leaders.length)throw Error('Meta unavailable');
+          if(d.eligibleEvents<=24&&d.includedEvents<=24)throw Error('Main competitive format filtered too many events');
           JS
