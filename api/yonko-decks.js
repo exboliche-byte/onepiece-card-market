@@ -116,11 +116,11 @@ export function parseEvent(html,event){
 }
 function unique(arr){const m=new Map();for(const value of arr)if(!m.has(value.path))m.set(value.path,value);return [...m.values()]}
 function pickEvents(all,leader,offset){
- const cand=leader==="all"?all:all.filter(e=>e.leaderCodes.includes(leader));
+ const cand=leader==="ALL"?all:all.filter(e=>e.leaderCodes.includes(leader));
  // Mix major and recent events instead of presenting only small local stores.
  const sorted=cand.slice().sort((a,b)=>{
   const recent=String(b.date||"").localeCompare(String(a.date||""));
-  if(leader!=="all")return recent||Number(b.major)-Number(a.major);
+  if(leader!=="ALL")return recent||Number(b.major)-Number(a.major);
   return Number(b.major)-Number(a.major)||recent;
  });
  // Source index already sorted by freshness. Interleave major and other sources.
