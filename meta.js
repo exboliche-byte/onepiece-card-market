@@ -111,20 +111,59 @@ function matrix(d){
    (m.expanded?"Mostrar 12 líderes":"Ampliar a "+Math.min(28,d.leaders.length)+" líderes")+'</button>';
 }
 
-function matchupTable(d){
-  const selected=d.leaders.some(x=>x.id===m.leader)?m.leader:d.leaders[0]?.id||"";
-  if(!selected)return '<div class="notice">No hay partidas suficientes para comparar líderes.</div>';
-  const rows=d.matchups.filter(x=>x.leader===selected).sort((a,b)=>b.games-a.games);
-  return '<label class="control-label" style="margin:10px 0">Tu líder<select class="field" id="metaLeaderSelect">'+
-    d.leaders.map(x=>'<option value="'+esc(x.id)+'"'+(x.id===selected?" selected":"")+'>'+esc(name(x.id)+" · "+x.id)+'</option>').join("")+'</select></label>'+
-    '<div class="notice">'+(m.scope==="global"?
-      'Limitless no registra quién sale primero. Por eso el W/R público por orden de salida se muestra como —, nunca como un dato inventado.':
-      'Los datos de primero/segundo solo son visibles cuando cada grupo incluye al menos 6 resultados de 3 usuarios distintos. El total incluye los resultados sin orden registrado.')+'</div>'+
-    (rows.length?'<div class="meta-scroller"><table class="meta-table"><thead><tr><th>Rival</th><th>W/R</th><th>V-D</th><th>Primero</th><th>n 1.º</th><th>Segundo</th><th>n 2.º</th></tr></thead><tbody>'+
-      rows.map(x=>'<tr><td>'+esc(name(x.opponent))+'<small>'+esc(x.opponent)+'</small></td><td>'+rate(x.wins,x.losses)+'</td><td>'+integer(x.wins)+'-'+integer(x.losses)+'</td>'+
-        '<td>'+(x.first?rate(x.first.wins,x.first.losses):"—")+'</td><td>'+(x.first?integer(x.first.games):"—")+'</td>'+
-        '<td>'+(x.second?rate(x.second.wins,x.second.losses):"—")+'</td><td>'+(x.second?integer(x.second.games):"—")+'</td></tr>').join("")+
-      '</tbody></table></div>':'<div class="notice">Sin emparejamientos de este líder con muestra suficiente.</div>');
+
+function firstSecondView(d){
+ if(m.scope==="global"){
+  const sim=simulatorData();
+  if(!sim)return '<div class="notice">Cargando las estadísticas de salir primero o segundo de OPlayTCG… '+
+    'Limitless no publica este dato para sus torneos.</div>';
+  const leaders=sim.leaders.filter(x=>Number.isFinite(x.firstRate)&&Number.isFinite(x.secondRate)&&
+    x.firstGames>0&&x.secondGames>0);
+  let filtered=m.leader?leaders.filter(x=>x.id===m.leader):[...leaders];
+  if(m.turnSort==="first")filtered.sort((a,b)=>(b.firstRate-b.secondRate)-(a.firstRate-a.secondRate));
+  else if(m.turnSort==="second")filtered.sort((a,b)=>(b.secondRate-b.firstRate)-(a.secondRate-a.firstRate));
+  else filtered.sort((a,b)=>b.games-a.games);
+  const tiles=filtered.slice(0,m.expanded?100:18).map(x=>{
+    const diff=x.firstRate-x.secondRate;
+    return '<article class="meta-turn-card"><div class="meta-turn-leader">'+art(x.id)+
+      '<div><b>'+esc(name(x.id))+'</b><small>'+esc(x.id)+' · '+integer(x.games)+' partidas</small>'+
+      '<small>W/R general: '+rate(x.wins,x.losses)+'</small></div></div>'+
+      '<div class="meta-turn-bars">'+
+       '<div class="meta-turn-line"><span>🥇 1.º</span><div class="meta-turn-track"><i style="width:'+x.firstRate+'%"></i></div>'+
+       '<b>'+x.firstRate.toFixed(1)+'%</b><small>n='+integer(x.firstGames)+'</small></div>'+
+       '<div class="meta-turn-line"><span>🥈 2.º</span><div class="meta-turn-track"><i style="width:'+x.secondRate+'%"></i></div>'+
+       '<b>'+x.secondRate.toFixed(1)+'%</b><small>n='+integer(x.secondGames)+'</small></div></div>'+
+      '<p class="meta-turn-diff">'+(Math.abs(diff)<1?"Equilibrado":diff>0?"↑ Ventaja saliendo primero":"↓ Ventaja saliendo segundo")+
+      ' · '+Math.abs(diff).toFixed(1)+' puntos</p></article>';
+  }).join("");
+  return '<div class="meta-turn-intro"><strong>🥇 ¿Primero o segundo?</strong>'+
+    '<span>🎮 OPlayTCG · '+integer(sim.games)+' partidas analizadas'+
+    (sim.measuredAt?' · '+esc(sim.measuredAt):"")+'</span></div>'+
+    '<div class="meta-turn-controls"><label>Filtrar líder<select class="field" id="metaTurnLeader">'+
+    '<option value="">Todos los líderes</option>'+leaders.map(x=>
+      '<option value="'+esc(x.id)+'"'+(m.leader===x.id?' selected':"")+'>'+esc(name(x.id))+' · '+esc(x.id)+'</option>').join("")+
+    '</select></label><label>Ordenar por<select class="field" id="metaTurnSort">'+
+    [['games','Más partidas'],['first','Mayor ventaja 1.º'],['second','Mayor ventaja 2.º']].map(([v,l])=>
+      '<option value="'+v+'"'+(m.turnSort===v?' selected':"")+'>'+l+'</option>').join("")+
+    '</select></label></div>'+
+    '<div class="meta-turn-grid">'+tiles+'</div>'+
+    (!filtered.length?'<div class="notice">No hay desglose de ese líder con muestra comprobada.</div>':"")+
+    (!m.leader&&filtered.length>18?'<button class="secondary btn" id="metaExpand">'+
+      (m.expanded?"Mostrar menos":"Ver todos los "+filtered.length+" líderes")+'</button>':"")+
+    '<p class="small">Son partidas del simulador, no torneos. Cada barra incluye el número de partidas correspondiente; nunca extrapolamos al resto.</p>';
+ }
+ const current=d.leaders.some(x=>x.id===m.leader)?m.leader:d.leaders[0]?.id||"";
+ const rows=d.matchups.filter(x=>x.leader===current&&(x.first||x.second)).sort((a,b)=>b.games-a.games);
+ return '<p class="small">👥 Datos comunitarios agregados, solo si cumplen los umbrales de privacidad.</p>'+
+  '<label>Líder<select class="field" id="metaLeaderSelect">'+d.leaders.map(x=>
+    '<option value="'+esc(x.id)+'"'+(current===x.id?' selected':"")+'>'+esc(name(x.id))+'</option>').join("")+'</select></label>'+
+  (rows.length?'<div class="meta-turn-grid">'+rows.map(x=>
+    '<article class="meta-turn-card"><strong>'+esc(name(x.opponent))+'</strong>'+
+    '<p>Primero: '+(x.first?rate(x.first.wins,x.first.losses):"—")+
+    ' · n='+(x.first?integer(x.first.games):"—")+'</p>'+
+    '<p>Segundo: '+(x.second?rate(x.second.wins,x.second.losses):"—")+
+    ' · n='+(x.second?integer(x.second.games):"—")+'</p></article>').join("")+'</div>':
+    '<div class="notice">Sin muestra suficiente para ese líder.</div>');
 }
 function ranking(d){
   return '<div class="meta-scroller"><table class="meta-table"><thead><tr><th>Líder</th><th>Resultados</th><th>Victorias</th><th>Derrotas</th><th>W/R</th><th>Tier</th></tr></thead><tbody>'+
