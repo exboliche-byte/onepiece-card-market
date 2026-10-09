@@ -51,8 +51,9 @@ async function changeItem(listId,cardId,quantity){
  const selectedList=ws.lists.find(x=>x.id===listId);
  if(!selectedList)return false;
  const c=printCard(cardId);
- if(!c){notify("La impresión exacta no está disponible en el catálogo");return false}
- const user=state.user.id,amount=Math.max(0,Math.min(99,Math.round(Number(quantity)||0)));
+ const amount=Math.max(0,Math.min(99,Math.round(Number(quantity)||0)));
+ if(!c&&amount>0){notify("La impresión exacta no está disponible en el catálogo");return false}
+ const user=state.user.id;
  ws.busy=true;
  try{
   const response=await state.sb.rpc("wants_set_item",{p_list_id:listId,p_card_id:cardId,p_quantity:amount});
@@ -79,6 +80,18 @@ async function consume(cardId,amount){
  }catch(error){
   console.warn("Automatic wants consumption",error);
   if(state.user?.id===owner)notify("Carta guardada, pero las wants no se actualizaron. Revisa Mis wants.");
+ }
+}
+async function consumeBatch(changes){
+ if(!state.user?.id||!state.sb||!changes||!Object.keys(changes).length)return;
+ const owner=state.user.id;
+ try{
+  const r=await state.sb.rpc("wants_consume_bulk",{p_changes:changes});
+  if(r.error)throw r.error;
+  if(state.user?.id===owner&&ws.loaded)await load(true);
+ }catch(error){
+  console.warn("Wants after CSV import",error);
+  if(state.user?.id===owner)notify("Colección importada; revisa Mis wants: no se pudo descontar todo.");
  }
 }
 function searchResults(){
@@ -211,9 +224,9 @@ function bind(){
    if(existing!==next)await changeItem(l.id,id,next);
   });
  }
- if(!ws.loaded&&!ws.loading)void load();
+ if(!ws.loaded&&!ws.loading&&!ws.error)void load();
 }
-window.MyWants={view,bind,load,add:showAdd,consume};
+window.MyWants={view,bind,load,add:showAdd,consume,consumeBatch};
 const style=document.createElement("style");
 style.textContent=".wants-page{max-width:1080px;padding-bottom:110px}.wants-panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:14px}.wants-heading{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;margin-bottom:13px}.wants-heading h3{margin:0}.wants-list-switch{display:flex;flex-wrap:wrap;gap:8px}.wants-list-switch button{border-radius:10px;border:1px solid var(--line);background:var(--panel2);color:var(--text);padding:10px 14px;font-weight:700}.wants-list-switch button.active{border-color:var(--accent);color:var(--accent)}.wants-list-actions{display:flex;gap:7px}.wants-totals{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:12px 0}.wants-totals>div{background:var(--panel2);border:1px solid var(--line);padding:11px;border-radius:11px}.wants-totals b{font-size:clamp(16px,3vw,25px);display:block}.wants-totals small,.wants-card-info small,.wants-search-row small{display:block;color:var(--muted);font-size:11px}.wants-search-label{display:grid;gap:6px;margin-top:13px}.wants-search-grid{max-height:340px;overflow:auto;margin-top:9px}.wants-search-row{display:flex;align-items:center;gap:10px;padding:7px;border-bottom:1px solid var(--line)}.wants-search-row>div{flex:1;min-width:0}.wants-search-art{height:66px;width:46px;object-fit:cover;border-radius:5px;flex:none}.wants-cards{display:grid;gap:8px}.wants-card{display:flex;gap:12px;align-items:center;background:var(--panel2);border:1px solid var(--line);border-radius:11px;padding:10px;min-width:0}.wants-card-art{width:65px;height:91px;border-radius:5px;object-fit:cover;flex:none}.wants-card-info{flex:1;min-width:0}.wants-card-info strong,.wants-card-info span,.wants-card-info a{display:block;margin:3px 0}.wants-card-info a{font-size:12px;color:var(--accent)}.wants-card-controls{display:grid;grid-template-columns:repeat(3,auto);gap:5px;align-items:center;text-align:center}.wants-card-controls .wants-remove{grid-column:1/-1}.wants-add-modal .modal{max-width:430px;display:grid;gap:13px}.wants-add-modal label{display:grid;gap:6px}.wants-modal-card{display:flex;gap:11px;align-items:center}.wants-modal-card small{display:block;color:var(--muted)}@media(max-width:590px){.wants-totals{grid-template-columns:repeat(2,minmax(0,1fr))}.wants-card{flex-wrap:wrap}.wants-card-art{width:52px;height:73px}.wants-card-controls{margin-left:auto}}";
 document.head.appendChild(style);
