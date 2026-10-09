@@ -202,7 +202,7 @@ test("Recommendations and matchup coach are placed in Mazos and Torneos",()=>{
  assert.match(html,/state\.tab==="deck-completion"\?deckCompletionView\(\)/);
  assert.match(html,/if\(location\.pathname==="\/deck-completion"\)state\.tab="deck-completion"/);
  assert.match(html,/if\(state\.tab==="deck-completion"\)window\.OnePieceTools\?\.bindDecks/);
- assert.match(fs.readFileSync(path.join(root,"vercel.json"),"utf8"),/"source": "\/deck-completion"/);
+ assert.ok(JSON.parse(fs.readFileSync(path.join(root,"vercel.json"),"utf8")).rewrites.some(r=>r.source==="/deck-completion"&&r.destination==="/index.html"));
  assert.match(fs.readFileSync(path.join(root,"tools-hub.js"),"utf8"),/state\.tab==="deck-completion"\)renderShell/);
  assert.match(html,/OnePieceTools\?\.decksView/);
  const tournament=fs.readFileSync(path.join(root,"tournaments.js"),"utf8");
