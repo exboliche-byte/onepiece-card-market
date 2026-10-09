@@ -28,7 +28,7 @@ async function load(force=false){
   ws.error=String(error.message||error);console.warn("wants load",error);
  }finally{
   ws.loading=false;
-  if(state.user?.id===user&&state.tab==="collection"&&state.wantsOpen)renderShell();
+  if(state.user?.id===user&&state.tab==="wants")renderShell();
  }
 }
 async function createList(name){
@@ -63,7 +63,7 @@ async function changeItem(listId,cardId,quantity){
   if(amount>0)items[cardId]=amount;else delete items[cardId];
   selectedList.items=items;
   notify(amount?"Wants actualizadas":"Carta quitada de wants");
-  if(state.tab==="collection"&&state.wantsOpen)renderShell();
+  if(state.tab==="wants")renderShell();
   return true;
  }catch(error){console.warn("wants update",error);notify("No se pudieron guardar las wants: "+String(error.message||error).slice(0,85));return false}
  finally{ws.busy=false}
@@ -132,8 +132,7 @@ function view(){
     '<span aria-hidden="true">›</span></button>';
  }).join("")+'</div>';
  return '<div class="wrap wants-page"><div class="hero"><div><h1>💛 Mis wants</h1>'+
-   '<p>Listas personales de cartas que quiero, con precios actualizados por impresión.</p></div>'+
-   '<button class="secondary btn" id="closeWants" type="button">← Mi colección</button></div>'+
+   '<p>Listas personales de cartas que quiero, con precios actualizados por impresión.</p></div></div>'+
    (ws.error?'<div class="notice">No se pudieron cargar las listas: '+h(ws.error)+
     ' <button class="secondary btn" id="retryWants" type="button">Reintentar</button></div>':"")+
    (ws.loading&&!ws.loaded?'<div class="notice">Cargando wants desde tu cuenta…</div>':"")+
@@ -211,7 +210,6 @@ async function showAdd(cardId,count=1){
  };
 }
 function bind(){
- document.querySelector("#closeWants")?.addEventListener("click",()=>{state.wantsOpen=false;overview();renderShell()});
  document.querySelector("#wantsBackToLists")?.addEventListener("click",()=>{overview();renderShell()});
  document.querySelector("#wantsSendCardmarket")?.addEventListener("click",()=>void sendListToCardmarket());
  document.querySelector("#retryWants")?.addEventListener("click",()=>void load(true));
