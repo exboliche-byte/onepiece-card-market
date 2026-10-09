@@ -52,13 +52,13 @@ test("View includes source separation, personalized dice and turn-order analysis
   assert.ok(page.includes(phrase),phrase);
 });
 test("Expanded public coverage pages through tournaments, tracks limits and preserves standard meta",()=>{
- assert.match(meta,/coverage.*expanded/);
+ assert.match(script,/api\/meta-unified/);
  assert.match(meta,/game=OP&limit=500&page=/);
  assert.match(meta,/expanded\?140:100/);
  assert.match(meta,/eligibleEvents:eligible\.length/);
  assert.match(meta,/truncated:eligible\.length>selected\.length/);
  assert.match(meta,/rateLimited/);
- assert.match(script,/Limitless: orden de salida no disponible/);
+ assert.match(script,/OPlay · 1\.º/);
 });
 test("Production build copies the preparation module and runs its tests",()=>{
  const build=fs.readFileSync(path.join(root,"scripts/vercel-build.sh"),"utf8");
