@@ -16,7 +16,7 @@ test("competitive suggestions exclude banned and rotated exact cards and leaders
  assert.equal(ctx.standardLeaderPlayable("OP05-060"),true);
  assert.equal(ctx.standardCompetitiveDeckPlayable("OP05-060",{"OP06-086":4}),false);
  assert.equal(ctx.standardCompetitiveDeckPlayable("OP05-060",{"OP09-001":4}),true);
- assert.match(html,/state\.deckDiscoverResults=.*\.filter\(x=>standardCompetitiveDeckPlayable/);
+ assert.match(html,/standardCompetitiveDeckPlayable\(deck\.leaderId,deck\.cards\)/);
  assert.match(html,/if\(!standardCompetitiveDeckPlayable\(result\.leaderId,result\.cards\)\)/);
  assert.match(tools,/standardCompetitiveDeckPlayable\(r\.leaderId,r\.cards\)/);
  assert.match(tools,/standardCompetitiveDeckPlayable\(x\.leaderId,x\.cards\)/);
