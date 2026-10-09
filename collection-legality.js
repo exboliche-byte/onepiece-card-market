@@ -21,11 +21,19 @@
  function useRules(d){if(!validate(d))return false;const changed=JSON.stringify(d)!==JSON.stringify(rules);rules=d;return changed}
  async function load(){
   if(loading)return loading;
-  loading=(async()=>{try{
-    const res=await fetch("/data/legality.json",{cache:"no-store"});
-    if(!res.ok)throw Error("Rules feed HTTP "+res.status);
-    return useRules(await res.json());
-   }catch(e){console.warn("Unable to refresh official legality; retaining validated last-known rules.",e);return false}
+  loading=(async()=>{
+    // Latest validated GitHub rules are served by the API, without requiring a deploy
+    // for each future ban/rotation update. The packaged snapshot is a fallback.
+    for(const path of ["/api/legality","/data/legality.json"]){
+      try{
+        const res=await fetch(path,{cache:"no-store"});
+        if(!res.ok)throw Error("Rules feed HTTP "+res.status);
+        const payload=await res.json();
+        if(!validate(payload))throw Error("Invalid rules payload");
+        return useRules(payload);
+      }catch(e){console.warn("Legality source unavailable: "+path,e)}
+    }
+    return false;
   })().finally(()=>{loading=null});
   return loading;
  }
