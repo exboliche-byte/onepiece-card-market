@@ -35,3 +35,11 @@ button.physical-chip.partial{color:#f1bd58;background:rgba(200,136,24,.1)}
 .physical-card-overview{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,215px),1fr));gap:8px;margin:12px 0}
 .physical-card-line{border:1px solid var(--border,#444);border-radius:10px;padding:8px}
 @media(max-width:480px){.physical-card-photo{width:50px;height:70px;flex-basis:50px}.physical-movement,.physical-card-line{gap:9px}}
+
+/* Lista de compra de mazos parcialmente montados, solo con seguimiento activo. */
+.deck-library-heading-actions{flex-wrap:wrap}
+.physical-pending-list{display:grid;gap:10px;margin:14px 0}
+.physical-pending-row{display:flex;gap:12px;align-items:center;border:1px solid var(--line,#445);border-radius:12px;padding:10px}
+.physical-pending-count{font-size:14px;font-weight:750;color:var(--accent,#ffd447);margin:4px 0}
+.physical-pending-total{border-top:1px solid var(--line,#445);padding-top:12px;margin-top:14px}
+.physical-pending-row .small{margin-top:4px}
