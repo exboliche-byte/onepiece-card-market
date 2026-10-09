@@ -185,20 +185,31 @@ function readyToEdit(){
   if(h.cloudConflict){notify("Resuelve primero el conflicto entre dispositivos");return false}
   return true;
 }
-function matches(q){
-  q=norm(String(q||"").trim());if(q.length<2)return [];
-  return state.cards.filter(c=>!isJapaneseCatalogCard(c)&&norm([c.id,c.name,c.set,baseId(c.id)].join(" ")).includes(q))
-    .sort((a,b)=>qty(b.id)-qty(a.id)||String(a.id).localeCompare(String(b.id),"es",{numeric:true})).slice(0,24);
+// Index the currently loaded catalog once, not on every keystroke.
+let searchCardsSource=null,searchCardsCount=0,searchIndex=[];
+function matches(query){
+ const needle=norm(String(query||"").trim()).replace(/\s+/g," ");
+ if(needle.length<2)return [];
+ const source=Array.isArray(state.cards)?state.cards:[];
+ if(searchCardsSource!==source||searchCardsCount!==source.length){
+  searchCardsSource=source;searchCardsCount=source.length;
+  searchIndex=source.filter(c=>c?.id&&!isJapaneseCatalogCard(c)).map(c=>({
+   c,keywords:norm([c.id,c.name,c.set,c.set_name,baseId(c.id)].join(" "))
+  }));
+ }
+ const terms=needle.split(" ").filter(Boolean);
+ return searchIndex.filter(x=>terms.every(t=>x.keywords.includes(t))).map(x=>x.c)
+  .sort((a,b)=>qty(b.id)-qty(a.id)||String(a.id).localeCompare(String(b.id),"es",{numeric:true})).slice(0,36);
 }
-function searchResults(q,mode){
-  if(q.trim().length<2)return '<div class="small">Busca por nombre o código (mínimo 2 caracteres).</div>';
-  const cards=matches(q);
-  if(!cards.length)return '<div class="notice">No se encuentran cartas.</div>';
-  return cards.map(c=>'<div class="tools-found">'+cardImg(c,"thumb")+'<div class="grow"><b>'+text(c.name||c.id)+'</b>'+
-    '<div class="small">'+text(c.id)+' · '+text(c.set||"")+' · '+money(price(c))+' / copia'+
-    (state.user?' · Tengo '+qty(c.id):"")+'</div></div>'+
-    '<button class="secondary btn" data-trade-add="0" data-card="'+text(c.id)+'">←</button>'+
-    '<button class="primary btn" data-trade-add="1" data-card="'+text(c.id)+'">→</button>').join("");
+function searchResults(query){
+ if(String(query||"").trim().length<2)return '<div class="small">Busca por nombre o código (mínimo 2 caracteres).</div>';
+ const cards=matches(query);
+ if(!cards.length)return '<div class="notice">No se encuentran cartas para esa búsqueda. Prueba con el nombre o código.</div>';
+ return cards.map(c=>'<div class="tools-found">'+cardImg(c,"thumb")+'<div class="grow"><b>'+text(c.name||c.id)+'</b>'+
+  '<div class="small">'+text(c.id)+' · '+text(c.set||"")+' · '+money(price(c))+' / copia'+
+  (state.user?' · Tengo '+qty(c.id):"")+'</div></div>'+
+  '<button class="secondary btn" data-trade-add="0" data-card="'+text(c.id)+'">←</button>'+
+  '<button class="primary btn" data-trade-add="1" data-card="'+text(c.id)+'">→</button>').join("");
 }
 function total(i){
   let amount=0,unknown=0,copies=0;
@@ -316,23 +327,22 @@ function tradeItems(){
  return h.trade.map(rows=>rows.map(x=>({id:x.id,q:x.q})));
 }
 function bindSearch(input,host,mode){
-  const el=document.querySelector(input),target=document.querySelector(host);
-  if(!el||!target)return;
-  const wire=()=>{
-    target.querySelectorAll("[data-trade-add]").forEach(b=>b.onclick=()=>{
-      if(!readyToEdit())return;
-      const i=Number(b.dataset.tradeAdd),id=b.dataset.card;
-      if(!card(id))return;
-      const found=h.trade[i].find(x=>x.id===id);
-      if(found)found.q=Math.min(100,found.q+1);else h.trade[i].push({id,q:1,manual:null});
-      save();renderShell();
-    });
-  };
-  wire();
-  el.addEventListener("input",()=>{
-    h.q=el.value;
-    target.innerHTML=searchResults(el.value,mode);wire();
-  });
+ const el=document.querySelector(input),target=document.querySelector(host);
+ if(!el||!target)return;
+ const show=()=>{h.q=el.value;target.innerHTML=searchResults(h.q)};
+ // Delegate clicks so replacing the results never destroys the add-card handler.
+ target.addEventListener("click",event=>{
+  const b=event.target?.closest?.("[data-trade-add]");
+  if(!b||!target.contains(b)||!readyToEdit())return;
+  const side=Number(b.dataset.tradeAdd),id=b.dataset.card;
+  if(![0,1].includes(side)||!card(id))return;
+  const found=h.trade[side].find(x=>x.id===id);
+  if(found)found.q=Math.min(100,found.q+1);
+  else h.trade[side].push({id,q:1,manual:null});
+  save();renderShell();
+ });
+ el.addEventListener("input",show);
+ el.addEventListener("search",show);
 }
 function summary(){
   const side=(i,label)=>label+"\n"+h.trade[i].map(x=>x.q+"x "+(card(x.id)?.name||x.id)+" ("+x.id+") a "+

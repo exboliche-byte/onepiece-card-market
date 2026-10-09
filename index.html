@@ -2262,6 +2262,11 @@ function deckCompletionView(){
 }
 function renderShell(){
   if(reloadViewPending)return;
+  // Cloud refreshes must not interrupt card or username search in Intercambios.
+  const active=state.tab==="trades"?document.activeElement:null;
+  const keepFocus=active&&["toolsSearch","tradePeer"].includes(active.id)?{
+    id:active.id,start:active.selectionStart,end:active.selectionEnd
+  }:null;
   if(state.publicCollection){
     document.body.dataset.currentTab="public-collection";
     $("#app").innerHTML=publicCollectionView();
@@ -2272,6 +2277,15 @@ function renderShell(){
   document.body.dataset.currentTab=state.tab;
   $("#app").innerHTML='<div class="app'+(sidebarCollapsed?' sidebar-collapsed':'')+'"><header class="top"><div class="brand"><b>ONE PIECE</b><span>MiAlbumOnePiece</span></div>'+account+'</header>'+main+nav()+(state.detail?detailView(state.detail):"")+(state.auth?authModal():"")+(state.newDeck?newDeckModal():"")+'</div>';
   bindShell();
+  if(keepFocus){
+    const field=document.getElementById(keepFocus.id);
+    if(field){
+      field.focus({preventScroll:true});
+      if(Number.isInteger(keepFocus.start)&&Number.isInteger(keepFocus.end)){
+        try{field.setSelectionRange(keepFocus.start,keepFocus.end)}catch{}
+      }
+    }
+  }
   if(state.tab==="catalog")renderCatalogResults();
   if(state.tab==="collection"){
     if(state.collectionStatsOpen)window.loadCollectionHistory?.();
