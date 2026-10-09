@@ -2912,6 +2912,9 @@ function writeCollection(id,nextValue){
       if(Number(result.data)!==n)throw Error("La cantidad confirmada no coincide");
       if(state.user?.id!==userId)return false;
       if(n===0)delete state.owned[id];else state.owned[id]=n;
+       // Wants are reduced only AFTER the exact-print cloud write succeeds.
+       if(n>old)void window.MyWants?.consume?.(id,n-old);
+
       // Notify the open scanner only after an exact-print write is confirmed.
       window.dispatchEvent(new CustomEvent("mialbum:collection-updated",{
         detail:{userId,id,quantity:n}
@@ -3873,6 +3876,11 @@ async function previewImport(text){
     if(confirm(msg+"\n\nAceptar = importar. Cancelar = no cambiar nada.")){
       const ok=await replaceCollectionFromCSV(imported);
       if(!ok)return;
+      // Only actual positive differences consume wants (never re-imported copies).
+      const newlyOwned=Object.fromEntries([...imported]
+        .filter(([id,q])=>q>Number(oldOwned[id]||0))
+        .map(([id,q])=>[id,q-Number(oldOwned[id]||0)]));
+      if(Object.keys(newlyOwned).length)void window.MyWants?.consumeBatch?.(newlyOwned);
       state.importedCards={...state.importedCards,...created,...importMeta};
       saveLocal();
       prepareCatalog(state.cards.filter(c=>!c.syntheticImport),state.packs);
