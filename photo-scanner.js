@@ -120,7 +120,7 @@ function recognizeFrame(region,rotation=0){
  return new Promise((resolve,reject)=>{
   const timer=setTimeout(()=>{matcher=null;reject(Error("Análisis visual agotó el tiempo"))},14000);
   matcher={resolve,reject,timer};
-  worker.postMessage({type:"frame",frames:1,pixels:data.buffer,limit:32},[data.buffer]);
+  worker.postMessage({type:"frame",frames:1,pixels:data.buffer,limit:32,photo:true},[data.buffer]);
  });
 }
 async function recognize(region){
@@ -141,7 +141,7 @@ function baseSuggestions(ranked){
   const code=base(candidate.id),card=baseCard(code);
   if(!card||!code||found.has(code))continue;
   found.add(code);options.push({code,score:candidate.score,art:candidate.art});
-  if(options.length>=6)break;
+  if(options.length>=9)break;
  }
  return options;
 }
@@ -217,7 +217,8 @@ async function readCode(region){
   }).catch(error=>{photoOcrLoading=null;throw error});
  }
  const engine=await photoOcrLoading;
- const result=await engine.recognize(makeCrop(region,canvas,800,1120),3);
+ const frame=makeCrop(region,canvas,900,1260);
+ const result=await engine.recognizeCode(frame);
  return result.codes.find(id=>group(id).length)||null;
 }
 function chooseCode(row,code){
@@ -252,6 +253,13 @@ function rowList(){
    '<img src="'+r.thumb+'" alt="Recorte de carta '+(i+1)+'">'+
    '<div class="photo-card-fields"><b>Carta '+(i+1)+'</b><small>'+(r.confident?'Coincidencia probable: confirma la edición':'Revisar identificación')+'</small>'+
    '<label>Identificación<select data-photo-code>'+optionText(r)+'</select></label>'+
+   '<div class="photo-guess-label">'+(r.confident?'Propuesta de reconocimiento (revisa la impresión)':'¿Cuál es? Toca una de estas cartas sugeridas:')+'</div>'+
+   '<div class="photo-guesses">'+r.candidates.slice(0,8).map(candidate=>{
+    const c=baseCard(candidate.code);
+    if(!c)return '';
+    return '<button type="button" data-photo-guess="'+esc(candidate.code)+'"'+(r.selectedCode===candidate.code?' class="photo-guess-selected"':'')+'>'+
+      cardImg(c,"photo-guess-img")+'<span>'+esc(candidate.code)+'</span></button>';
+   }).join('')+'</div>'+
    '<button type="button" data-photo-ocr>🔎 Leer código de la carta (OCR)</button>'+ 
    '<label>Buscar otra carta<input data-photo-search type="search" placeholder="Código o nombre de carta" autocomplete="off"></label>'+
    '<div data-photo-suggestions class="photo-suggestions"></div>'+
@@ -263,6 +271,9 @@ function rowList(){
  }).join("");
  host.querySelectorAll("[data-photo-index]").forEach(el=>{
   const i=Number(el.dataset.photoIndex),r=rows[i];
+  el.querySelectorAll("[data-photo-guess]").forEach(button=>button.onclick=()=>{
+   chooseCode(r,button.dataset.photoGuess);r.confident=false;rowList();
+  });
   el.querySelector("[data-photo-code]").onchange=e=>{
    r.selectedCode=e.target.value;
    r.printId=r.selectedCode?(baseCard(r.selectedCode)?.id||""):"";
@@ -471,6 +482,9 @@ function open(){
  "#photoScanPanel label{display:grid;gap:3px;font-size:12px;color:#cfd5e1}#photoScanPanel select,#photoScanPanel input{width:100%;min-width:0;padding:8px;background:#26364c;color:#fff;border:1px solid #7d8da3;border-radius:7px;font:inherit}"+
  "#photoScanPanel .photo-row-bottom{display:flex;gap:8px;align-items:end;flex-wrap:wrap}#photoScanPanel .photo-row-bottom input[type=number]{width:70px}#photoScanPanel .photo-row-bottom label.photo-skip{display:flex;align-items:center;gap:4px}#photoScanPanel .photo-skip input{width:auto}"+
  "#photoScanPanel .photo-suggestions{display:grid;gap:3px}#photoScanPanel .photo-suggestions button{text-align:left;font-size:12px}"+
+ "#photoScanPanel .photo-guess-label{font-size:12px;color:#ffe2a1}#photoScanPanel .photo-guesses{display:flex;overflow-x:auto;gap:7px;max-width:100%;padding:5px 0;scroll-snap-type:x proximity}"+
+ "#photoScanPanel .photo-guesses button{flex:0 0 78px;padding:5px;background:#1f2a3a;border:2px solid #53637b;scroll-snap-align:start;display:flex;flex-direction:column;align-items:center;gap:3px;min-width:0}"+
+ "#photoScanPanel .photo-guesses button.photo-guess-selected{border-color:#ffd447}#photoScanPanel img.photo-guess-img{width:64px;height:89px;object-fit:contain;background:#050505}#photoScanPanel .photo-guesses span{font-size:10px;white-space:nowrap}"+
  "#photoScanPanel footer{position:sticky;bottom:0;background:#0b121ff5;padding:12px;margin-top:12px;display:grid;gap:7px;border-top:1px solid #526075}#photoScanPanel footer button{background:#ffd447;color:#171717;font-size:17px}#photoScanPanel footer span{font-size:11px;color:#bfcadc;text-align:center}"+
  "@media(max-width:500px){#photoScanPanel .photo-card-row>img{width:70px;height:100px}#photoScanPanel .photo-row-bottom button{font-size:11px;padding:8px}}";
  document.head.appendChild(style);
