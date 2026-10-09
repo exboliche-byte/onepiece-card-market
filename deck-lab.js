@@ -202,7 +202,8 @@ function compareHtml(d){
 function assistSources(d){
  const current=counts(d),leader=code(d.leader),prices=cheapestPrints(),stock=new Map();
  for(const [id,q] of Object.entries(state.owned||{}))stock.set(code(id),(stock.get(code(id))||0)+n(q));
- const sources=lab.external.filter(x=>code(x.leader)===leader&&entries(x).length===50);
+ const sources=lab.external.filter(x=>code(x.leader)===leader&&entries(x).length===50&&
+   (typeof standardCompetitiveDeckPlayable!=="function"||standardCompetitiveDeckPlayable(x.leader,x.cards)));
  const popularity=new Map();
  for(const src of sources)for(const id of counts(src).keys())popularity.set(id,(popularity.get(id)||0)+1);
  const candidates=sources.map(ref=>{
