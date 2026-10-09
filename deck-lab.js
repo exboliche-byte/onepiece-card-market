@@ -1,7 +1,7 @@
 (function(){
 "use strict";
 /* Read-only mazo tools. Card editions remain exact in the saved decks. */
-const lab={view:"",deckId:null,opponentId:"",source:"saved",external:[],externalLoaded:false,externalError:"",filter:"",pasted:null,pastedText:"",pile:[],life:[],hand:[],played:[],mulligan:false,turn:0,don:0,first:true,lifeCount:5,target:"",combo:[],minCopies:1};
+const lab={view:"",deckId:null,opponentId:"",source:"saved",external:[],externalLoaded:false,externalError:"",filter:"",pasted:null,pastedText:"",pile:[],life:[],hand:[],played:[],mulligan:false,turn:0,don:0,donReady:0,discard:[],first:true,lifeCount:5,target:"",combo:[],minCopies:1};
 const n=x=>Math.max(0,Math.floor(Number(x)||0)),code=id=>deckPrintedCode(id),safe=s=>esc(s);
 function entries(d){const a=[];for(const [id,q] of Object.entries(d?.cards||{}))for(let j=0;j<Math.min(n(q),50);j++)a.push(id);return a}
 function counts(d){const m=new Map();for(const [id,q] of Object.entries(d?.cards||{}))if(n(q))m.set(code(id),(m.get(code(id))||0)+n(q));return m}
@@ -21,7 +21,7 @@ function reset(){
  const cards=shuffle(entries(active()));
  lab.hand=cards.splice(0,Math.min(5,cards.length));
  lab.life=cards.splice(0,Math.min(lab.lifeCount,cards.length));
- lab.pile=cards;lab.played=[];lab.turn=0;lab.don=0;lab.mulligan=false;
+ lab.pile=cards;lab.played=[];lab.discard=[];lab.turn=0;lab.don=0;lab.donReady=0;lab.mulligan=false;
 }
 function candidateDeck(){return state.decks.find(d=>d.id===state.deckId)||state.decks.find(d=>!d.draftCompetitive)||null}
 function open(view){
@@ -104,9 +104,10 @@ function simulateHtml(d){
  '<button class="secondary btn" id="labReset">Nueva mano</button>'+
  '<button class="secondary btn" id="labMulligan" '+(lab.mulligan||lab.turn?'disabled':'')+'>Mulligan (1)</button>'+
  '<button class="primary btn" id="labNext" '+(!lab.pile.length?'disabled':'')+'>'+(lab.turn?'Siguiente turno':'Comenzar turno 1')+'</button></div>'+
- '<div class="deck-lab-metrics"><div><b>'+lab.turn+'</b><small>Tu turno</small></div><div><b>'+lab.don+'/10</b><small>DON!! acumulados</small></div><div><b>'+lab.life.length+'</b><small>Cartas de vida, ocultas</small></div></div>'+
- '<p class="small">'+lab.hand.length+' en mano · '+lab.pile.length+' en mazo · '+lab.played.length+' jugadas/descartadas'+(lab.turn===1&&lab.first?' · primero sin robo inicial':'')+'</p>'+
- '<div class="deck-lab-hand">'+lab.hand.map((id,i)=>'<div class="deck-lab-card" title="'+safe(title(id))+'">'+thumb(id)+'<span>'+safe(code(id))+'</span><button class="secondary btn" type="button" data-lab-play="'+i+'" title="Retirar de la mano">Jugar / retirar</button></div>').join("")+'</div>'+
+ '<div class="deck-lab-metrics"><div><b>'+lab.turn+'</b><small>Tu turno</small></div><div><b>'+lab.donReady+'/'+lab.don+'</b><small>DON!! activos / totales</small></div><div><b>'+lab.life.length+'</b><small>Cartas de vida, ocultas</small></div></div>'+
+ '<div class="deck-lab-controls"><button class="secondary btn" id="labDraw" '+(!lab.pile.length?'disabled':'')+'>Robar carta</button><button class="secondary btn" id="labLifeDraw" '+(!lab.life.length?'disabled':'')+'>Recibir 1 daño (vida a mano)</button><button class="secondary btn" id="labUseDon" '+(!lab.donReady?'disabled':'')+'>Usar 1 DON!!</button><button class="secondary btn" id="labReadyDon" '+(lab.donReady===lab.don?'disabled':'')+'>Recuperar DON!!</button></div>'+ 
+  '<p class="small">'+lab.hand.length+' en mano · '+lab.pile.length+' en mazo · '+lab.played.length+' en campo · '+lab.discard.length+' descartadas'+(lab.turn===1&&lab.first?' · primero sin robo inicial':'')+'</p>'+
+ '<div class="deck-lab-hand">'+lab.hand.map((id,i)=>'<div class="deck-lab-card" title="'+safe(title(id))+'">'+thumb(id)+'<span>'+safe(code(id))+'</span><button class="secondary btn" type="button" data-lab-play="'+i+'">Jugar</button><button class="secondary btn" type="button" data-lab-discard="'+i+'">Descartar</button></div>').join("")+'</div>'+
  '<div class="section deck-lab-odds"><h3>Probabilidades exactas</h3>'+
  '<label for="labTarget">Carta objetivo y copias mínimas</label><div class="deck-lab-controls"><select class="field" id="labTarget">'+options.map(([id,q])=>'<option value="'+safe(id)+'"'+(id===lab.target?' selected':'')+'>'+safe(id+' · '+q+' copias · '+title(id))+'</option>').join("")+'</select>'+
  '<select class="field" id="labMinCopies"><option value="1">≥ 1 copia</option><option value="2"'+(lab.minCopies===2?' selected':'')+'>≥ 2 copias</option></select></div>'+
@@ -208,8 +209,13 @@ function render(){
  layer.querySelector("#labLife")?.addEventListener("change",e=>{lab.lifeCount=Math.max(0,Math.min(8,n(e.target.value)));reset();render()});
  layer.querySelector("#labReset")?.addEventListener("click",()=>{reset();render()});
  layer.querySelector("#labMulligan")?.addEventListener("click",()=>{if(lab.mulligan||lab.turn)return;reset();lab.mulligan=true;render()});
- layer.querySelector("#labNext")?.addEventListener("click",()=>{if(!lab.pile.length)return;lab.turn++;lab.don=Math.min(10,lab.don+(lab.turn===1&&lab.first?1:2));if(!(lab.turn===1&&lab.first))lab.hand.push(lab.pile.shift());render()});
+ layer.querySelector("#labNext")?.addEventListener("click",()=>{if(!lab.pile.length)return;lab.turn++;lab.don=Math.min(10,lab.don+(lab.turn===1&&lab.first?1:2));lab.donReady=lab.don;if(!(lab.turn===1&&lab.first))lab.hand.push(lab.pile.shift());render()});
+  layer.querySelector("#labDraw")?.addEventListener("click",()=>{if(lab.pile.length){lab.hand.push(lab.pile.shift());render()}});
+  layer.querySelector("#labLifeDraw")?.addEventListener("click",()=>{if(lab.life.length){lab.hand.push(lab.life.shift());render()}});
+  layer.querySelector("#labUseDon")?.addEventListener("click",()=>{lab.donReady=Math.max(0,lab.donReady-1);render()});
+  layer.querySelector("#labReadyDon")?.addEventListener("click",()=>{lab.donReady=lab.don;render()});
  layer.querySelectorAll("[data-lab-play]").forEach(b=>b.addEventListener("click",()=>{const i=Number(b.dataset.labPlay);if(!Number.isInteger(i)||i<0||i>=lab.hand.length)return;lab.played.push(lab.hand.splice(i,1)[0]);render()}));
+  layer.querySelectorAll("[data-lab-discard]").forEach(b=>b.addEventListener("click",()=>{const i=Number(b.dataset.labDiscard);if(!Number.isInteger(i)||i<0||i>=lab.hand.length)return;lab.discard.push(lab.hand.splice(i,1)[0]);render()}));
  layer.querySelector("#labTarget")?.addEventListener("change",e=>{lab.target=e.target.value;render()});
  layer.querySelector("#labMinCopies")?.addEventListener("change",e=>{lab.minCopies=Math.max(1,Math.min(2,n(e.target.value)));render()});
  layer.querySelectorAll("[data-lab-combo]").forEach(b=>b.addEventListener("change",e=>{lab.combo[Number(b.dataset.labCombo)]=e.target.value;render()}));
