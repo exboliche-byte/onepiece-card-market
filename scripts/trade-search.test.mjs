@@ -92,3 +92,11 @@ test("Trade results have one full-width row per card and responsive non-overflow
  assert.match(css,/@media\(max-width:540px\)\{\.tools-found\{grid-template-columns:42px minmax\(0,1fr\) 36px 36px/);
  assert.match(css,/\.tools-found \.grow\{min-width:0;overflow-wrap:anywhere\}/);
 });
+
+test("Trade results reserve readable text space at narrow mobile widths",()=>{
+ assert.match(code,/class="tools-found-actions"/);
+ assert.match(code,/grid-template-areas:"image info" "image actions"/);
+ assert.match(code,/\.tools-item\{display:grid;grid-template-columns:55px minmax\(0,1fr\)/);
+ assert.match(code,/\.tools-results \.tools-found>\.grow\{grid-area:info/);
+ assert.match(code,/word-break:normal/);
+});
