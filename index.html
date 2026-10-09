@@ -249,7 +249,7 @@ const state={
   catalog:{set:"Todas",category:"Todos",color:"Todos",rarity:"Todos",type:"Todos",attribute:"Todos",ownership:"Todas",sort:"id",dir:"asc",page:1,grouped:true,minCost:"",maxCost:"",minPower:"",maxPower:"",minPrice:"",maxPrice:"",query:"",filtersOpen:false},
   owned:{},collectionReady:false,collection:{query:"",set:"Todas",category:"Todos",color:"Todos",rarity:"Todos",type:"Todos",attribute:"Todos",quantity:"Todas",playset:"Todas",sort:"id",dir:"asc",page:1,filtersOpen:false},
   album:{set:"",query:"",ownership:"Todas",sort:"id",dir:"asc",page:1},expansions:{type:"Todos",sort:"set",dir:"asc"},
-  deckQuery:"",deckPage:1,deckLibrary:true,deckChoosingLeader:false,deckPreviewOrigin:"",deckPreviewScrollY:0,deckDiscover:false,deckDiscoverMode:"leader",deckDiscoverCard:"",deckDiscoverCardQuery:"",deckDiscoverLeader:"",deckDiscoverLeaderQuery:"",deckDiscoverResults:[],deckDiscoverLoading:false,deckDiscoverError:"",deckDiscoverDays:90,deckDiscoverMinPlayers:32,deckDiscoverMeta:null,deckFilters:{set:"Todas",category:"Todos",color:"Todos",rarity:"Todos",type:"Todos",attribute:"Todos",ownership:"Todas",sort:"id",dir:"asc",filtersOpen:false},auth:false,authReady:false,authBusy:false,authError:"",authNotice:"",authRecovery:false,toast:"",loading:true
+  deckQuery:"",deckPage:1,deckLibrary:true,deckChoosingLeader:false,deckPreviewOrigin:"",deckPreviewScrollY:0,deckDiscover:false,deckDiscoverMode:"leader",deckDiscoverSource:"all",deckDiscoverFormat:"en",deckDiscoverCard:"",deckDiscoverCardQuery:"",deckDiscoverLeader:"",deckDiscoverLeaderQuery:"",deckDiscoverResults:[],deckDiscoverLoading:false,deckDiscoverError:"",deckDiscoverDays:90,deckDiscoverMinPlayers:32,deckDiscoverMeta:null,deckFilters:{set:"Todas",category:"Todos",color:"Todos",rarity:"Todos",type:"Todos",attribute:"Todos",ownership:"Todas",sort:"id",dir:"asc",filtersOpen:false},auth:false,authReady:false,authBusy:false,authError:"",authNotice:"",authRecovery:false,toast:"",loading:true
 };
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??"").replace(/[&<>'"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[c]));
@@ -1512,15 +1512,16 @@ function competitiveResultHtml(result,index){
   const record=Number(rec.wins||0)+'-'+Number(rec.losses||0)+'-'+Number(rec.ties||0);
   const place=Number(result.placing||0)?Number(result.placing)+'.º':'—';
   const field=Number(result.players||0)?' / '+Number(result.players):'';
-  const sourceName=result.source==="One Piece Top Decks"?"One Piece Top Decks":"Limitless";
+  const sourceName=result.source==="Yonko / One Piece Top Decks"?"Yonko / Top Decks":"Limitless";
+  const jp=result.format==="jp";
   return '<article class="competitive-deck"><div class="competitive-result-main">'+
     (leader?'<div class="competitive-result-leader">'+cardImg(leader,"cardimg")+'</div>':'')+
     '<div class="competitive-result-copy"><div class="competitive-deck-head"><div><h3>'+esc(result.leaderName||result.leaderId)+'</h3><div class="small">'+esc(result.tournament||"Torneo")+' · '+date+'</div></div><div><b>'+place+field+'</b></div></div>'+
-    '<div class="competitive-badges">'+(state.deckDiscoverMode==="card"&&state.deckDiscoverCard?
+    '<div class="competitive-badges">'+(jp?'<span class="competitive-badge">Japón · archivo</span>':'')+(state.deckDiscoverMode==="card"&&state.deckDiscoverCard?
    '<span class="competitive-badge good">'+(deckPrintedCode(result.leaderId)===state.deckDiscoverCard?1:Number(result.cards?.[state.deckDiscoverCard]||0))+' copia(s) de '+esc(state.deckDiscoverCard)+'</span>':'')+
    '<span class="competitive-badge good">'+esc(result.quality||"Resultado")+'</span><span class="competitive-badge">'+esc(result.player||"Jugador")+'</span><span class="competitive-badge">Récord '+esc(record)+'</span>'+(result.country?'<span class="competitive-badge">'+esc(result.country)+'</span>':'')+'</div>'+
     '<div class="small"><b>Tu colección:</b> '+stats.owned+'/'+stats.total+' cartas cubiertas · faltan '+stats.missing+(stats.cost>0?' · aprox. '+money(stats.cost):'')+'</div>'+
-    '<div class="competitive-actions"><button class="primary btn" data-preview-competitive="'+index+'">Ver mazo</button><button class="secondary btn" data-compare-competitive="'+index+'">Comparar</button>'+(result.sourceUrl?'<a class="secondary btn" target="_blank" rel="noopener" href="'+esc(result.sourceUrl)+'">'+esc(sourceName)+' ↗</a>':'')+'</div></div></div>'+
+    '<div class="competitive-actions">'+(jp?'':'<button class="primary btn" data-preview-competitive="'+index+'">Ver mazo</button><button class="secondary btn" data-compare-competitive="'+index+'">Comparar</button>')+(result.sourceUrl?'<a class="secondary btn" target="_blank" rel="noopener" href="'+esc(result.sourceUrl)+'">'+esc(sourceName)+' ↗</a>':'')+'</div></div></div>'+
     '<div class="competitive-source">Fuente: '+esc(sourceName)+'.</div></article>';
 }
 let competitiveDeckSearchVersion=0;
@@ -1563,11 +1564,11 @@ function savedDecksWithCompetitiveCard(code){
  }).filter(x=>x.copies>0);
 }
 function competitiveDeckSearchView(){
- const byCard=state.deckDiscoverMode==="card";
+ const byCard=state.deckDiscoverMode==="card",yonko=state.deckDiscoverSource!=="limitless",jp=state.deckDiscoverFormat==="jp"&&yonko;
  let results="";
  if(state.deckDiscoverLoading)results='<div class="notice">Consultando listas públicas de torneos recientes…</div>';
  else if(state.deckDiscoverError)results='<div class="notice">'+esc(state.deckDiscoverError)+'</div>';
- else if(state.deckDiscoverResults.length)results='<div class="notice">'+state.deckDiscoverResults.length+' mazo(s) encontrado(s)'+(state.deckDiscoverMeta?.scannedEvents?' · '+state.deckDiscoverMeta.scannedEvents+' torneos consultados':'')+(state.deckDiscoverMeta?.rateLimited?' · resultados parciales por límite de la fuente':'')+'</div><div class="competitive-results">'+state.deckDiscoverResults.map(competitiveResultHtml).join("")+'</div>';
+ else if(state.deckDiscoverResults.length)results='<div class="notice">'+state.deckDiscoverResults.length+' mazo(s) encontrado(s)'+(state.deckDiscoverMeta?.scannedEvents?' · '+state.deckDiscoverMeta.scannedEvents+' torneos consultados':'')+(state.deckDiscoverMeta?.rateLimited?' · resultados parciales por límite de la fuente':state.deckDiscoverMeta?.partial?' · alguna fuente no disponible':'')+'</div><div class="competitive-results">'+state.deckDiscoverResults.map(competitiveResultHtml).join("")+'</div>';
  else if(state.deckDiscoverMeta)results='<div class="notice">No se encontraron listas públicas legales que incluyan '+(byCard?'esa carta':'ese líder')+' con estos filtros. Prueba ampliar el periodo o bajar el mínimo de jugadores.</div>';
  const saved=byCard?savedDecksWithCompetitiveCard(state.deckDiscoverCard):[];
  const mine=saved.length?'<section class="section"><h3>Mis mazos que incluyen esta carta ('+saved.length+')</h3><div class="competitive-results">'+
@@ -1584,35 +1585,103 @@ function competitiveDeckSearchView(){
    '<div class="competitive-mode-tabs"><button type="button" class="secondary btn'+(!byCard?' competitive-mode-active':'')+'" data-competitive-mode="leader">Por líder</button><button type="button" class="secondary btn'+(byCard?' competitive-mode-active':'')+'" data-competitive-mode="card">Por carta</button></div>'+
    picker+
    '<div class="competitive-controls">'+
+     '<label class="filter-label"><span>Fuentes</span><select id="competitiveSource" class="field"><option value="all" '+(state.deckDiscoverSource==="all"?"selected":"")+'>Todas · Limitless + Yonko</option><option value="limitless" '+(state.deckDiscoverSource==="limitless"?"selected":"")+'>Limitless</option><option value="yonko" '+(state.deckDiscoverSource==="yonko"?"selected":"")+'>Yonko / One Piece Top Decks</option></select></label>'+
+     (state.deckDiscoverSource==="yonko"?'<label class="filter-label"><span>Formato</span><select id="competitiveFormat" class="field"><option value="en" '+(jp?"":"selected")+'>Inglés / Europa</option><option value="jp" '+(jp?"selected":"")+'>Japón (archivo)</option></select></label>':'')+
      '<label class="filter-label"><span>Periodo</span><select id="competitiveDays" class="field"><option value="90" '+(state.deckDiscoverDays===90?"selected":"")+'>90 días</option><option value="180" '+(state.deckDiscoverDays===180?"selected":"")+'>180 días</option><option value="365" '+(state.deckDiscoverDays===365?"selected":"")+'>1 año</option></select></label>'+
-     '<label class="filter-label"><span>Torneo mínimo</span><select id="competitiveMinPlayers" class="field"><option value="16" '+(state.deckDiscoverMinPlayers===16?"selected":"")+'>16 jugadores</option><option value="32" '+(state.deckDiscoverMinPlayers===32?"selected":"")+'>32 jugadores</option><option value="64" '+(state.deckDiscoverMinPlayers===64?"selected":"")+'>64 jugadores</option></select></label>'+
+     (state.deckDiscoverSource==="limitless"||state.deckDiscoverSource==="all"?'<label class="filter-label"><span>Torneo mínimo</span><select id="competitiveMinPlayers" class="field"><option value="16" '+(state.deckDiscoverMinPlayers===16?"selected":"")+'>16 jugadores</option><option value="32" '+(state.deckDiscoverMinPlayers===32?"selected":"")+'>32 jugadores</option><option value="64" '+(state.deckDiscoverMinPlayers===64?"selected":"")+'>64 jugadores</option></select></label>':'')+
      '<button class="primary btn" id="runCompetitiveSearch" '+(state.deckDiscoverLoading?"disabled":"")+'>Buscar mazos</button>'+
-   '</div>'+ (byCard?mine:'')+results+'</div>';
+   '</div>'+(jp?'<div class="small">Listas japonesas para consulta histórica: no se importan ni se mezclan con el Standard europeo.</div>':'')+
+   (byCard?mine:'')+results+(state.deckDiscoverMeta?.hasMoreYonko?'<button type="button" class="secondary btn" id="loadMoreYonkoDecks" '+(state.deckDiscoverLoading?"disabled":"")+'>Ver más torneos de Yonko</button>':'')+'</div>';
+}
+function competitiveDecksFromResponses(responses,wantedCard,byCard,format){
+ const map=new Map();
+ for(const item of responses){
+  for(const deck of (Array.isArray(item?.results)?item.results:[])){
+   if(!deck?.leaderId||!deck?.cards||typeof deck.cards!=="object")continue;
+   if(format!=="jp"&&!standardCompetitiveDeckPlayable(deck.leaderId,deck.cards))continue;
+   if(byCard&&deckPrintedCode(deck.leaderId)!==wantedCard&&
+     !Object.entries(deck.cards).some(([id,n])=>deckPrintedCode(id)===wantedCard&&Number(n)>0))continue;
+   // Match identical entries across sources by date, player, leader and content.
+   const fingerprint=[deck.date,deck.player,deck.leaderId,
+    Object.entries(deck.cards).sort(([a],[b])=>a.localeCompare(b)).map(([id,n])=>id+":"+n).join(",")].join("|").toLowerCase();
+   if(!map.has(fingerprint))map.set(fingerprint,deck);
+  }
+ }
+ return [...map.values()].sort((a,b)=>String(b.date||"").localeCompare(String(a.date||""))||
+   (Number(a.placing)||999)-(Number(b.placing)||999));
+}
+async function competitiveFetch(source,query){
+ const url=(source==="yonko"?"/api/yonko-decks?":"/api/competitive-decks?")+query.toString();
+ const r=await fetch(url,{headers:{accept:"application/json"}});
+ const payload=await r.json().catch(()=>({}));
+ if(!r.ok)throw Error(payload.error||"Error consultando "+source);
+ return payload;
 }
 async function searchCompetitiveDecks(){
-  const byCard=state.deckDiscoverMode==="card";
-  const leader=byCard?"all":String(state.deckDiscoverLeader||"").trim();
-  const wantedCard=state.deckDiscoverCard;
-  const searchVersion=++competitiveDeckSearchVersion;
-  if(!byCard&&!leader)return notify("Selecciona un líder");
-  if(byCard&&!state.deckDiscoverCard)return notify("Selecciona una carta");
-  state.deckDiscoverDays=Number($("#competitiveDays")?.value||state.deckDiscoverDays||90);
-  state.deckDiscoverMinPlayers=Number($("#competitiveMinPlayers")?.value||state.deckDiscoverMinPlayers||32);
-  state.deckDiscoverLoading=true;state.deckDiscoverError="";state.deckDiscoverResults=[];state.deckDiscoverMeta=null;renderShell();
-  try{
-    const qs=new URLSearchParams({leader,days:String(state.deckDiscoverDays),minPlayers:String(state.deckDiscoverMinPlayers),limit:byCard?"40":"20"});
-    if(byCard)qs.set("card",wantedCard);
-    const r=await fetch("/api/competitive-decks?"+qs.toString(),{headers:{accept:"application/json"}});
-    const data=await r.json().catch(()=>({}));
-    if(searchVersion!==competitiveDeckSearchVersion)return;
-    if(!r.ok)throw Error(data.error||"No se pudieron cargar los mazos");
-    state.deckDiscoverResults=(Array.isArray(data.results)?data.results:[]).filter(x=>standardCompetitiveDeckPlayable(x.leaderId,x.cards)&&(!byCard||deckPrintedCode(x.leaderId)===state.deckDiscoverCard||Object.entries(x.cards||{}).some(([id,n])=>deckPrintedCode(id)===state.deckDiscoverCard&&Number(n)>0)));
-    state.deckDiscoverMeta={scannedEvents:Number(data.scannedEvents||0),availableMatches:Number(data.availableMatches||0),rateLimited:!!data.rateLimited};
-  }catch(e){
-    if(searchVersion===competitiveDeckSearchVersion)state.deckDiscoverError=e.message||"No se pudieron consultar los mazos competitivos.";
-  }finally{
-    if(searchVersion===competitiveDeckSearchVersion){state.deckDiscoverLoading=false;renderShell()}
+ const byCard=state.deckDiscoverMode==="card";
+ const leader=byCard?"all":String(state.deckDiscoverLeader||"").trim();
+ const wantedCard=state.deckDiscoverCard;
+ const format=state.deckDiscoverSource==="yonko"?state.deckDiscoverFormat:"en";
+ const source=state.deckDiscoverSource;
+ const searchVersion=++competitiveDeckSearchVersion;
+ if(!byCard&&!leader)return notify("Selecciona un líder");
+ if(byCard&&!wantedCard)return notify("Selecciona una carta");
+ state.deckDiscoverDays=Number($("#competitiveDays")?.value||state.deckDiscoverDays||90);
+ state.deckDiscoverMinPlayers=Number($("#competitiveMinPlayers")?.value||state.deckDiscoverMinPlayers||32);
+ state.deckDiscoverLoading=true;state.deckDiscoverError="";state.deckDiscoverResults=[];state.deckDiscoverMeta=null;renderShell();
+ try{
+  const query=new URLSearchParams({leader,days:String(state.deckDiscoverDays),limit:byCard?"40":"30"});
+  if(byCard)query.set("card",wantedCard);
+  const jobs=[];
+  if(source!=="yonko"){
+   const limitlessQuery=new URLSearchParams(query);
+   limitlessQuery.set("minPlayers",String(state.deckDiscoverMinPlayers));
+   jobs.push(competitiveFetch("limitless",limitlessQuery));
   }
+  if(source!=="limitless"){
+   const yonkoQuery=new URLSearchParams(query);
+   yonkoQuery.set("format",format);yonkoQuery.set("page","1");
+   jobs.push(competitiveFetch("yonko",yonkoQuery));
+  }
+  const settled=await Promise.allSettled(jobs);
+  if(searchVersion!==competitiveDeckSearchVersion)return;
+  const successful=settled.filter(x=>x.status==="fulfilled").map(x=>x.value);
+  if(!successful.length)throw Error(settled.map(x=>x.reason?.message||"Fuente no disponible").join(" · "));
+  state.deckDiscoverResults=competitiveDecksFromResponses(successful,wantedCard,byCard,format);
+  const yonko=successful.find(x=>x.source==="Yonko / One Piece Top Decks");
+  state.deckDiscoverMeta={
+   scannedEvents:successful.reduce((n,x)=>n+Number(x.scannedEvents||0),0),
+   rateLimited:successful.some(x=>!!x.rateLimited),
+   partial:settled.some(x=>x.status==="rejected")||successful.some(x=>!!x.partial),
+   hasMoreYonko:!!yonko?.hasMore,yonkoPage:1,
+   availableMatches:state.deckDiscoverResults.length
+  };
+ }catch(e){
+  if(searchVersion===competitiveDeckSearchVersion)state.deckDiscoverError=e.message||"No se pudieron consultar los mazos competitivos.";
+ }finally{
+  if(searchVersion===competitiveDeckSearchVersion){state.deckDiscoverLoading=false;renderShell()}
+ }
+}
+async function loadMoreYonkoDecks(){
+ if(state.deckDiscoverLoading||!state.deckDiscoverMeta?.hasMoreYonko)return;
+ const searchVersion=++competitiveDeckSearchVersion;
+ const page=(state.deckDiscoverMeta.yonkoPage||1)+1;
+ const byCard=state.deckDiscoverMode==="card",wantedCard=state.deckDiscoverCard;
+ const leader=byCard?"all":String(state.deckDiscoverLeader||"");
+ state.deckDiscoverLoading=true;renderShell();
+ try{
+  const query=new URLSearchParams({leader,days:String(state.deckDiscoverDays),format:state.deckDiscoverFormat,page:String(page),limit:"60"});
+  if(byCard)query.set("card",wantedCard);
+  const response=await competitiveFetch("yonko",query);
+  if(searchVersion!==competitiveDeckSearchVersion)return;
+  state.deckDiscoverResults=competitiveDecksFromResponses(
+   [{results:state.deckDiscoverResults},{results:response.results}],wantedCard,byCard,state.deckDiscoverFormat);
+  state.deckDiscoverMeta={...state.deckDiscoverMeta,yonkoPage:page,hasMoreYonko:!!response.hasMore,
+   partial:state.deckDiscoverMeta.partial||!!response.partial,
+   scannedEvents:state.deckDiscoverMeta.scannedEvents+Number(response.scannedEvents||0),
+   availableMatches:state.deckDiscoverResults.length};
+ }catch(e){if(searchVersion===competitiveDeckSearchVersion)notify("Yonko: "+e.message)}
+ finally{if(searchVersion===competitiveDeckSearchVersion){state.deckDiscoverLoading=false;renderShell()}}
 }
 function competitiveDraftName(result){
   // Tournament titles can be arbitrarily long; Supabase deck names are limited to 120.
@@ -1621,6 +1690,7 @@ function competitiveDraftName(result){
 }
 function openCompetitiveDeckPreview(index,origin="decks"){
   const result=state.deckDiscoverResults[Number(index)];if(!result)return;
+  if(result.format==="jp")return notify("Los mazos japoneses son solo para consulta.");
   if(!standardCompetitiveDeckPlayable(result.leaderId,result.cards))return notify("La lista ya no es legal en Standard.");
   // A refreshed session can have owned print IDs not yet present in the
   // catalog. Recreate their display entries without writing to Supabase.
@@ -1633,7 +1703,7 @@ function openCompetitiveDeckPreview(index,origin="decks"){
   const draft={
     id:"competitive-draft-"+crypto.randomUUID(),
     name:competitiveDraftName(result),
-    description:"Vista previa de Limitless. "+(result.player?"Jugador: "+result.player+". ":"")+(date?"Fecha: "+date+". ":"")+(result.sourceUrl||""),
+    description:"Vista previa de "+(result.source||"Limitless")+". "+(result.player?"Jugador: "+result.player+". ":"")+(date?"Fecha: "+date+". ":"")+(result.sourceUrl||""),
     leader:leaderCard.id,cards,colors:leaderCard.colors||[],owner_id:state.user?.id||null,
     updatedAt:new Date().toISOString(),draftCompetitive:true,draftDirty:false,
     competitiveSource:{source:result.source||"Limitless",url:result.sourceUrl||"",tournament:result.tournament||"",player:result.player||"",placing:result.placing||null,date:result.date||null,unresolved}
@@ -3020,6 +3090,16 @@ function bindShell(){
       state.deckPreviewOrigin="card-search";state.deckId=b.dataset.openCardDeck;
       state.deckLibrary=false;state.deckChoosingLeader=false;state.deckDiscover=false;
     }));
+    $("#competitiveSource")?.addEventListener("change",e=>{
+      competitiveDeckSearchVersion++;state.deckDiscoverSource=e.target.value;
+      state.deckDiscoverFormat="en";state.deckDiscoverResults=[];state.deckDiscoverMeta=null;
+      state.deckDiscoverError="";state.deckDiscoverLoading=false;renderShell();
+    });
+    $("#competitiveFormat")?.addEventListener("change",e=>{
+      competitiveDeckSearchVersion++;state.deckDiscoverFormat=e.target.value==="jp"?"jp":"en";
+      state.deckDiscoverResults=[];state.deckDiscoverMeta=null;state.deckDiscoverError="";state.deckDiscoverLoading=false;renderShell();
+    });
+    $("#loadMoreYonkoDecks")?.addEventListener("click",loadMoreYonkoDecks);
     $("#runCompetitiveSearch")?.addEventListener("click",searchCompetitiveDecks);
     $("#competitiveDays")?.addEventListener("change",e=>{state.deckDiscoverDays=Number(e.target.value)||90});
     $("#competitiveMinPlayers")?.addEventListener("change",e=>{state.deckDiscoverMinPlayers=Number(e.target.value)||32});
