@@ -47,6 +47,8 @@ export function combineMetas(tournaments,simulator){
    sourcesCount:Number(!!a)+Number(!!b),share:0};
  }).sort((a,b)=>b.games-a.games||a.id.localeCompare(b.id));
  const totalGames=num(tournaments?.games)+num(simulator?.games);
+ const leaderTotal=result.reduce((sum,x)=>sum+x.games,0);
+ for(const row of result)row.share=leaderTotal?round(100*row.games/leaderTotal):0;
  const matchups=(Array.isArray(tournaments?.matchups)?tournaments.matchups:[])
    .filter(x=>leaders.has(id(x.leader))&&leaders.has(id(x.opponent)))
    .map(x=>({...x,leader:id(x.leader),opponent:id(x.opponent),
