@@ -192,7 +192,8 @@ function view(){
       (community||!m.global?"":'<div class="meta-sample-note"><b>'+integer(d.includedEvents)+' torneos analizados</b> de '+
        integer(d.eligibleEvents)+' elegibles'+
        ((d.partial||d.truncated)?' · Muestra parcial':' · Cobertura completa de la selección')+
-       (d.rateLimited?' · Límite de la fuente':"")+'</div>')+
+       (d.rateLimited?' · Limitación temporal de Limitless':"")+
+       (d.sourcesAvailable===2?' · 2 fuentes combinadas':' · Falta una fuente')+'</div>')+
       '<div class="meta-tabs">'+
       nav("tiers","🏆 Tier list")+nav("matrix","▦ Matriz W/R")+nav("firstsecond","🥇 1.º / 2.º")+'</div>'+
       (m.section==="tiers"?tiers(d):m.section==="matrix"?matrix(d):firstSecondView(d))+
@@ -223,11 +224,18 @@ async function loadGlobal(force=false){
     if(!r.ok)throw Error(json.error||"No se pudo consultar Limitless (HTTP "+r.status+").");
     if(!Array.isArray(json.leaders)||!Array.isArray(json.matchups))
       throw Error("La respuesta del Meta no contiene estadísticas válidas.");
-    persistGlobalMeta(key,json);
+    const lastGood=m.global?.sourcesAvailable===2?m.global:
+      savedGlobalMeta(key)?.sourcesAvailable===2?savedGlobalMeta(key):null;
+    const shown=json.sourcesAvailable<2&&lastGood?{...lastGood,stale:true}:json;
+    if(json.sourcesAvailable===2||!lastGood)persistGlobalMeta(key,json);
     if(days===m.days&&format===m.format){
-      m.global=json;
-      m.globalRetryAfter=Date.now()+15*60000;
-      if(json.partial)m.error="";
+      m.global=shown;
+      m.globalRetryAfter=Date.now()+(json.sourcesAvailable===2?15*60000:45000);
+      m.error=json.sourcesAvailable<2?
+        (lastGood?"Mostrando el último meta combinado completo. ":
+        "El meta solo contiene los datos disponibles por ahora. ")+
+        "Limitless o OPlayTCG está temporalmente limitado.":
+        (json.sourceWarning||"");
     }
   }catch(e){
     if(days===m.days&&format===m.format){
