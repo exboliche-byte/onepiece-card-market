@@ -172,22 +172,36 @@ function ranking(d){
 }
 const nav=(value,label)=>'<button data-meta-section="'+value+'" class="'+(m.section===value?"active":"")+'">'+label+'</button>';
 function view(){
-  const community=m.scope==="community",d=active(),loading=community?m.communityLoading:m.loading,error=community?m.communityError:m.error;
-  const formats=[["auto","Formato más reciente"],["all","Todos los formatos"],...(m.global?.formats||[]).map(x=>[x,x])];
-  return '<div class="wrap meta-page"><div class="hero"><div><h1>⚔️ Meta</h1><p>Tier list, emparejamientos y W/R del One Piece Card Game.</p></div></div>'+
-    '<div class="meta-tabs"><button data-meta-scope="global" class="'+(!community?"active":"")+'">🌍 Global</button><button data-meta-scope="community" class="'+(community?"active":"")+'">👥 Comunidad MiAlbumOnePiece</button></div>'+
-    '<div class="meta-controls"><label>Período<select class="field" id="metaDays">'+[30,90,180,365].map(x=>'<option value="'+x+'"'+(m.days===x?" selected":"")+'>'+x+' días</option>').join("")+'</select></label>'+
-    (!community?'<label>Formato<select class="field" id="metaFormat">'+formats.map(([id,label])=>'<option value="'+esc(id)+'"'+(m.format===id?" selected":"")+'>'+esc(label)+'</option>').join("")+'</select></label>':"")+
-    '<button class="secondary btn" id="metaRefresh">↻ Actualizar</button></div>'+
-    (community?'<p class="meta-source">Los resultados de los torneos finalizados se incorporan automáticamente al meta de la comunidad. Solo publicamos estadísticas agregadas cuando hay suficiente muestra; nunca mostramos nombres, listas ni comentarios individuales.</p>':'<p class="meta-source">Fuente de torneos: <a href="https://play.limitlesstcg.com" target="_blank" rel="noopener">Limitless</a>. Puedes consultar también el meta independiente del simulador en <a href="https://oplaytcg.com/es/meta-stats" target="_blank" rel="noopener">OPlayTCG</a>; no se mezclan las muestras.</p>')+
-    (loading?'<div class="notice">Procesando resultados…</div>':"")+(error?'<div class="notice">'+esc(error)+'</div>':"")+
-    (d?'<p class="small">Actualizado '+esc(new Date(d.updatedAt||Date.now()).toLocaleString("es-ES"))+
-       (community?" · Datos de todos los torneos finalizados; las muestras pequeñas quedan ocultas":" · Formato: "+esc(d.formatUsed||"—")+(d.formatUsed==="all"?" · Formatos combinados":"")+(d.partial?" · Consulta parcial":"")+(d.stale?" · Última copia disponible":""))+'</p>'+
-      statCards(d)+'<div class="meta-tabs">'+nav("report","Informe contrastado")+nav("tiers","Tier list")+nav("matrix","Matriz W/R")+nav("matchups","Matchups · 1.º / 2.º")+nav("leaders","Ranking")+'</div>'+
-      (m.section==="report"?(window.renderMetaComparisonReport?.(d,m.independent,m.independentBusy)||"Informe no disponible"):
-  m.section==="tiers"?tiers(d):m.section==="matrix"?matrix(d):m.section==="matchups"?matchupTable(d):ranking(d))+
-      '<p class="meta-source">Solo se computan resultados identificados, sin inventar datos. Los tiers son orientativos, no predicciones oficiales.</p>':
-      (!loading?'<div class="notice">'+(community?"Todavía no hay estadísticas comunitarias con suficiente muestra para mostrarlas. Todos los torneos finalizados ya cuentan automáticamente.":"No hay datos disponibles por el momento.")+'</div>':""))+'</div>';
+ const community=m.scope==="community",d=active(),loading=community?m.communityLoading:m.loading,error=community?m.communityError:m.error;
+ const formats=[["auto","Formato más reciente"],["all","Todos los formatos"],...(m.global?.formats||[]).map(x=>[x,x])];
+ const top='<div class="wrap meta-page"><div class="hero"><div><h1>⚔️ Meta</h1>'+
+   '<p>Quién gana, contra quién y si importa salir primero.</p></div></div>'+
+   '<div class="meta-tabs"><button data-meta-scope="global" class="'+(!community?"active":"")+'">🌍 Global</button>'+
+   '<button data-meta-scope="community" class="'+(community?"active":"")+'">👥 Comunidad</button></div>'+
+   '<div class="meta-controls"><label>Período<select class="field" id="metaDays">'+
+    [30,90,180,365].map(x=>'<option value="'+x+'"'+(m.days===x?" selected":"")+'>'+x+' días</option>').join("")+
+   '</select></label>'+
+   (community?"":'<label>Formato<select class="field" id="metaFormat">'+formats.map(([id,label])=>
+     '<option value="'+esc(id)+'"'+(m.format===id?" selected":"")+'>'+esc(label)+'</option>').join("")+'</select></label>')+
+   '<button class="secondary btn" id="metaRefresh">↻ Actualizar</button></div>';
+ const contents=(loading?'<p class="small">Consultando datos actuales…</p>':"")+
+   (error?'<div class="notice">'+esc(error)+'</div>':"")+
+   (d?'<p class="small">Actualizado '+esc(new Date(d.updatedAt||Date.now()).toLocaleString("es-ES"))+
+       (!community?' · '+esc(d.formatUsed||"formato sin identificar"):"")+
+       (d.stale?' · copia anterior':"")+'</p>'+
+      statCards(d)+
+      (community?"":'<div class="meta-sample-note"><b>'+integer(d.includedEvents)+' torneos analizados</b> de '+
+       integer(d.eligibleEvents)+' elegibles'+
+       ((d.partial||d.truncated)?' · Muestra parcial':' · Cobertura completa de la selección')+
+       (d.rateLimited?' · Límite de la fuente':"")+'</div>')+
+      '<div class="meta-tabs">'+
+      nav("tiers","🏆 Tier list")+nav("matrix","▦ Matriz W/R")+nav("firstsecond","🥇 1.º / 2.º")+'</div>'+
+      (m.section==="tiers"?tiers(d):m.section==="matrix"?matrix(d):firstSecondView(d))+
+      '<p class="meta-source">🏆 Torneos: <a href="https://play.limitlesstcg.com" target="_blank" rel="noopener">Limitless</a>'+
+      ' · 🎮 Simulador: <a href="https://oplaytcg.com/es/meta-stats" target="_blank" rel="noopener">OPlayTCG</a>'+
+      '. Las muestras se muestran por separado.</p>':
+      (!loading?'<div class="notice">'+(community?"Sin suficiente muestra comunitaria todavía.":"Sin datos disponibles temporalmente.")+'</div>':""));
+ return top+contents+'</div>';
 }
 async function loadGlobal(force=false){
   const days=m.days,format=m.format,key=days+":"+format;
@@ -204,7 +218,7 @@ async function loadGlobal(force=false){
     const query=new URLSearchParams({days:String(days),format});
     if(force)query.set("refresh","1");
     const r=await fetch("/api/meta?"+query,{headers:{accept:"application/json"},
-      signal:AbortSignal.timeout(40000)});
+      signal:AbortSignal.timeout(59000)});
     const raw=await r.text();let json;
     try{json=JSON.parse(raw)}catch{throw Error("El Meta devolvió una respuesta no válida (HTTP "+r.status+").")}
     if(!r.ok)throw Error(json.error||"No se pudo consultar Limitless (HTTP "+r.status+").");
@@ -257,10 +271,15 @@ async function loadCommunity(force=false){
 function bind(){
   document.querySelectorAll("[data-meta-scope]").forEach(b=>b.onclick=()=>{m.scope=b.dataset.metaScope;m.leader="";renderShell()});
   document.querySelectorAll("[data-meta-section]").forEach(b=>b.onclick=()=>{m.section=b.dataset.metaSection;renderShell()});
-  document.querySelectorAll("[data-meta-leader]").forEach(b=>b.onclick=()=>{m.leader=b.dataset.metaLeader;m.section="matchups";renderShell()});
+  document.querySelectorAll("[data-meta-leader]").forEach(b=>b.onclick=()=>{m.leader=b.dataset.metaLeader;m.section="firstsecond";renderShell()});
   $("#metaDays")?.addEventListener("change",e=>{m.days=Number(e.target.value);m.global=null;m.community=null;renderShell()});
   $("#metaFormat")?.addEventListener("change",e=>{m.format=e.target.value;m.global=null;renderShell()});
   $("#metaLeaderSelect")?.addEventListener("change",e=>{m.leader=e.target.value;renderShell()});
+  $("#metaTurnLeader")?.addEventListener("change",e=>{m.leader=e.target.value;m.expanded=false;renderShell()});
+  $("#metaTurnSort")?.addEventListener("change",e=>{m.turnSort=e.target.value;renderShell()});
+  document.querySelectorAll("[data-meta-tiersource]").forEach(b=>b.onclick=()=>{
+    m.tierSource=b.dataset.metaTiersource;renderShell();
+  });
   $("#metaExpand")?.addEventListener("click",()=>{m.expanded=!m.expanded;renderShell()});
   $("#metaRefresh")?.addEventListener("click",()=>{
   if(m.scope==="global"){void loadGlobal(true);void loadIndependent(true)}
