@@ -315,38 +315,67 @@ function refreshControls(){
  const save=$("#photoSave");
  if(save)save.disabled=busy||!rows.some(r=>!r.omitted&&r.printId);
 }
-async function processFile(file){
- if(!file)return;
- if(!file.type.startsWith("image/")||file.size>MAX_FILE||file.size===0){tell("Selecciona una imagen JPG, PNG o WebP de hasta 22 MB.",true);return}
- const gen=++generation;workerStop();stopDetection();busy=true;regions=[];rows=[];
- tell("Analizando fotografía…");refreshControls();$("#photoPreview").hidden=true;rowList();
+async function analyzeRegions(layout=0){
+ if(!canvas||!active)return;
+ const gen=++generation;
+ stopDetection();workerStop();
+ regions=[];rows=[];busy=true;rowList();refreshControls();tell("Localizando cartas…");
  try{
-  canvas=await normalizeImage(file);
-  if(gen!==generation||!active)return;
+  if(layout>0)regions=layoutRegions(layout);
+  else{
+   try{regions=await detectionRegions(canvas)}
+   catch(error){if(gen===generation)tell("Detección automática no disponible. Usando encuadre de una carta.",true)}
+   if(!regions.length){
+    regions=layoutRegions(1);
+    tell("No se han encontrado bordes claros. Analizo la carta central; puedes elegir una distribución o dibujar recuadros.");
+   }
+  }
+  if(!active||gen!==generation)return;
   $("#photoPreview").hidden=false;drawPreview();
-  try{regions=await detectionRegions(canvas)}catch(error){
-   if(gen!==generation||!active)return;
-   regions=[];tell("Detección fallida: "+(error.message||error)+". Marca los recuadros manualmente.",true);
-   return;
+  let visualReady=false;
+  try{await workerStart();visualReady=workerReady}
+  catch(error){
+   if(!active||gen!==generation)return;
+   tell("El índice visual no está disponible. Selecciona cada carta por código o nombre; los recortes están listos.",true);
   }
-  if(gen!==generation||!active)return;
-  drawPreview();
-  if(!regions.length){
-   tell("No se han detectado rectángulos. Dibuja un recuadro alrededor de cada carta sobre la fotografía.",true);
-   return;
-  }
-  tell("Detectadas "+regions.length+" posibles cartas. Buscando coincidencias…");
-  await workerStart();
   for(let i=0;i<regions.length;i++){
    if(!active||gen!==generation)return;
-   tell("Identificando carta "+(i+1)+" de "+regions.length+"…");
-   try{rows.push(selectedRow(regions[i],await recognize(regions[i])))}catch(e){rows.push(selectedRow(regions[i]))}
+   tell("Analizando carta "+(i+1)+" de "+regions.length+"…");
+   let ranked=[];
+   if(visualReady)try{ranked=await recognize(regions[i])}catch(error){console.warn("Lectura de recorte",error)}
+   if(!active||gen!==generation)return;
+   rows.push(selectedRow(regions[i],ranked));
    rowList();
+   // Give the mobile browser an opportunity to paint progress between cards.
+   if(i%2===1)await new Promise(resolve=>setTimeout(resolve,0));
   }
-  tell("Detectadas "+regions.length+" zonas. Revisa cada carta y su impresión antes de guardar.");
- }catch(e){
-  if(active&&gen===generation)tell("Error al analizar la fotografía: "+(e.message||e),true);
- }finally{if(active&&gen===generation){busy=false;refreshControls();rowList();drawPreview()}}
+  const identified=rows.filter(r=>r.selectedCode).length;
+  tell("Foto analizada: "+rows.length+" cartas, "+identified+" identificadas con confianza. Comprueba las demás y sus impresiones.");
+ }catch(error){
+  if(active&&gen===generation)tell("No se ha podido procesar la imagen: "+String(error.message||error),true);
+ }finally{
+  if(active&&gen===generation){busy=false;refreshControls();rowList();drawPreview()}
+ }
+}
+async function processFile(file){
+ if(!file)return;
+ if(!file.type.startsWith("image/")||file.size>MAX_FILE||file.size===0){
+  tell("Selecciona una imagen JPG, PNG o WebP de hasta 22 MB.",true);return
+ }
+ const gen=++generation;
+ stopDetection();workerStop();busy=true;regions=[];rows=[];canvas=null;
+ tell("Abriendo imagen…");refreshControls();$("#photoPreview").hidden=true;rowList();
+ try{
+  const source=await normalizeImage(file);
+  if(!active||gen!==generation)return;
+  canvas=source;
+  const chosen=Number($("#photoLayout")?.value||0);
+  await analyzeRegions(chosen);
+ }catch(error){
+  if(active&&gen===generation)tell("No se puede abrir la imagen: "+String(error.message||error),true);
+ }finally{
+  if(active&&busy&&gen===generation){busy=false;refreshControls()}
+ }
 }
 async function saveCards(){
  if(busy||!active||!state.user?.id||!state.collectionReady)return;
