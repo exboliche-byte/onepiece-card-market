@@ -403,7 +403,8 @@ function bind(){
     document.querySelectorAll("[data-tools-preview]").forEach(b=>b.onclick=()=>{
       const r=h.list[Number(b.dataset.toolsPreview)];if(!r)return;
       state.deckDiscoverResults=[r];state.deckDiscover=true;state.deckDiscoverLeader=printed(r.leaderId);
-      state.tab="decks";openCompetitiveDeckPreview(0);
+      state.deckPreviewScrollY=window.scrollY||0;
+      openCompetitiveDeckPreview(0,"deck-completion");
     });
   }
 
