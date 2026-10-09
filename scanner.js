@@ -860,7 +860,7 @@ async function open(){
     '<button id="scanFlip">Cambiar cámara</button></div>'+
     '<div class="scanActions">'+
     '<button id="scanCandidates" hidden disabled>Ver posibles cartas</button><button id="scanRetry">Reiniciar motores</button><button id="scanResume">Continuar</button>'+
-    '<button id="scanManual">Buscar manualmente</button><button id="scanPhoto">📷 Escanear foto</button><button id="scanUndo" hidden>↶ Deshacer</button></div></div>'+
+    '<button id="scanManual">Buscar manualmente</button><button id="scanUndo" hidden>↶ Deshacer</button></div></div>'+
     '<div class="scanHelp">Llena el recuadro con la carta y evita reflejos. Confirma siempre la impresión.</div>'+
     '</div>';
   document.body.appendChild(p);
@@ -873,27 +873,6 @@ async function open(){
   $("#scanCandidates").onclick=()=>showVisualChoices();
   $("#scanRetry").onclick=()=>{if(running)void startRecognition()};
   $("#scanManual").onclick=manual;
-  $("#scanPhoto").onclick=()=>{
-    const previousLock=locked;
-    window.OnePiecePhotoScanner?.open();
-    if(!document.querySelector("#photoScanPanel"))return;
-    cancelAnimationFrame(scanTimer);locked=true;
-    // Liberar la cámara: algunos móviles no permiten fotografiar con el vídeo activo.
-    if(camera)camera.pause();
-    if(stream){stream.getTracks().forEach(t=>t.stop());stream=null}
-    track=null;if(camera)camera.srcObject=null;
-    window.addEventListener("onepiece:photo-closed",()=>{
-      if(!running)return;
-      locked=previousLock;
-      const restoreCamera=()=>{
-        if(!running||locked||!panel()||document.querySelector("#photoScanPanel"))return;
-        if(cameraStarting){setTimeout(restoreCamera,120);return}
-        if(!stream?.active)void startCamera(session);
-        else camera?.play().then(plan).catch(()=>void startCamera(session));
-      };
-      if(!locked)restoreCamera();
-    },{once:true});
-  };
   $("#scanUndo").onclick=()=>void undoLastSavedScan();
   $("#scanTorch").onclick=toggleTorch;
   $("#scanFlip").onclick=switchCamera;
@@ -936,15 +915,6 @@ function close({fromHistory=false}={}){
 }
 // Captura el Atrás antes de que la navegación del álbum cambie de vista.
 window.addEventListener("popstate",event=>{
-  if(document.querySelector("#photoScanPanel")){
-    event.stopImmediatePropagation();
-    window.OnePiecePhotoScanner?.close();
-    // Back consumes the scanner history entry: restore it for the next Back.
-    if(scannerHistoryActive){
-      try{history.pushState({...event.state,mialbumScanner:true},"",location.href)}catch(error){console.warn("Historial escáner",error)}
-    }
-    return;
-  }
   if(!scannerHistoryActive||!panel())return;
   event.stopImmediatePropagation();
   close({fromHistory:true});
