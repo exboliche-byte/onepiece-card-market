@@ -14,8 +14,6 @@ let scannerHistoryActive=false;
 let lastCode="",lastSeenAt=0,repeatCount=0,attempts=0,shot=null,activeHit=null;
 let torch=false,facing="environment",cameraStarting=false,resizeWatcher=null,wakeLock=null;
 let preferredCameraId="",availableCameras=[];
-let autoAddEnabled=false,autoAddTimer=null,autoAddTicker=null,autoAddCandidate=null;
-let autoWaitForChange="",autoMissingFrames=0;
 let lastScannedPrintId="";
 let lastSavedScan=null,undoBusy=false;
 let batchEnabled=false,batchQueue=new Map(),batchHeld="",batchBlank=0,batchLastAt=0,batchSaving=false;
@@ -55,64 +53,15 @@ async function undoLastSavedScan(){
  }catch(e){status("No se pudo deshacer: "+e.message)}
  finally{undoBusy=false;if(b)b.disabled=false}
 }
-function cancelAutoCountdown(){
-  if(autoAddTimer!==null){clearTimeout(autoAddTimer);autoAddTimer=null}
-  if(autoAddTicker!==null){clearInterval(autoAddTicker);autoAddTicker=null}
-  const countdown=$("#scanAutoCountdown");
-  if(countdown){countdown.hidden=true;countdown.textContent=""}
-}
-function updateAutoControls(){
-  const toggle=$("#scanAutoToggle"),stop=$("#scanAutoStop");
-  if(toggle)toggle.checked=autoAddEnabled;
-  if(stop)stop.hidden=!autoAddEnabled;
-  batchUI();
-}
-function stopAutoAdding(){
-  autoAddEnabled=false;
-  autoAddCandidate=null;
-  cancelAutoCountdown();
-  updateAutoControls();
-}
-function startAutoCountdown(){
-  cancelAutoCountdown();
-  const candidate=autoAddCandidate;
-  if(!autoAddEnabled||!candidate||!running||!locked||document.hidden||session!==candidate.session)return;
-  const target=$("#scanVariant"),countdown=$("#scanAutoCountdown");
-  if(!target||!countdown||target.value!==candidate.printId)return;
-  const end=Date.now()+5000;
-  countdown.hidden=false;
-  const update=()=>{
-    const remaining=Math.max(0,Math.ceil((end-Date.now())/1000));
-    countdown.textContent="Añadiendo 1 copia de "+candidate.printId+" en "+remaining+" s…";
-  };
-  update();
-  autoAddTicker=setInterval(update,200);
-  autoAddTimer=setTimeout(()=>{
-    cancelAutoCountdown();
-    if(!autoAddEnabled||autoAddCandidate!==candidate||!running||!locked||
-       document.hidden||session!==candidate.session||$("#scanVariant")?.value!==candidate.printId)return;
-    autoAddCandidate=null; // Un fallo de red no provoca reintentos automáticos.
-    void candidate.save();
-  },5000);
-}
-function setAutoAdding(value){
-  autoAddEnabled=!!value;
-  if(!autoAddEnabled){autoAddCandidate=null;cancelAutoCountdown()}
-  updateAutoControls();
-  if(autoAddEnabled)startAutoCountdown();
-}
-
 function batchTotal(){return [...batchQueue.values()].reduce((a,r)=>a+r.count,0)}
 function batchUI(){
- const t=$("#scanBatchToggle"),bar=$("#scanBatchBar"),auto=$("#scanAutoToggle"),counter=$("#scanBatchCount"),hint=$("#scanBatchHint");
- if(t){t.checked=batchEnabled;t.disabled=autoAddEnabled}
- if(auto)auto.disabled=batchEnabled;
+ const t=$("#scanBatchToggle"),bar=$("#scanBatchBar"),counter=$("#scanBatchCount"),hint=$("#scanBatchHint");
+ if(t)t.checked=batchEnabled;
  if(bar)bar.hidden=!batchEnabled&&!batchQueue.size;
  if(counter)counter.textContent=batchTotal()+" cartas · "+batchQueue.size+" referencias";
  if(hint)hint.textContent=batchQueue.size?"Última: "+[...batchQueue.values()].at(-1).code+" · separa las cartas iguales antes de repetir":"Pasa una carta, retírala y pasa la siguiente";
 }
 function setBatch(enabled){
- if(enabled&&autoAddEnabled)return;
  batchEnabled=!!enabled;batchHeld="";batchBlank=0;recentVisualMatches=[];
  batchUI();
  if(!batchEnabled&&batchQueue.size)batchReview();
@@ -208,11 +157,7 @@ style.textContent=[
 "#scanPanel .scanDecision{position:absolute;z-index:10;left:10px;right:10px;bottom:calc(env(safe-area-inset-bottom,0px) + 10px);max-height:calc(100% - env(safe-area-inset-top,0px) - 158px);overflow-y:auto;overscroll-behavior:contain;background:#0d1522fc;border:1px solid #ffd447;border-radius:13px;padding:13px 12px 18px;box-shadow:0 8px 28px #000d;touch-action:pan-y}",
 "#scanPanel .scanAutoBar{position:absolute;z-index:12;top:calc(env(safe-area-inset-top,0px) + 62px);left:10px;right:10px;display:flex;flex-direction:column;gap:5px;align-items:stretch;padding:7px 10px;background:#080b11e8;border-radius:11px;border:1px solid #526279}",
 "#scanPanel .scanAutoBar label{display:flex;align-items:center;justify-content:center;gap:9px;font-weight:700;font-size:13px;cursor:pointer}",
-"#scanPanel #scanAutoToggle{width:19px;height:19px;accent-color:#ffd447;flex:none}",
-"#scanPanel #scanAutoStop{display:block;width:100%;min-height:54px;font-size:18px;font-weight:900;background:#c52332;border:2px solid #ff7b87;color:#fff;letter-spacing:.02em}",
-"#scanPanel #scanAutoStop[hidden]{display:none}",
-"#scanPanel .scanAutoCountdown{font-size:16px;font-weight:850;padding:10px;margin:10px 0;color:#161616;background:#ffd447;border-radius:9px;text-align:center}",
-"#scanPanel .scanAutoCountdown[hidden]{display:none}",
+"#scanPanel #scanBatchToggle{width:19px;height:19px;accent-color:#ffd447;flex:none}",
 "#scanPanel .scanOwnedLive{border:1px solid #5e855f;background:#102719;color:#d5ffdd;border-radius:9px;padding:8px 10px;font-size:14px;text-align:center;font-weight:850}",
 "#scanPanel .scanOwnedLive[hidden]{display:none}",
 "#scanPanel .scanCardPrice{margin:10px 0;padding:10px 12px;border:1px solid #796a37;border-radius:10px;background:#2b2514;color:#ffe18c;font-size:17px;font-weight:850;text-align:center}",
@@ -433,18 +378,6 @@ function handleVisualResults(ranked){
        best.score<=92&&best.art<=101)batchCapture(known.get(id));
    return;
   }
-  // Una misma carta que sigue bajo la cámara no se contabiliza de nuevo.
-  // Rearmar tras otra carta o 12 fotogramas sin ninguna coincidencia válida.
-  if(autoWaitForChange){
-    if(!id){
-      if(++autoMissingFrames>=12){
-        autoWaitForChange="";autoMissingFrames=0;recentVisualMatches=[];
-      }
-    }else{
-      autoMissingFrames=0;
-      if(id===autoWaitForChange)return;
-    }
-  }
   if(!id){
     if(attempts%4===0)status("Buscando ilustración. Alinea los cuatro bordes y evita reflejos.");
     return;
@@ -453,9 +386,6 @@ function handleVisualResults(ranked){
   if(found>=3){
     const card=known.get(id),code=idBase(id);
     if(!card)return;
-    if(autoWaitForChange&&id!==autoWaitForChange){
-      autoWaitForChange="";autoMissingFrames=0;
-    }
     shot=snapshot(true);
     show({card,code,variants:cardByCode(code),
       source:"Coincidencia visual (3 de las últimas 10 capturas)",confidence:"visual"});
@@ -505,7 +435,7 @@ async function scanOCR(){
 function showVisualChoices(heading="Posibles cartas según la ilustración"){
   if(!running||!visualResults.length)return;
   if(batchEnabled){batchReview();return}
-  autoAddCandidate=null;cancelAutoCountdown();updateScanCopiesLabel(null);
+  updateScanCopiesLabel(null);
   locked=true;cancelAnimationFrame(scanTimer);
   shot=snapshot(true);
   panel()?.classList.add("locked");
@@ -535,13 +465,9 @@ function showVisualChoices(heading="Posibles cartas según la ilustración"){
 }
 function ownedCount(id){return Number(qty(id)||0)}
 function updateScanCopiesLabel(card){
-  const count=card?ownedCount(card.id):null;
-  const add=$("#scanAddOne"),stop=$("#scanAutoStop");
-  if(add)add.textContent=card?"+1 y continuar · Ya tienes "+count:"+1 y continuar";
-  if(stop){
-    stop.textContent=card?"⏹ PARAR AUTOMÁTICO · Tienes "+count+" copia(s) de "+card.id:
-      "⏹ PARAR AÑADIDO AUTOMÁTICO";
-  }
+ const count=card?ownedCount(card.id):null;
+ const add=$("#scanAddOne");
+ if(add)add.textContent=card?"+1 y continuar · Ya tienes "+count:"+1 y continuar";
 }
 // Actualizar la ficha y el contador persistente sin reiniciar el escáner.
 function refreshScannerCopies(changedId){
@@ -611,7 +537,7 @@ function chooseVariant(variants,selected){
 }
 function showNameChoices(hit){
   if(!running||!hit?.cards?.length)return;
-  autoAddCandidate=null;cancelAutoCountdown();updateScanCopiesLabel(null);
+  updateScanCopiesLabel(null);
   locked=true;cancelAnimationFrame(scanTimer);
   panel()?.classList.add("locked");
   const still=document.createElement("img");still.className="scanFreeze";still.src=shot?.still||"";
@@ -636,7 +562,7 @@ function showNameChoices(hit){
 }
 function show(hit){
   if(!running||!hit?.card)return;
-  autoAddCandidate=null;cancelAutoCountdown();
+  
   // La búsqueda manual respeta la versión elegida expresamente;
   // todos los reconocimientos automáticos y candidatos visuales van a BASE.
   const isManualSearch=hit.source==="Búsqueda manual";
@@ -661,7 +587,6 @@ function show(hit){
     '<div class="small" id="scanGroupCount">Tienes '+owned+' copias de esta carta · '+Math.max(0,limit-owned)+' para el playset</div></div></div>'+
     '<div class="scanCardPrice" id="scanCardPrice" aria-live="polite">Consultando precio…</div>'+
     '<p class="small">Confirma la impresión. Las paralelas y reimpresiones comparten código y no son intercambiables.</p>'+
-    '<div id="scanAutoCountdown" class="scanAutoCountdown" hidden aria-live="polite"></div>'+
     '<select id="scanVariant">'+options+'</select><div id="scanExactCount" class="small"></div>'+
     '<div class="scanChoiceButtons"><button class="primary" id="scanAddOne">+1 y continuar</button>'+
     '<input type="number" min="1" max="99" value="2" id="scanQuantity" aria-label="Número de copias">'+
@@ -669,14 +594,13 @@ function show(hit){
     '<div class="scanChoiceButtons"><button id="scanDiscard">Descartar y seguir</button><button id="scanSearchAgain">Buscar otra carta</button></div>';
   const selected=()=>variants.find(c=>c.id===$("#scanVariant")?.value);
   $("#scanVariant").onchange=()=>{
-    autoAddCandidate=null;cancelAutoCountdown(); // Cambiar impresión exige confirmación manual.
-    chooseVariant(variants);
+     chooseVariant(variants);
   };
   chooseVariant(variants);
   let saving=false;
-  const save=async (howMany,automatic=false)=>{
+  const save=async howMany=>{
     if(saving)return;
-    autoAddCandidate=null;cancelAutoCountdown();
+    
     if(!state.user||!state.collectionReady||!state.sb){
       status("Inicia sesión para guardar en la colección.");return;
     }
@@ -697,7 +621,6 @@ function show(hit){
     if(!ok){status("No se ha confirmado el guardado en Supabase. No se ha añadido.");return}
     lastSavedScan={id:card.id,userId:state.user.id,before,after,amount:after-before};
     updateUndoButton();
-    if(automatic){autoWaitForChange=idBase(card.id);autoMissingFrames=0}
     resume();
     status("Guardadas "+(after-before)+" copia(s) de "+card.id+". Escaneando de nuevo.");
   };
@@ -705,15 +628,10 @@ function show(hit){
   $("#scanAddMany").onclick=()=>void save($("#scanQuantity").value);
   $("#scanDiscard").onclick=resume;
   $("#scanSearchAgain").onclick=manual;
-  // Solo coincidencias visuales, nunca una búsqueda manual, OCR dudoso o paralela adivinada.
-  if(hit.confidence==="visual"&&variants.some(c=>c.id===hit.selectedId)){
-    autoAddCandidate={printId:hit.selectedId,session,save:()=>save(1,true)};
-    startAutoCountdown();
-  }
   status("Carta detectada. Comprueba la versión antes de guardar.");
 }
 function releaseFreeze(){
-  autoAddCandidate=null;cancelAutoCountdown();updateScanCopiesLabel(null);
+  updateScanCopiesLabel(null);
   locked=false;panel()?.classList.remove("locked");
   $(".scanFreeze")?.remove();if(camera)camera.style.visibility="";
   const area=$("#scanDecision");if(area){area.hidden=true;area.replaceChildren()}
@@ -727,7 +645,7 @@ function resume(){
 }
 function manual(){
   if(!running)return;
-  autoAddCandidate=null;cancelAutoCountdown();
+  
   session++;locked=true;cancelAnimationFrame(scanTimer);
   const area=$("#scanDecision");area.hidden=false;
   area.innerHTML='<b>Buscar carta manualmente</b><p class="small">Introduce el código o nombre para elegir una impresión.</p>'+
@@ -918,15 +836,13 @@ async function open(){
   if(!state.cards?.length){alert("El catálogo aún no ha terminado de cargar.");return}
   running=true;locked=false;processing=false;attempts=0;lastCode="";repeatCount=0;session++;
   batchEnabled=false;batchQueue.clear();batchHeld="";batchBlank=0;batchLastAt=0;
-  stopAutoAdding();autoWaitForChange="";autoMissingFrames=0;lastScannedPrintId="";lastSavedScan=null;
+  lastScannedPrintId="";lastSavedScan=null;
   const turn=session;
   const p=document.createElement("section");p.id="scanPanel";
   p.innerHTML='<div class="scanLayout">'+
     '<div class="scanTop"><h2>Escáner visual · One Piece</h2><button id="scanClose">✕ Cerrar</button></div>'+
     '<div class="scanAutoBar"><label><input type="checkbox" id="scanBatchToggle"> Escaneo continuo · varias cartas sin detenerse</label>'+ 
     '<div class="scanBatchBar" id="scanBatchBar" hidden><b id="scanBatchCount">0 cartas</b><span id="scanBatchHint"></span><button id="scanBatchReview" type="button">Revisar y guardar</button></div>'+ 
-    '<label><input type="checkbox" id="scanAutoToggle"> Añadir 1 copia automáticamente tras 5 s</label>'+
-    '<button type="button" id="scanAutoStop" hidden>⏹ PARAR AÑADIDO AUTOMÁTICO</button>'+
     '<div class="scanOwnedLive" id="scanOwnedLive" role="status" aria-live="polite" hidden></div></div>'+
     '<div id="scanStatus" role="status" aria-live="off"></div>'+
     '<div id="scanHint">Ilustraciones + OCR auxiliar · sin servicios de pago</div>'+
@@ -945,11 +861,9 @@ async function open(){
   document.body.appendChild(p);
   camera=$(".scanStage video");
   $("#scanClose").onclick=()=>close();
-  $("#scanAutoToggle").onchange=e=>setAutoAdding(e.target.checked);
   $("#scanBatchToggle").onchange=e=>setBatch(e.target.checked);
   $("#scanBatchReview").onclick=batchReview;
-  $("#scanAutoStop").onclick=stopAutoAdding;
-  updateAutoControls();
+  batchUI();
   $("#scanResume").onclick=resume;
   $("#scanCandidates").onclick=()=>showVisualChoices();
   $("#scanRetry").onclick=()=>{if(running)void startRecognition()};
@@ -981,7 +895,7 @@ function close({fromHistory=false}={}){
     return;
   }
   scannerHistoryActive=false;
-  stopAutoAdding();autoWaitForChange="";autoMissingFrames=0;lastScannedPrintId="";lastSavedScan=null;
+  lastScannedPrintId="";lastSavedScan=null;
   batchEnabled=false;batchQueue.clear();batchHeld="";batchBlank=0;
   running=false;locked=false;session++;
   cancelAnimationFrame(scanTimer);scanTimer=null;
@@ -1003,11 +917,8 @@ window.addEventListener("popstate",event=>{
 document.addEventListener("visibilitychange",()=>{
   if(!running)return;
   if(document.hidden){
-    cancelAutoCountdown();
     if(!locked)cancelAnimationFrame(scanTimer);
-  }else if(locked){
-    startAutoCountdown(); // Volver a disponer de 5 s tras regresar a la pestaña.
-  }else{
+  }else if(!locked){
     camera?.play()?.catch(()=>{});plan();
   }
 });
