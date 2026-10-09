@@ -1903,7 +1903,7 @@ function openDeckImportDialog(){
   if(!state.user)return notify("Inicia sesión para importar mazos");
   closeDeckListModal();
   const m=document.createElement("div");m.className="modalback deck-list-modal";
-  m.innerHTML='<div class="modal"><div class="sectionhead"><h2>Importar mazo desde lista</h2><button class="close" data-list-close>×</button></div><p class="muted">Pega una lista con una carta por línea. Ejemplo: <b>1 OP01-001</b> para el líder y <b>4 OP01-002</b> para las cartas.</p><input id="deckListName" class="field" placeholder="Nombre del mazo" value="Mazo importado"><textarea id="deckListInput" class="field" rows="16" style="margin-top:8px" placeholder="1 OP01-001\n4 OP01-002\n4 OP01-003"></textarea><div class="inline-actions" style="margin-top:10px"><button class="secondary btn" data-list-close>Cancelar</button><button class="primary btn" id="importDeckListConfirm">Importar lista</button></div></div>';
+  m.innerHTML='<div class="modal"><div class="sectionhead"><h2>Importar mazo desde lista</h2><button class="close" data-list-close>×</button></div><p class="muted">Pega una lista por líneas (ejemplo: <b>1 OP01-001</b> y <b>4 OP01-002</b>) o pega directamente la URL de un mazo de <b>One Piece Top Decks</b> (enlace <code>deckgen</code>).</p><input id="deckListName" class="field" placeholder="Nombre del mazo" value="Mazo importado"><textarea id="deckListInput" class="field" rows="16" style="margin-top:8px" placeholder="1 OP01-001\n4 OP01-002\n4 OP01-003"></textarea><div class="inline-actions" style="margin-top:10px"><button class="secondary btn" data-list-close>Cancelar</button><button class="primary btn" id="importDeckListConfirm">Importar lista</button></div></div>';
   document.body.appendChild(m);
   m.querySelectorAll("[data-list-close]").forEach(b=>b.onclick=closeDeckListModal);
   m.addEventListener("click",e=>{if(e.target===m)closeDeckListModal()});
@@ -2089,9 +2089,51 @@ function deckCreationProblem(leader,cards={}){
   return "";
 }
 
+// The deckgen URL contains the entire list. No API request or bot protection bypass.
+function parseTopDecksLink(raw){
+ const source=String(raw||"").trim();
+ if(source.length>10000)throw Error("El enlace es demasiado largo.");
+ let url;
+ try{url=new URL(source)}catch{throw Error("Pega la URL completa del mazo.")}
+ if(url.protocol!=="https:"||!["onepiecetopdecks.com","www.onepiecetopdecks.com"].includes(url.hostname)||
+    !/^\/deck-list\/[^?#]+\/deckgen\/?$/i.test(url.pathname))
+   throw Error("El enlace debe ser de onepiecetopdecks.com/deck-list/…/deckgen/.");
+ const parts=String(url.searchParams.get("dg")||"").split(/a/i);
+ if(parts.length<2||parts.length>51)throw Error("La URL no contiene un mazo válido.");
+ const cards=Object.create(null);
+ let leader="";
+ for(let i=0;i<parts.length;i++){
+  const m=parts[i].toUpperCase().match(/^(\d{1,2})N((?:(?:OP|ST|EB|PRB)\d{2}|P)-\d{3})$/);
+  if(!m)throw Error("Hay un código de carta incorrecto en el enlace.");
+  const q=Number(m[1]),id=m[2];
+  if(q<1||q>50)throw Error("Cantidad de carta no válida.");
+  if(i===0){if(q!==1)throw Error("El líder debe tener una copia.");leader=id}
+  else cards[id]=(cards[id]||0)+q;
+ }
+ if(Object.values(cards).reduce((total,q)=>total+q,0)!==50)
+   throw Error("El mazo del enlace no contiene 50 cartas más el líder.");
+ return {
+  leader,cards,
+  name:String(url.searchParams.get("dn")||"Mazo Top Decks").trim().slice(0,120),
+  description:"Importado desde One Piece Top Decks: "+source.slice(0,1700)
+ };
+}
 function importDeckText(t,n=""){
   if(!state.user){notify("Inicia sesión para importar mazos");return false}
   let name=String(n||"Mazo importado").replace(/\.[^.]+$/,"")||"Mazo importado",description="",leader="",cards={};
+  const input=String(t||"").trim();
+  if(/^https?:\/\/(?:www\.)?onepiecetopdecks\.com\//i.test(input)){
+    let linked;
+    try{linked=parseTopDecksLink(input)}
+    catch(error){notify("Enlace Top Decks: "+error.message);return false}
+    const missing=[linked.leader,...Object.keys(linked.cards)].filter(id=>!resolveDeckImportCard(id));
+    if(missing.length){
+      notify("No se puede importar: faltan "+missing.length+" cartas en el catálogo ("+missing.slice(0,3).join(", ")+").");
+      return false;
+    }
+    if(name!=="Mazo importado")linked.name=name;
+    t=JSON.stringify(linked);
+  }
   try{
     const p=JSON.parse(t);
     if(p&&typeof p==="object"){
