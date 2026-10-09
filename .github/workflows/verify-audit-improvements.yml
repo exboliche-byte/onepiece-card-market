@@ -28,4 +28,5 @@ jobs:
       - name: Validate database migration scripts
         run: |
           test -s supabase/migrations/20261009_atomic_persistence.sql
-          grep -q 'SECURITY INVOKER' supabase/migrations/20261009_atomic_persistence.sql
+          grep -q 'CREATE OR REPLACE FUNCTION public.deck_save_atomic' supabase/migrations/20261009_atomic_persistence.sql
+          ! grep -qi 'SECURITY DEFINER' supabase/migrations/20261009_atomic_persistence.sql
