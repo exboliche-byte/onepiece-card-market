@@ -17,6 +17,7 @@ let preferredCameraId="",availableCameras=[];
 let lastScannedPrintId="";
 let lastSavedScan=null,undoBusy=false;
 let batchEnabled=false,batchQueue=new Map(),batchHeld="",batchBlank=0,batchLastAt=0,batchSaving=false;
+const batchPriceLoads=new Map();
 const $=q=>document.querySelector("#scanPanel "+q);
 const panel=()=>document.querySelector("#scanPanel");
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&#39;","'":"&#39;"}[c]));
@@ -79,6 +80,41 @@ function batchReview(){
  locked=true;cancelAnimationFrame(scanTimer);panel()?.classList.add("locked");
  batchRender();
 }
+function batchOwnedText(card){
+ const count=card?ownedCount(card.id):0;
+ return "Ya tienes: "+count+" copia"+(count===1?"":"s");
+}
+function batchUnitPriceText(card,loading=false){
+ const value=card?priceOf(card):null;
+ return "Precio por copia: "+(value===null?(loading?"consultando…":"no disponible"):money(value));
+}
+async function updateBatchRowDetails(el,card){
+ if(!el||!card)return;
+ const owned=el.querySelector(".scanBatchOwned"),price=el.querySelector(".scanBatchPrice");
+ if(owned)owned.textContent=batchOwnedText(card);
+ if(!price)return;
+ const value=priceOf(card);
+ price.textContent=batchUnitPriceText(card,value===null);
+ if(value!==null)return;
+ let pending=batchPriceLoads.get(card.id);
+ if(!pending){
+  pending=ensurePrices([card.id]).catch(error=>console.warn("Precio escáner continuo",error))
+    .finally(()=>batchPriceLoads.delete(card.id));
+  batchPriceLoads.set(card.id,pending);
+ }
+ await pending;
+ if(!running||!el.isConnected||el.querySelector(".scanBatchVariant")?.value!==card.id)return;
+ price.textContent=batchUnitPriceText(card);
+}
+function refreshBatchOwnedCopies(changedId){
+ $("#scanDecision")?.querySelectorAll(".scanBatchItem").forEach(el=>{
+  const card=state.cards.find(c=>c.id===el.querySelector(".scanBatchVariant")?.value);
+  if(card&&(!changedId||changedId===card.id)){
+   const label=el.querySelector(".scanBatchOwned");
+   if(label)label.textContent=batchOwnedText(card);
+  }
+ });
+}
 function batchRender(){
  const area=$("#scanDecision");if(!area)return;
  area.hidden=false;
@@ -91,7 +127,9 @@ function batchRender(){
  '<div class="scanBatchInfo"><b>'+esc(c?.name||row.code)+'</b><small>'+esc(row.code)+'</small>'+
  '<select class="scanBatchVariant" aria-label="Impresión de '+esc(row.code)+'">'+variants.map(v=>
  '<option value="'+esc(v.id)+'"'+(v.id===row.printId?' selected':'')+'>'+esc(v.id)+' · '+esc(variantKindOf(v))+' · '+esc(printSetOf(v))+'</option>').join("")+'</select>'+
- '<div class="scanBatchEdit"><label>Copias <input class="scanBatchQty" type="number" min="1" max="99" value="'+row.count+'"></label>'+
+ '<div class="scanBatchCardMeta"><span class="scanBatchOwned">'+esc(batchOwnedText(c))+'</span>'+
+ '<span class="scanBatchPrice">'+esc(batchUnitPriceText(c,!!c&&priceOf(c)===null))+'</span></div>'+
+ '<div class="scanBatchEdit"><label>A añadir <input class="scanBatchQty" type="number" min="1" max="99" value="'+row.count+'"></label>'+
  '<button type="button" class="scanBatchRemove">Quitar</button></div></div></div>';
  }).join("")+'</div>'+
  '<div class="scanChoiceButtons"><button class="primary" id="scanBatchSave"'+(!rows.length?' disabled':'')+'>Guardar '+batchTotal()+' en mi colección</button></div>'+
@@ -102,7 +140,10 @@ function batchRender(){
    if(cardByCode(row.code).some(c=>c.id===e.target.value))row.printId=e.target.value;
    const c=state.cards.find(c=>c.id===row.printId),img=el.querySelector("img");
    if(c&&img)img.src=imageCdnUrl(c);
+   if(c)void updateBatchRowDetails(el,c);
   };
+  const current=cardByCode(row.code).find(c=>c.id===row.printId);
+  if(current)void updateBatchRowDetails(el,current);
   el.querySelector(".scanBatchQty").onchange=e=>{
    const q=Number(e.target.value);row.count=Number.isInteger(q)?Math.max(1,Math.min(99,q)):1;
    batchRender();batchUI();
@@ -174,6 +215,7 @@ style.textContent=[
 "#scanPanel .scanBottomDock .scanActions,#scanPanel .scanBottomDock .scanTools{position:static;inset:auto;width:100%;max-width:none;flex:none;margin:0;padding:6px;justify-content:center;align-items:center;gap:5px;background:#080b11d9}",
 "#scanPanel .scanBottomDock .scanActions button{flex:1 1 29%;min-width:0;min-height:38px;padding:7px 5px;font-size:12px}#scanPanel .scanBottomDock .scanActions button[hidden],#scanPanel .scanBottomDock .scanTools button[hidden]{display:none}",
 "#scanPanel .scanBottomDock .scanTools{flex-wrap:wrap}#scanPanel .scanBottomDock .scanTools label{flex:1 1 auto;min-width:0}#scanPanel .scanBottomDock .scanTools button{flex:0 0 auto}",
+"#scanPanel .scanBatchCardMeta{display:flex;flex-wrap:wrap;gap:5px 12px;font-size:12px;font-weight:700;color:#e4eefe}#scanPanel .scanBatchPrice{color:#ffe18c}",
 "@media (min-width:760px){#scanPanel .scanBottomDock{max-width:690px;margin:auto;max-height:33vh}#scanPanel .scanBottomDock .scanActions button{max-width:210px}}"
 
 ].join("");
@@ -932,6 +974,7 @@ window.addEventListener("mialbum:collection-updated",event=>{
   const detail=event.detail||{};
   if(!state.user?.id||detail.userId!==state.user.id)return;
   refreshScannerCopies(detail.id);
+  refreshBatchOwnedCopies(detail.id);
 });
 window.openOnePieceScanner=open;
 
