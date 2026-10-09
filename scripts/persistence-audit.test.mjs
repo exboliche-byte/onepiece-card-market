@@ -44,8 +44,10 @@ test("scanner undo restores confirmed exact-print quantity",()=>{
 });
 test("price cache quota and PWA large-file cache protections",()=>{
  assert.match(html,/catch\(storageError\)/);
- assert.match(sw,/mialbumonepiece-v13/);
- assert.match(sw,/url\.pathname==="\/data\/packs\.json"/);
+ assert.match(sw,/mialbumonepiece-v15/);
+ assert.match(sw,/SMALL_DATA/);
+ assert.match(sw,/\/data\/packs\.json/);
+ assert.match(sw,/if\(!nav&&!asset&&!small\)return;/);
 });
 test("modal accessibility and removable chips are present",()=>{
  assert.match(html,/function renderFilterChips\(mode\)/);

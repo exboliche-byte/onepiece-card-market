@@ -29,8 +29,9 @@ test("all critical views and workflows have entry points",()=>{
 });
 test("catalog updates are network-first and private API responses are never cached",()=>{
  assert.ok(sw.includes('url.pathname.startsWith("/api/")'));
- assert.ok(sw.includes('const isData=url.pathname.startsWith("/data/")'));
- assert.ok(sw.includes('cache:isData||event.request.mode==="navigate"?"no-store"'));
+ assert.ok(sw.includes('const SMALL_DATA=new Set('));
+ assert.ok(sw.includes('await fetch(req,{cache:"no-store"})'));
+ assert.ok(sw.includes('if(!nav&&!asset&&!small)return;'));
 });
 test("new tournament formats are derived from source packs and all leaders can be selected",()=>{
  assert.ok(!tournaments.includes('set:"OP-17"'),"Hard-coded expansion OP-17");

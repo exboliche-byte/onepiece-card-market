@@ -1,0 +1,13 @@
+/* Shared clear control for text searches across app views and modals. */
+.search-clear-wrap{display:block;position:relative;width:100%;min-width:0}
+.search-clear-wrap>input{display:block;width:100%;min-width:0;padding-right:45px!important}
+.search-clear-wrap>.search-clear-button{position:absolute;right:5px;top:50%;transform:translateY(-50%);z-index:2;display:grid;place-items:center;width:34px;height:34px;padding:0;border:1px solid var(--line,#45556c);border-radius:9px;background:var(--panel2,#171d2b);color:var(--text,#fff);font-size:23px;line-height:1;cursor:pointer;touch-action:manipulation}
+.search-clear-wrap>.search-clear-button:hover{border-color:var(--accent,#ffd447);color:var(--accent,#ffd447)}
+.search-clear-wrap>.search-clear-button:focus-visible{outline:2px solid var(--accent,#ffd447);outline-offset:1px}
+.search-clear-wrap>.search-clear-button[hidden]{display:none!important}
+.search-clear-wrap input[type="search"]::-webkit-search-cancel-button{-webkit-appearance:none;appearance:none;display:none}
+.catalog-search-inline>.search-clear-wrap{flex:1 1 auto;width:auto}
+.competitive-leader-picker>.search-clear-wrap{margin-bottom:8px}
+.competitive-leader-picker>.search-clear-wrap input{margin-bottom:0}
+@media(max-width:760px){.collection-top .catalog-controls>.search-clear-wrap{grid-column:1/-1}}
+@media(max-width:480px){.search-clear-wrap>.search-clear-button{width:32px;height:32px;right:4px}}
