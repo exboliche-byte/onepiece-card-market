@@ -17,6 +17,7 @@ let preferredCameraId="",availableCameras=[];
 let autoAddEnabled=false,autoAddTimer=null,autoAddTicker=null,autoAddCandidate=null;
 let autoWaitForChange="",autoMissingFrames=0;
 let lastScannedPrintId="";
+let lastSavedScan=null,undoBusy=false;
 const $=q=>document.querySelector("#scanPanel "+q);
 const panel=()=>document.querySelector("#scanPanel");
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&#39;","'":"&#39;"}[c]));
@@ -33,6 +34,26 @@ const status=msg=>{
   e.setAttribute("aria-live",error?"assertive":"off");
 };
 const hint=(msg)=>{const e=$("#scanHint");if(e)e.textContent=msg};
+function updateUndoButton(){
+ const b=$("#scanUndo");if(!b)return;
+ b.hidden=!lastSavedScan;
+ if(lastSavedScan)b.textContent="↶ Deshacer "+lastSavedScan.amount+" copia(s) de "+lastSavedScan.id;
+}
+async function undoLastSavedScan(){
+ const item=lastSavedScan;
+ if(!item||undoBusy||!state.user?.id||state.user.id!==item.userId)return;
+ if(qty(item.id)!==item.after){
+  lastSavedScan=null;updateUndoButton();status("No se puede deshacer: la cantidad ya ha cambiado.");return;
+ }
+ undoBusy=true;const b=$("#scanUndo");if(b)b.disabled=true;
+ try{
+  const ok=await setQty(item.id,item.before);
+  if(!ok){status("No se pudo deshacer en Supabase.");return}
+  lastSavedScan=null;updateUndoButton();
+  status("Deshecho. Restauradas "+item.before+" copias de "+item.id+".");
+ }catch(e){status("No se pudo deshacer: "+e.message)}
+ finally{undoBusy=false;if(b)b.disabled=false}
+}
 function cancelAutoCountdown(){
   if(autoAddTimer!==null){clearTimeout(autoAddTimer);autoAddTimer=null}
   if(autoAddTicker!==null){clearInterval(autoAddTicker);autoAddTicker=null}
@@ -573,6 +594,8 @@ function show(hit){
     if(!running||!panel())return;
     one.disabled=many.disabled=false;
     if(!ok){status("No se ha confirmado el guardado en Supabase. No se ha añadido.");return}
+    lastSavedScan={id:card.id,userId:state.user.id,before,after,amount:after-before};
+    updateUndoButton();
     if(automatic){autoWaitForChange=idBase(card.id);autoMissingFrames=0}
     resume();
     status("Guardadas "+(after-before)+" copia(s) de "+card.id+". Escaneando de nuevo.");
@@ -793,7 +816,7 @@ async function open(){
   }
   if(!state.cards?.length){alert("El catálogo aún no ha terminado de cargar.");return}
   running=true;locked=false;processing=false;attempts=0;lastCode="";repeatCount=0;session++;
-  stopAutoAdding();autoWaitForChange="";autoMissingFrames=0;lastScannedPrintId="";
+  stopAutoAdding();autoWaitForChange="";autoMissingFrames=0;lastScannedPrintId="";lastSavedScan=null;
   const turn=session;
   const p=document.createElement("section");p.id="scanPanel";
   p.innerHTML='<div class="scanLayout">'+
@@ -812,7 +835,7 @@ async function open(){
     '<button id="scanFlip">Cambiar cámara</button></div>'+
     '<div class="scanActions">'+
     '<button id="scanCandidates" hidden disabled>Ver posibles cartas</button><button id="scanRetry">Reiniciar motores</button><button id="scanResume">Continuar</button>'+
-    '<button id="scanManual">Buscar manualmente</button></div>'+
+    '<button id="scanManual">Buscar manualmente</button><button id="scanUndo" hidden>↶ Deshacer</button></div>'+
     '<div class="scanHelp">Llena el recuadro con la carta y evita reflejos. Confirma siempre la impresión.</div>'+
     '</div>';
   document.body.appendChild(p);
@@ -825,6 +848,7 @@ async function open(){
   $("#scanCandidates").onclick=()=>showVisualChoices();
   $("#scanRetry").onclick=()=>{if(running)void startRecognition()};
   $("#scanManual").onclick=manual;
+  $("#scanUndo").onclick=()=>void undoLastSavedScan();
   $("#scanTorch").onclick=toggleTorch;
   $("#scanFlip").onclick=switchCamera;
   $("#scanCameraSelect").onchange=e=>selectCamera(e.target.value);
@@ -851,7 +875,7 @@ function close({fromHistory=false}={}){
     return;
   }
   scannerHistoryActive=false;
-  stopAutoAdding();autoWaitForChange="";autoMissingFrames=0;lastScannedPrintId="";
+  stopAutoAdding();autoWaitForChange="";autoMissingFrames=0;lastScannedPrintId="";lastSavedScan=null;
   running=false;locked=false;session++;
   cancelAnimationFrame(scanTimer);scanTimer=null;
   if(resizeWatcher){resizeWatcher.disconnect();resizeWatcher=null}
