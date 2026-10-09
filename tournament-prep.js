@@ -123,7 +123,7 @@ function view(){
   '</select></label><button class="primary btn" id="prepRefresh"'+(pending?" disabled":"")+'>'+(pending?"Recopilando…":"↻ Actualizar datos")+'</button></div>'+
   '<div class="prep-sources"><button type="button" class="'+(st.scope==="global"?"selected":"")+'" data-prep-scope="global">🌍 Meta combinado</button>'+
   '<button type="button" class="'+(st.scope==="community"?"selected":"")+'" data-prep-scope="community">👥 Comunidad</button></div>'+
-  '<p class="small">Meta y Preparar torneo comparten los mismos datos filtrados de Limitless y OPlayTCG. Los datos de la comunidad y tus rondas se muestran aparte.</p></section>'+
+  '<p class="small">Meta y Preparar torneo usan el mismo metajuego combinado. Período y formato filtran los torneos; OPlay utiliza la muestra temporal publicada por su simulador. Tu historial personal se mantiene independiente.</p></section>'+
   (pending?'<div class="notice">Cargando resultados reales de torneos…</div>':"")+
   (error?'<div class="notice">⚠ '+e(error)+'</div>':"")+
   (d?'<div class="prep-stats">'+metric("Partidas públicas de este líder",leaderStat?num(leaderStat.games):"—")+
