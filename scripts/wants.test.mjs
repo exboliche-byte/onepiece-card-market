@@ -24,7 +24,8 @@ test("wants module and integrated HTML parse",()=>{
  assert.match(html,/\["wants","Wants"\]/);
  assert.match(html,/state\.tab==="wants"\?wantsView\(\)/);
  assert.match(html,/if\(state\.tab==="wants"\)window\.MyWants\?\.bind\?\.\(\)/);
- assert.match(html,/\["MI[S]? CARTAS",\["collection","wants","scanner"\]\]/);
+ assert.match(html,/\["MIS CARTAS",\["collection","wants"\]\]/);
+ assert.match(html,/\["HERRAMIENTAS",\["proxies","scanner"\]\]/);
  assert.doesNotMatch(html,/id="openWants"/);
  assert.doesNotMatch(html,/state\.wantsOpen/);
  assert.match(wants,/state\.tab==="wants"/);

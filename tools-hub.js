@@ -433,8 +433,8 @@ document.addEventListener?.("visibilitychange",()=>{
 });
 window.OnePieceTools={tradePage,tradeItems,decksView,loadCloud,flushCloud,
  bindTrade:()=>{h.tab="trade";bind();
-  document.getElementById("tradeModePrepare")?.addEventListener("click",()=>{if(h.tradeSection!=="prepare"){h.tradeSection="prepare";renderShell()}});
-  document.getElementById("tradeModeOffers")?.addEventListener("click",()=>{if(h.tradeSection!=="offers"){h.tradeSection="offers";renderShell()}});
+  document.querySelector("#tradeModePrepare")?.addEventListener("click",()=>{if(h.tradeSection!=="prepare"){h.tradeSection="prepare";renderShell()}});
+  document.querySelector("#tradeModeOffers")?.addEventListener("click",()=>{if(h.tradeSection!=="offers"){h.tradeSection="offers";renderShell()}});
   if(h.tradeSection==="offers")window.TradeOffers?.bind?.();
  },
  bindDecks:()=>{h.tab="decks";bind()}
