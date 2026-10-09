@@ -74,3 +74,39 @@ test("missing physical copy retains the requested print for its image",async()=>
  assert.equal(next.missing[0].id,"OP11-012");
  assert.equal(next.missing[0].quantity,2);
 });
+
+test("pending only includes partly assembled decks, never deliberately unmounted boxes",async()=>{
+ const {api,state,saboDeck}=setup(7);await api.load();
+ assert.equal(api._testing.pendingCards().length,0,"Koala is deliberately unmounted");
+ state.decks.push({id:"44444444-4444-4444-8444-444444444444",name:"Sin montar",leader:"",cards:{"OP11-011":4}});
+ const raw={[sabo]:{"OP11-011":4},[koala]:{"OP11-011_p1":2}};
+ const pending=api._testing.pendingCards(raw);
+ assert.equal(pending.length,1);
+ assert.equal(pending[0].missing,1);
+ assert.equal(pending[0].free,1);
+ assert.equal(pending[0].required,2);
+ assert.equal(pending[0].decks[0].name,"Koala");
+ assert.equal(api._testing.stats(saboDeck,raw).status,"montado");
+});
+test("missing quantities add up across incomplete decks without using mounted copies",async()=>{
+ const {api,state}=setup(7);await api.load();
+ const luffy="55555555-5555-4555-8555-555555555555";
+ state.decks.push({id:luffy,name:"Luffy",leader:"",cards:{"OP11-011":4}});
+ const raw={[sabo]:{"OP11-011":4},[koala]:{"OP11-011_p1":1},[luffy]:{"OP11-011_p1":1}};
+ const pending=api._testing.pendingCards(raw);
+ assert.equal(pending.length,1);
+ assert.equal(pending[0].required,6);
+ assert.equal(pending[0].free,1);
+ assert.equal(pending[0].missing,5);
+ assert.equal(pending[0].decks.length,2);
+});
+test("pending and deactivate buttons appear only when tracking is active",async()=>{
+ const {api,state}=setup(7);
+ assert.equal(api.pendingButton(),"");
+ assert.equal(api.activeTrackingButton(),"");
+ await api.load();
+ assert.match(api.pendingButton(),/data-physical-pending/);
+ assert.match(api.activeTrackingButton(),/data-physical-toggle/);
+ state.collectionReady=false;
+ assert.equal(api.pendingButton(),"");
+});
