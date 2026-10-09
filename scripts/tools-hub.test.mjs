@@ -16,7 +16,7 @@ const cards=[
 ];
 function setup(saved={}){
   const notices=[],written={...saved},buttons=[];
-  const state={user:{id:"u1"},collectionReady:true,loading:false,tab:"tools",owned:{"OP01-001":2},
+  const state={user:{id:"u1"},collectionReady:true,loading:false,tab:"trades",owned:{"OP01-001":2},
     cards,decks:[],tournaments:[],prices:{}};
   const root={
     state,window:{},document:{
@@ -34,24 +34,23 @@ function setup(saved={}){
     deckPrintedCode:id=>typeof id==="string"?id:id?.id||"",
     deckAvailableByPrinting:()=>({}),deckOwnedCopies:()=>0,
     resolveDeckImportCard:id=>cards.find(c=>c.id===id),
-    competitiveLeaderOptions:()=>[{id:"OP01-003",name:"Sanji"}],
+    competitiveLeaderOptions:()=>[{id:"OP01-003",name:"Sanji",card:cards[2]}],
     renderShell:()=>{},notify:s=>notices.push(s),console,fetch:async()=>({ok:false,json:async()=>({})}),
     setTimeout:()=>1,clearTimeout:()=>{}
   };
   vm.runInNewContext(source,root,{timeout:2500});
   const hub=root.window.OnePieceTools;
   function tab(name){
-    const btn={dataset:{toolsTab:name}};
-    buttons.splice(0,buttons.length,btn);
-    hub.bind();assert.equal(typeof btn.onclick,"function");btn.onclick();
-    return hub.view();
+    if(name==="decks")return hub.decksView();
+    if(name==="coach")return hub.coachView();
+    return hub.tradePage();
   }
   return {hub,tab,notices,state,written};
 }
 test("Tools hub is wired into the current navigation and the production build",()=>{
-  assert.match(html,/\["tools","Herramientas"\]/);
-  assert.match(html,/OnePieceTools\?\.view/);
-  assert.match(html,/OnePieceTools\?\.bind/);
+  assert.match(html,/\["trades","Intercambios"\]/);
+  assert.match(html,/OnePieceTools\?\.tradePage/);
+  assert.match(html,/OnePieceTools\?\.bindTrade/);
   assert.match(html,/src="\/tools-hub\.js"/);
   const build=fs.readFileSync(path.join(root,"scripts/vercel-build.sh"),"utf8");
   assert.match(build,/tools-hub\.js/);
@@ -62,7 +61,7 @@ test("Manual trade totals never change the owned collection",()=>{
     [{id:"OP01-002",q:1,manual:8}]
   ],watch:[]});
   const t=setup({"mialbumonepiece_tools_u1":saved});
-  const before=JSON.stringify(t.state.owned),page=t.hub.view();
+  const before=JSON.stringify(t.state.owned),page=t.hub.tradePage();
   assert.match(page,/Intercambio manual/);
   assert.match(page,/24\.00 €/);
   assert.match(page,/8\.00 €/);
@@ -72,27 +71,15 @@ test("Manual trade totals never change the owned collection",()=>{
 test("All tools render and the tournament panel reads personal rounds",()=>{
   const t=setup();
   assert.match(t.tab("decks"),/Mazos que casi puedes construir/);
-  assert.match(t.tab("alerts"),/Alertas de precios/);
+  assert.doesNotMatch(t.tab("trade"),/Alertas de precios/);
   t.state.tournaments=[{leaderId:"OP01-003",rounds:[
     {opponentId:"OP01-002",kind:"swiss",result:"W",start:"1"},
     {opponentId:"OP01-001",kind:"swiss",result:"L",start:"2"},
     {opponentId:"OP01-002",kind:"bye",result:"W"}
   ]}];
   assert.match(t.tab("coach"),/2 rondas personales/);
+  assert.match(t.tab("coach"),/data-tools-leader=/);
   assert.match(t.tab("trade"),/Intercambio manual/);
-});
-test("Exact-print alerts warn only once for the same current price",async()=>{
-  const t=setup({"mialbumonepiece_tools_u1":JSON.stringify({watch:[
-    {id:"OP01-001",target:15,direction:"below"},
-    {id:"OP01-002",target:6,direction:"above"}
-  ]})});
-  const cloud=mockDb(null);
-  t.state.sb=cloud.client;
-  await t.hub.loadCloud();
-  assert.match(t.tab("alerts"),/1 objetivos alcanzados/);
-  t.hub.checkAlerts();t.hub.checkAlerts();
-  assert.equal(t.notices.length,1);
-  assert.match(t.notices[0],/precio objetivo/);
 });
 test("Competitive endpoint adds optional multi-leader mode without removing exact leader filtering",()=>{
   assert.match(api,/leader!=="all"&&leaderId!==leader/);
@@ -128,22 +115,21 @@ function mockDb(initial){
   }};
   return {client,row:()=>structuredClone(row),reads:()=>reads,writes:()=>writes};
 }
-test("Cloud migration preserves old local trade and alert settings",async()=>{
-  const saved={trade:[[{id:"OP01-001",q:2,manual:10}],[]],
-    watch:[{id:"OP01-002",target:7,direction:"above"}]};
+test("Cloud migration preserves existing local trade drafts",async()=>{
+  const saved={trade:[[{id:"OP01-001",q:2,manual:10}],[]]};
   const t=setup({"mialbumonepiece_tools_u1":JSON.stringify(saved)});
   const cloud=mockDb(null);t.state.sb=cloud.client;
   assert.equal(await t.hub.loadCloud(),true);
   assert.equal(cloud.writes(),1);
   assert.equal(cloud.row().trade[0][0].q,2);
-  assert.equal(cloud.row().watch[0].id,"OP01-002");
-  assert.match(t.hub.view(),/Guardado en Supabase/);
+  assert.ok(!Object.hasOwn(cloud.row(),"watch"));
+  assert.match(t.hub.tradePage(),/Guardado en Supabase/);
 });
 test("Cloud load prefers existing remote settings to stale browser cache",async()=>{
   const t=setup({"mialbumonepiece_tools_u1":JSON.stringify({
-    trade:[[{id:"OP01-001",q:100,manual:50}],[]],watch:[],revision:9})});
+    trade:[[{id:"OP01-001",q:100,manual:50}],[]],revision:9})});
   const cloud=mockDb({user_id:"u1",trade:[[{id:"OP01-002",q:1,manual:5}],[]],
-    watch:[],revision:9});t.state.sb=cloud.client;
+    revision:9});t.state.sb=cloud.client;
   assert.equal(await t.hub.loadCloud(),true);
   const page=t.hub.view();
   assert.match(page,/Zoro/);
@@ -151,19 +137,19 @@ test("Cloud load prefers existing remote settings to stale browser cache",async(
   assert.equal(cloud.writes(),0);
 });
 test("Offline pending changes with same revision save; conflicts never overwrite",async()=>{
-  const data={trade:[[{id:"OP01-001",q:2,manual:12}],[]],watch:[],pending:true,revision:2};
+  const data={trade:[[{id:"OP01-001",q:2,manual:12}],[]],pending:true,revision:2};
   const t=setup({"mialbumonepiece_tools_u1":JSON.stringify(data)});
-  const cloud=mockDb({user_id:"u1",trade:[[],[]],watch:[],revision:2});
+  const cloud=mockDb({user_id:"u1",trade:[[],[]],revision:2});
   t.state.sb=cloud.client;
   await t.hub.loadCloud();await t.hub.flushCloud();
   assert.equal(cloud.row().revision,3);
   assert.equal(cloud.row().trade[0][0].q,2);
   const other=setup({"mialbumonepiece_tools_u1":JSON.stringify({...data,revision:1})});
-  const cloud2=mockDb({user_id:"u1",trade:[[],[]],watch:[],revision:3});
+  const cloud2=mockDb({user_id:"u1",trade:[[],[]],revision:3});
   other.state.sb=cloud2.client;
   await other.hub.loadCloud();await other.hub.flushCloud();
   assert.equal(cloud2.writes(),0);
-  assert.match(other.hub.view(),/Decide cuál conservar/);
+  assert.match(other.hub.tradePage(),/Decide cuál conservar/);
   assert.match(other.hub.view(),/Reemplazar datos de Supabase/);
 });
 test("Own-account SQL permissions are enabled for the tools table",()=>{
@@ -174,9 +160,9 @@ test("Own-account SQL permissions are enabled for the tools table",()=>{
 });
 
 test("Legacy browser drafts conflict visibly if another device already has cloud settings",async()=>{
-  const cached={trade:[[{id:"OP01-001",q:1,manual:8}],[]],watch:[]};
+  const cached={trade:[[{id:"OP01-001",q:1,manual:8}],[]]};
   const t=setup({"mialbumonepiece_tools_u1":JSON.stringify(cached)});
-  const remote=mockDb({user_id:"u1",trade:[[],[]],watch:[],revision:4});
+  const remote=mockDb({user_id:"u1",trade:[[],[]],revision:4});
   t.state.sb=remote.client;
   assert.equal(await t.hub.loadCloud(),true);
   assert.equal(remote.writes(),0);
@@ -184,4 +170,36 @@ test("Legacy browser drafts conflict visibly if another device already has cloud
   assert.match(t.hub.view(),/Reemplazar datos de Supabase/);
   const local=JSON.parse(t.written["mialbumonepiece_tools_u1"]);
   assert.equal(local.trade[0][0].manual,8);
+});
+
+test("Mutual acceptance, exact-print transfer and private policies are present",()=>{
+ const sql=fs.readFileSync(path.join(root,"supabase/migrations/20261009_mutual_trade_offers.sql"),"utf8");
+ assert.match(sql,/status text not null default 'pending'/i);
+ assert.match(sql,/maker_accepted boolean not null default true/i);
+ assert.match(sql,/taker_accepted boolean not null default false/i);
+ assert.match(sql,/for select\s+to authenticated using \(maker_id=/i);
+ assert.match(sql,/if uid<>off.taker_id then raise exception/i);
+ assert.match(sql,/if not off.maker_accepted then raise exception/i);
+ assert.match(sql,/quantity=quantity-n/i);
+ assert.match(sql,/quantity=public.collection_items.quantity\+excluded.quantity/i);
+ assert.match(sql,/update public.trade_offers set taker_accepted=true,status='completed'/i);
+ assert.match(sql,/alter table public.user_tools drop column if exists watch/i);
+ const client=fs.readFileSync(path.join(root,"trade-offers.js"),"utf8");
+ new Function(client);
+ assert.match(client,/trade_offer_create/);
+ assert.match(client,/trade_offer_decide/);
+ assert.match(client,/data-trade-act="accept"/);
+ assert.match(html,/src="\/trade-offers.js"/);
+ const build=fs.readFileSync(path.join(root,"scripts/vercel-build.sh"),"utf8");
+ assert.match(build,/trade-offers\.js/);
+ assert.doesNotMatch(html,/OnePieceTools\?\.checkAlerts/);
+ assert.doesNotMatch(fs.readFileSync(path.join(root,"tools-hub.js"),"utf8"),/watchState|alertsView|data-watch-add/);
+});
+test("Recommendations and matchup coach are placed in Mazos and Torneos",()=>{
+ assert.match(html,/id="openDeckCompletion"/);
+ assert.match(html,/OnePieceTools\?\.decksView/);
+ const tournament=fs.readFileSync(path.join(root,"tournaments.js"),"utf8");
+ assert.match(tournament,/id="tourneyCoachOpen"/);
+ assert.match(tournament,/OnePieceTools\?\.coachView/);
+ assert.match(fs.readFileSync(path.join(root,"tools-hub.js"),"utf8"),/tools-leader-grid/);
 });

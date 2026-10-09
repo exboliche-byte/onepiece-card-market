@@ -239,7 +239,7 @@
   }
   function tournamentList(){
     const arr=(state.tournaments||[]).slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))||String(b.createdAt).localeCompare(String(a.createdAt)));
-    return '<div class="tourney-wrap"><div class="tourney-header"><div><h1>🏆 Mis torneos</h1><div class="tourney-muted">Registra tus partidas, resultados y posiciones.</div></div><div class="tourney-actions"><button class="secondary btn" id="tourneyStatsOpen">📊 Estadísticas</button><button class="primary btn" id="tourneyNew">＋ Nuevo</button></div></div>'+
+    return '<div class="tourney-wrap"><div class="tourney-header"><div><h1>🏆 Mis torneos</h1><div class="tourney-muted">Registra tus partidas, resultados y posiciones.</div></div><div class="tourney-actions"><button class="secondary btn" id="tourneyStatsOpen">📊 Estadísticas</button><button class="secondary btn" id="tourneyCoachOpen">🎯 Preparar torneo</button><button class="primary btn" id="tourneyNew">＋ Nuevo</button></div></div>'+
       (state.tournamentCloudError?'<p class="tourney-hint">'+esc(state.tournamentCloudError)+'</p>':'')+
       (arr.length?'<div class="tourney-grid">'+arr.map(t=>{const r=tournamentRecord(t);return '<button type="button" class="tourney-tile" data-tourney-open="'+esc(t.id)+'">'+
         (portrait(t.leaderId)?'<img class="tourney-portrait" src="'+esc(portrait(t.leaderId))+'" alt="">':'<div class="tourney-portrait"></div>')+
@@ -451,6 +451,7 @@
   function view(){
     if(!state.user)return '<div class="tourney-wrap"><div class="tourney-header"><h1>🏆 Mis torneos</h1></div><div class="tourney-panel"><h2>Inicia sesión</h2><p>Necesitas una cuenta para registrar tus torneos.</p><button class="primary btn" id="tourneyLogin">Ir a mi cuenta</button></div></div>';
     if(state.tournamentDraft)return editingForm();
+    if(state.tournamentCoachOpen)return '<div class="tourney-wrap"><div class="tourney-header"><h1>🎯 Preparar torneo</h1><button class="secondary btn" id="tourneyCoachBack">← Mis torneos</button></div>'+(window.OnePieceTools?.coachView?.()||"")+"</div>";
     const t=getTournament();
     if(state.tournamentStats)return tournamentStatsView(state.tournamentStats==="all"?null:t);
     return t?detailsView(t)+(state.tournamentDeckOpen?deckModal(t):""):tournamentList();
@@ -606,6 +607,9 @@
     const on=(s,ev,f)=>document.querySelector(s)?.addEventListener(ev,f);
     on("#tourneyLogin","click",()=>navigateApp(()=>{state.tab="account"}));
     on("#tourneyStatsOpen","click",()=>{state.tournamentStats="all";rerender()});
+    on("#tourneyCoachOpen","click",()=>{state.tournamentCoachOpen=true;rerender()});
+    on("#tourneyCoachBack","click",()=>{state.tournamentCoachOpen=false;rerender()});
+    if(state.tournamentCoachOpen){window.OnePieceTools?.bindCoach?.();return;}
     on("#tourneyStatsBack","click",()=>{state.tournamentStats=null;rerender()});
     on("#tourneyNew","click",()=>{state.tournamentDraft={title:"",date:new Date(Date.now()-new Date().getTimezoneOffset()*60000).toISOString().slice(0,10),type:"Local Store",set:(state.packs||[]).map(p=>String(p.code||"").toUpperCase().match(/^OP-?(\d{2,3})(?:-EB-?\d{2})?$/)?.[1]).filter(Boolean).sort((a,b)=>Number(b)-Number(a)).map(n=>"OP-"+n)[0]||"",deckId:"",leaderId:"",alt:false,search:""};rerender()});
     document.querySelectorAll("[data-tourney-open]").forEach(b=>b.onclick=()=>navigateApp(()=>{state.tournamentId=b.dataset.tourneyOpen}));

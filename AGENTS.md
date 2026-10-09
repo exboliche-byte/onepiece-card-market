@@ -26,8 +26,8 @@ Nunca imprimir ni cambiar claves privadas de Supabase o Vercel, ni usar
 
 ## Herramientas de usuario
 
-`public.user_tools` almacena los dos lados del intercambio y las alertas
-de precios en JSONB por usuario, con RLS y control de concurrencia `revision`.
+`public.user_tools` almacena los dos lados del borrador de intercambio
+en JSONB por usuario, con RLS y control de concurrencia `revision`.
 El navegador guarda una copia local únicamente para migración y recuperación
 ante fallos. Los mazos accesibles y el análisis de torneos reutilizan las
 tablas existentes y los datos públicos, sin duplicar información de usuario.
@@ -40,3 +40,7 @@ comprobar que `scripts/vercel-build.sh` ejecuta las pruebas y copia todo
 archivo referenciado; desplegar en el proyecto Vercel anterior y verificar
 `READY` para el SHA nuevo. Los cambios SQL se comprueban con consultas y
 los asesores de seguridad de Supabase.
+
+## Intercambios entre usuarios (9 octubre 2026)
+Las propuestas reales están en `public.trade_offers` con RLS para ambos participantes. El creador acepta al enviarla; el receptor debe aceptarla después. Solamente `trade_offer_decide` transfiere cantidades de la impresión exacta, en una única transacción PostgreSQL; ninguna operación del frontend debe modificar directamente las colecciones de otro usuario. Rechazos y cancelaciones nunca alteran cantidades. Migración: `supabase/migrations/20261009_mutual_trade_offers.sql`.
+Las alertas de precio se eliminaron y no deben reintroducirse en el menú ni en `user_tools`.

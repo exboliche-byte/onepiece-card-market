@@ -1,8 +1,8 @@
 (function(){
 "use strict";
 /* This module never changes collection quantities or deck records. */
-const h={tab:"trade",owner:null,trade:[[],[]],watch:[],q:"",wq:"",list:[],meta:{},loaded:false,busy:false,error:"",
-  sort:"missing",maxMissing:"12",maxCost:"",coach:null,coachBusy:false,coachError:"",coachLeader:"",days:90,alertMemo:new Set(),cloudReady:false,cloudLoading:false,cloudError:"",cloudConflict:false,
+const h={tab:"trade",owner:null,trade:[[],[]],q:"",list:[],meta:{},loaded:false,busy:false,error:"",
+  sort:"missing",maxMissing:"12",maxCost:"",coach:null,coachBusy:false,coachError:"",coachLeader:"",days:90,cloudReady:false,cloudLoading:false,cloudError:"",cloudConflict:false,
   revision:null,pending:false,localRevision:null,hasCache:false,serial:0,saveTimer:null,writing:false,lastCloudAt:0};
 const key=id=>"mialbumonepiece_tools_"+id;
 const text=s=>esc(s);
@@ -14,7 +14,7 @@ function account(){
   const id=state.user?.id||null;
   if(h.owner===id)return;
   if(h.saveTimer){clearTimeout(h.saveTimer);h.saveTimer=null}
-  h.owner=id;h.trade=[[],[]];h.watch=[];h.alertMemo.clear();
+  h.owner=id;h.trade=[[],[]];
   h.cloudReady=false;h.cloudLoading=false;h.cloudError="";h.cloudConflict=false;
   h.revision=null;h.pending=false;h.localRevision=null;h.hasCache=false;h.serial=0;h.writing=false;h.lastCloudAt=0;
   if(!id)return;
@@ -25,8 +25,6 @@ function account(){
     h.pending=v.pending===true;h.localRevision=Number.isSafeInteger(v.revision)?v.revision:null;
     for(let i=0;i<2;i++)h.trade[i]=(Array.isArray(v.trade?.[i])?v.trade[i]:[]).slice(0,100)
       .filter(x=>typeof x.id==="string").map(x=>({id:x.id,q:num(x.q),manual:positive(x.manual)}));
-    h.watch=(Array.isArray(v.watch)?v.watch:[]).slice(0,200).filter(x=>typeof x.id==="string"&&positive(x.target))
-      .map(x=>({id:x.id,target:positive(x.target),direction:x.direction==="above"?"above":"below"}));
   }catch(err){console.warn("Herramientas locales",err)}
 }
 function sanitizeTrade(raw){
@@ -34,15 +32,10 @@ function sanitizeTrade(raw){
     .filter(x=>typeof x?.id==="string"&&x.id.length<=140)
     .map(x=>({id:x.id,q:num(x.q),manual:positive(x.manual)})));
 }
-function sanitizeWatches(raw){
-  return (Array.isArray(raw)?raw:[]).slice(0,200)
-    .filter(x=>typeof x?.id==="string"&&x.id.length<=140&&positive(x.target))
-    .map(x=>({id:x.id,target:positive(x.target),direction:x.direction==="above"?"above":"below"}));
-}
 function cache(){
   if(!h.owner)return;
   try{localStorage.setItem(key(h.owner),JSON.stringify({
-    trade:h.trade,watch:h.watch,pending:h.pending,revision:h.revision
+    trade:h.trade,pending:h.pending,revision:h.revision
   }))}catch(err){console.warn("Herramientas: error de caché local",err)}
 }
 function save(){
@@ -57,18 +50,18 @@ function scheduleSave(){
 async function flushCloud(){
   if(h.writing||h.cloudConflict||!h.pending||!h.cloudReady||!h.owner||!state.sb)return false;
   const userId=h.owner,client=state.sb,rev=h.revision,snapshot=h.serial;
-  const trade=sanitizeTrade(h.trade),watch=sanitizeWatches(h.watch);
+  const trade=sanitizeTrade(h.trade);
   h.writing=true;
   try{
     const result=await client.from("user_tools").update({
-      trade,watch,revision:rev+1,updated_at:new Date().toISOString()
+      trade,revision:rev+1,updated_at:new Date().toISOString()
     }).eq("user_id",userId).eq("revision",rev).select("revision").maybeSingle();
     if(result.error)throw result.error;
     if(h.owner!==userId)return false;
     if(!result.data){
       h.cloudConflict=true;
       h.cloudError="Otro dispositivo ha modificado estas herramientas. Tus cambios se conservan aquí, sin sobrescribir los de la nube.";
-      cache();if(state.tab==="tools")renderShell();
+      cache();if(state.tab==="trades")renderShell();
       return false;
     }
     h.revision=Number(result.data.revision)||rev+1;
@@ -87,7 +80,7 @@ async function flushCloud(){
     if(h.owner===userId){
       h.writing=false;
       if(h.pending&&!h.cloudError&&!h.cloudConflict)scheduleSave();
-      if(state.tab==="tools")renderShell();
+      if(state.tab==="trades")renderShell();
     }
   }
 }
@@ -100,15 +93,14 @@ async function loadCloud(force=false){
   const id=h.owner,client=state.sb,at=h.serial;
   h.cloudLoading=true;h.cloudError="";
   try{
-    const r=await client.from("user_tools").select("trade,watch,revision").eq("user_id",id).maybeSingle();
+    const r=await client.from("user_tools").select("trade,revision").eq("user_id",id).maybeSingle();
     if(r.error)throw r.error;
     if(h.owner!==id)return false;
     if(r.data){
       const revision=Number(r.data.revision)||1;
       const legacy=h.hasCache&&h.localRevision===null&&
-        (h.trade.some(side=>side.length)||h.watch.length)&&
-        JSON.stringify([sanitizeTrade(h.trade),sanitizeWatches(h.watch)])!==
-          JSON.stringify([sanitizeTrade(r.data.trade),sanitizeWatches(r.data.watch)]);
+        h.trade.some(side=>side.length)&&
+        JSON.stringify(sanitizeTrade(h.trade))!==JSON.stringify(sanitizeTrade(r.data.trade));
       if(legacy&&!force){
         h.revision=revision;h.cloudReady=true;h.pending=true;h.cloudConflict=true;
         h.cloudError="Este navegador tiene datos guardados antes de la sincronización y Supabase ya contiene otros. Elige cuál conservar.";
@@ -120,15 +112,15 @@ async function loadCloud(force=false){
         h.revision=revision;h.cloudReady=true;h.cloudConflict=true;
         h.cloudError="Hay cambios pendientes en este navegador y una versión distinta en Supabase. Decide cuál conservar.";
       }else if(at===h.serial){
-        h.trade=sanitizeTrade(r.data.trade);h.watch=sanitizeWatches(r.data.watch);
+        h.trade=sanitizeTrade(r.data.trade);
         h.revision=revision;h.pending=false;h.cloudReady=true;h.cloudConflict=false;cache();
       }
     }else{
       // First visit to the cloud feature: migrate the account's existing local data.
       // There was no remote row to overwrite.
-      const trade=sanitizeTrade(h.trade),watch=sanitizeWatches(h.watch);
+      const trade=sanitizeTrade(h.trade);
       const write=await client.from("user_tools").insert({
-        user_id:id,trade,watch,revision:1
+        user_id:id,trade,revision:1
       }).select("revision").single();
       if(write.error){
         if(write.error.code==="23505"){h.cloudLoading=false;return loadCloud(true)}
@@ -149,7 +141,7 @@ async function loadCloud(force=false){
     }
     return false;
   }finally{
-    if(h.owner===id){h.cloudLoading=false;if(state.tab==="tools")renderShell()}
+    if(h.owner===id){h.cloudLoading=false;if(state.tab==="trades")renderShell()}
   }
 }
 async function resolveConflict(useLocal){
@@ -171,7 +163,7 @@ async function resolveConflict(useLocal){
   }catch(err){if(h.owner===id)h.cloudError=String(err.message||err);renderShell()}
 }
 function cloudMessage(){
-  if(!h.owner)return '<div class="notice">Inicia sesión para guardar y sincronizar intercambios y alertas.</div>';
+  if(!h.owner)return '<div class="notice">Inicia sesión para guardar y sincronizar intercambios.</div>';
   if(!state.sb)return '<div class="notice">Esperando conexión a Supabase. Los cambios no están disponibles hasta conectar.</div>';
   if(h.cloudLoading||!h.cloudReady){
     return '<div class="notice">Sincronizando herramientas con Supabase… '+
@@ -181,7 +173,7 @@ function cloudMessage(){
   return '<div class="tools-cloud-status">'+
     (h.cloudError?'<div class="notice">'+text(h.cloudError)+'</div>':
       '<div class="small">'+(h.pending?"Guardado pendiente · ":"✓ Guardado en Supabase · ")+
-        'Intercambios y alertas disponibles en tus dispositivos</div>')+
+        'Intercambios disponibles en tus dispositivos</div>')+
     (h.pending?'<button class="secondary btn" id="toolsCloudRetry">Reintentar guardado</button>':"")+
     (h.cloudConflict?'<div class="tools-controls"><button class="secondary btn" id="toolsCloudKeepRemote">Usar datos de Supabase</button>'+
       '<button class="danger btn" id="toolsCloudKeepLocal">Reemplazar datos de Supabase</button></div>':"")+
@@ -205,9 +197,8 @@ function searchResults(q,mode){
   return cards.map(c=>'<div class="tools-found">'+cardImg(c,"thumb")+'<div class="grow"><b>'+text(c.name||c.id)+'</b>'+
     '<div class="small">'+text(c.id)+' · '+text(c.set||"")+' · '+money(price(c))+' / copia'+
     (state.user?' · Tengo '+qty(c.id):"")+'</div></div>'+
-    (mode==="trade"?'<button class="secondary btn" data-trade-add="0" data-card="'+text(c.id)+'">←</button>'+
-      '<button class="primary btn" data-trade-add="1" data-card="'+text(c.id)+'">→</button>':
-      '<button class="primary btn" data-watch-add="'+text(c.id)+'">Vigilar</button>')+'</div>').join("");
+    '<button class="secondary btn" data-trade-add="0" data-card="'+text(c.id)+'">←</button>'+
+    '<button class="primary btn" data-trade-add="1" data-card="'+text(c.id)+'">→</button>').join("");
 }
 function total(i){
   let amount=0,unknown=0,copies=0;
@@ -246,7 +237,7 @@ function tradeView(){
     '<div class="small">'+(a.unknown||b.unknown?'Hay copias sin precio; la diferencia no es completa.':'Valor orientativo de mercado.')+'</div></div>'+
     '<div class="tools-controls"><button class="secondary btn" id="toolsSwap">⇄ Cambiar lados</button>'+
     '<button class="secondary btn" id="toolsCopy">Copiar trato</button><button class="danger btn" id="toolsClear">Vaciar</button></div></div>'+
-    '<p class="small">El intercambio se guarda en tu cuenta de Supabase y se sincroniza entre dispositivos. Puedes copiar el resumen para enviárselo a otra persona.</p>';
+    '<p class="small">El borrador está sincronizado con tu cuenta. No se transfiere ninguna carta hasta que ambos usuarios acepten.</p>';
 }
 function cheapest(){
   const out=new Map();
@@ -311,31 +302,6 @@ function decksView(){
     (h.error?'<div class="notice">'+text(h.error)+'</div>':"")+body+
     '<p class="small">Los costes usan la impresión disponible más barata con precio para cada número de carta. Los precios desconocidos se indican y no se consideran coste cero. Solo se incluyen las listas públicas accesibles en la muestra.</p></div>';
 }
-function watchState(w){
-  const p=positive(price(card(w.id)));
-  return {p,hit:!!p&&(w.direction==="above"?p>=w.target:p<=w.target)};
-}
-function alertsView(){
-  const active=h.watch.filter(w=>watchState(w).hit).length;
-  return '<section class="section"><h2>Alertas de precios</h2>'+
-    '<p class="small">Marca una impresión concreta y un precio objetivo. Los avisos se comprueban al abrir la web con tu sesión. No hay correos ni notificaciones cuando está cerrada.</p>'+
-    (state.user?'<input class="field" type="search" id="toolsWatchSearch" placeholder="Buscar impresión…" value="'+text(h.wq)+'">'+
-      '<div class="tools-results" id="toolsWatchResults">'+searchResults(h.wq,"watch")+'</div>':
-      '<div class="notice">Inicia sesión para crear alertas.</div>')+'</section>'+
-    '<section class="section"><div class="sectionhead"><h2>Mis cartas vigiladas</h2><b>'+active+' objetivos alcanzados</b></div>'+
-    (h.watch.length?h.watch.map((w,i)=>{
-      const c=card(w.id),s=watchState(w);
-      return '<div class="tools-item '+(s.hit?"tools-hit":"")+'">'+(c?cardImg(c,"thumb"):"")+
-        '<div class="grow"><b>'+text(c?.name||w.id)+'</b><div class="small">'+text(w.id)+' · Actual: '+money(s.p)+'</div>'+
-        '<div class="tools-controls"><select class="field tools-direction" data-watch-dir="'+i+'">'+
-        '<option value="below"'+(w.direction==="below"?" selected":"")+'>Baje hasta</option>'+
-        '<option value="above"'+(w.direction==="above"?" selected":"")+'>Suba hasta</option></select>'+
-        '<input class="field tools-price" type="number" min="0.01" step="0.01" value="'+text(w.target)+'" data-watch-target="'+i+'"> €</div></div>'+
-        '<div><b class="'+(s.hit?"tools-good":"small")+'">'+(s.hit?"¡Objetivo!":s.p?"En espera":"Sin precio")+'</b>'+
-        '<div><button class="danger btn" data-watch-delete="'+i+'">✕</button></div></div></div>';
-    }).join(""):'<div class="notice">Todavía no tienes avisos.</div>')+'</section>'+
-    '<p class="small">Los avisos se guardan en Supabase y se sincronizan entre tus dispositivos.</p>';
-}
 function rate(w,l){
   const n=Number(w||0)+Number(l||0);
   return n?Math.round(1000*Number(w||0)/n)/10+"%":"—";
@@ -374,8 +340,9 @@ function coachView(){
   }
   return '<section class="section"><h2>Preparar un torneo</h2>'+
     '<p class="small">Consulta los emparejamientos del meta y compáralos con tus propias rondas. Los datos globales son de Limitless y no contienen quién salió primero; esa información solo aparece para tus partidas registradas.</p>'+
-    '<div class="tools-filters"><label class="control-label">Mi líder<select class="field" id="toolsCoachLeader">'+
-    leaders.map(x=>'<option value="'+text(x.id)+'"'+(pick===x.id?" selected":"")+'>'+text(x.name+" · "+x.id)+'</option>').join("")+'</select></label>'+
+    '<input class="field" id="toolsLeaderSearch" type="search" placeholder="Buscar líder por nombre o código">'+
+    '<div class="tools-leader-grid">'+leaders.map(x=>'<button type="button" class="tools-leader '+(pick===x.id?"selected":"")+'" data-tools-leader="'+text(x.id)+'" data-search="'+text(x.id+" "+x.name)+'">'+(x.card?cardImg(x.card,"cardimg"):"")+
+    '<span>'+text(x.name+" · "+x.id)+'</span></button>').join("")+'</div>'+
     '<label class="control-label">Período<select class="field" id="toolsCoachDays">'+
     [30,90,180,365].map(v=>'<option value="'+v+'"'+(h.days===v?" selected":"")+'>'+v+' días</option>').join("")+
     '</select></label><button class="primary btn" id="toolsCoachLoad" '+(h.coachBusy?"disabled":"")+'>'+
@@ -385,18 +352,18 @@ function coachView(){
     (rows||'<div class="notice">'+(h.coach?"No hay partidas globales suficientes para este líder.":"Elige tu líder y carga el análisis.")+'</div>')+
     '<p class="small">Prioriza practicar contra rivales habituales con mal resultado. Una muestra de pocas partidas no demuestra un emparejamiento favorable o desfavorable.</p></section>';
 }
-function view(){
-  account();
-  if(h.owner&&state.sb&&!h.cloudLoading){
-    if(!h.cloudReady&&!h.cloudError)void loadCloud();
-    else if(h.cloudReady&&!h.pending&&!h.writing&&!h.cloudConflict&&Date.now()-h.lastCloudAt>30000)void loadCloud(true);
-  }
-  const links=[["trade","⇄ Intercambio"],["decks","🃏 Mazos accesibles"],["alerts","€ Alertas"],["coach","🏆 Torneos"]];
-  return '<div class="wrap tools-wrap"><div class="hero"><div><h1>Herramientas</h1>'+
-    '<p>Intercambios, mazos accesibles, alertas y preparación.</p></div></div><div class="tools-tabs">'+
-    links.map(([id,label])=>'<button class="secondary btn '+(h.tab===id?"tools-selected":"")+'" data-tools-tab="'+id+'">'+label+'</button>').join("")+'</div>'+
-    (h.tab==="trade"||h.tab==="alerts"?cloudMessage():"")+
-    (h.tab==="trade"?tradeView():h.tab==="decks"?decksView():h.tab==="alerts"?alertsView():coachView())+'</div>';
+function tradePage(){
+ account();
+ if(h.owner&&state.sb&&!h.cloudLoading){
+  if(!h.cloudReady&&!h.cloudError)void loadCloud();
+  else if(h.cloudReady&&!h.pending&&!h.writing&&!h.cloudConflict&&Date.now()-h.lastCloudAt>30000)void loadCloud(true);
+ }
+ return '<div class="wrap tools-wrap"><div class="hero"><div><h1>⇄ Intercambios</h1><p>Prepara un trato y envía una propuesta para que ambos la aceptéis.</p></div></div>'+
+ cloudMessage()+tradeView()+(window.TradeOffers?.view?.()||"")+'</div>';
+}
+function tradeItems(){
+ if(!h.cloudReady||!h.owner||h.cloudConflict||h.pending||h.writing)return null;
+ return h.trade.map(rows=>rows.map(x=>({id:x.id,q:x.q})));
 }
 function bindSearch(input,host,mode){
   const el=document.querySelector(input),target=document.querySelector(host);
@@ -410,17 +377,10 @@ function bindSearch(input,host,mode){
       if(found)found.q=Math.min(100,found.q+1);else h.trade[i].push({id,q:1,manual:null});
       save();renderShell();
     });
-    target.querySelectorAll("[data-watch-add]").forEach(b=>b.onclick=()=>{
-      if(!readyToEdit())return;
-      const id=b.dataset.watchAdd,c=card(id),p=positive(price(c));
-      if(!c||h.watch.some(x=>x.id===id))return notify("Esta impresión ya está vigilada");
-      h.watch.push({id,target:p?Math.round(p*90)/100:1,direction:"below"});save();renderShell();
-      notify("Aviso añadido. Puedes cambiar su objetivo");
-    });
   };
   wire();
   el.addEventListener("input",()=>{
-    if(mode==="trade")h.q=el.value;else h.wq=el.value;
+    h.q=el.value;
     target.innerHTML=searchResults(el.value,mode);wire();
   });
 }
@@ -440,7 +400,7 @@ async function loadDecks(){
     h.list=(Array.isArray(data.results)?data.results:[]).filter(x=>x?.cards&&x.leaderId);
     h.meta={scannedEvents:data.scannedEvents,rateLimited:data.rateLimited};h.loaded=true;
   }catch(err){h.error=String(err.message||err)}
-  finally{h.busy=false;if(state.tab==="tools")renderShell()}
+  finally{h.busy=false;if(state.tab==="decks")renderShell()}
 }
 async function loadCoach(){
   h.coachBusy=true;h.coachError="";renderShell();
@@ -450,23 +410,13 @@ async function loadCoach(){
     if(!res.ok)throw Error(data.error||"No se pudo cargar el meta");
     h.coach=data;
   }catch(err){h.coachError=String(err.message||err)}
-  finally{h.coachBusy=false;if(state.tab==="tools")renderShell()}
-}
-function checkAlerts(){
-  account();if(!state.user||!h.cloudReady||!state.collectionReady||state.loading)return;
-  let n=0;
-  for(const w of h.watch){
-    const x=watchState(w);if(!x.p||!x.hit)continue;
-    const id=w.id+":"+w.direction+":"+w.target+":"+x.p;
-    if(!h.alertMemo.has(id)){h.alertMemo.add(id);n++}
-  }
-  if(n)notify(n===1?"Una carta vigilada ha alcanzado su precio objetivo":n+" cartas vigiladas han alcanzado su precio objetivo");
+  finally{h.coachBusy=false;if(state.tab==="tournaments")renderShell()}
 }
 function bind(){
   document.querySelector("#toolsCloudRetry")?.addEventListener("click",()=>h.cloudReady?void flushCloud():void loadCloud(true));
   document.querySelector("#toolsCloudKeepRemote")?.addEventListener("click",()=>void resolveConflict(false));
   document.querySelector("#toolsCloudKeepLocal")?.addEventListener("click",()=>void resolveConflict(true));
-  document.querySelectorAll("[data-tools-tab]").forEach(b=>b.onclick=()=>{h.tab=b.dataset.toolsTab;renderShell()});
+
   if(h.tab==="trade"){
     bindSearch("#toolsSearch","#toolsSearchResults","trade");
     document.querySelectorAll("[data-trade-change]").forEach(b=>b.onclick=()=>{
@@ -506,32 +456,19 @@ function bind(){
       state.tab="decks";openCompetitiveDeckPreview(0);
     });
   }
-  if(h.tab==="alerts"){
-    bindSearch("#toolsWatchSearch","#toolsWatchResults","watch");
-    document.querySelectorAll("[data-watch-dir]").forEach(b=>b.onchange=()=>{
-      if(!readyToEdit())return;
-      const w=h.watch[Number(b.dataset.watchDir)];if(w){w.direction=b.value;save();renderShell()}
-    });
-    document.querySelectorAll("[data-watch-target]").forEach(b=>b.onchange=()=>{
-      if(!readyToEdit())return;
-      const w=h.watch[Number(b.dataset.watchTarget)];
-      if(!w)return;
-      const n=positive(b.value);if(!n)return notify("Introduce un objetivo mayor que cero");
-      w.target=n;save();renderShell();
-    });
-    document.querySelectorAll("[data-watch-delete]").forEach(b=>b.onclick=()=>{
-      if(!readyToEdit())return;
-      h.watch.splice(Number(b.dataset.watchDelete),1);save();renderShell();
-    });
-  }
   if(h.tab==="coach"){
-    document.querySelector("#toolsCoachLeader")?.addEventListener("change",ev=>{h.coachLeader=ev.target.value;renderShell()});
+    document.querySelectorAll("[data-tools-leader]").forEach(b=>b.onclick=()=>{h.coachLeader=b.dataset.toolsLeader;renderShell()});
+    document.querySelector("#toolsLeaderSearch")?.addEventListener("input",ev=>{
+      const q=norm(ev.target.value);
+      document.querySelectorAll("[data-tools-leader]").forEach(el=>{el.hidden=!norm(el.dataset.search||"").includes(q)});
+    });
     document.querySelector("#toolsCoachDays")?.addEventListener("change",ev=>{h.days=Number(ev.target.value);h.coach=null;renderShell()});
     document.querySelector("#toolsCoachLoad")?.addEventListener("click",loadCoach);
   }
 }
 const style=document.createElement("style");
 style.textContent=".tools-tabs,.tools-controls,.tools-total{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.tools-tabs{margin-bottom:13px}.tools-selected{border-color:var(--accent)!important;color:var(--accent)!important}.tools-results{display:grid;gap:5px;max-height:300px;overflow:auto;margin-top:9px}.tools-found,.tools-item,.tools-match{display:flex;align-items:center;gap:9px;padding:8px;background:var(--panel2);border:1px solid var(--line);border-radius:11px;margin:7px 0;min-width:0}.tools-found .thumb,.tools-item .thumb{width:48px;height:67px;flex:none;object-fit:cover}.tools-item .grow,.tools-found .grow{min-width:0}.tools-controls{margin:7px 0}.tools-controls .btn{padding:6px 9px}.tools-price{width:92px!important;padding:7px!important}.tools-direction{width:auto!important;padding:7px!important}.tools-cols{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.tools-total{justify-content:space-between}.tools-filters{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:12px 0}.tools-deckgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.tools-numbers{display:flex;gap:8px;flex-wrap:wrap;color:var(--accent);margin:5px 0}.tools-deckgrid .btn{margin-top:7px}.tools-hit{border-color:var(--ok)}.tools-good{color:var(--ok)}.tools-match>div:not(.grow){min-width:70px;text-align:right}.tools-match .small{line-height:1.5}@media(max-width:760px){.tools-cols,.tools-deckgrid{grid-template-columns:1fr}.tools-filters{grid-template-columns:repeat(2,minmax(0,1fr))}.tools-match{flex-wrap:wrap}.tools-match .grow{flex-basis:100%}}@media(max-width:430px){.tools-filters{grid-template-columns:1fr}.tools-tabs button{flex:1 1 42%}.tools-item{flex-wrap:wrap}.tools-match>div:not(.grow){flex:1;text-align:left}}";
+style.textContent+=".tools-leader-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(95px,1fr));gap:8px;max-height:410px;overflow:auto;margin:10px 0}.tools-leader{padding:4px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;color:var(--text);cursor:pointer;overflow:hidden;text-align:left}.tools-leader.selected{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}.tools-leader[hidden]{display:none}.tools-leader img{width:100%;aspect-ratio:.716;object-fit:cover}.tools-leader span{display:block;padding:5px;font-size:10px;line-height:1.3}";
 document.head.appendChild(style);
 document.addEventListener?.("visibilitychange",()=>{
   if(!document.hidden&&h.owner&&state.user?.id===h.owner&&state.sb){
@@ -539,5 +476,9 @@ document.addEventListener?.("visibilitychange",()=>{
     else if(!h.pending&&!h.writing&&h.cloudReady&&Date.now()-h.lastCloudAt>10000)void loadCloud(true);
   }
 });
-window.OnePieceTools={view,bind,checkAlerts,loadCloud,flushCloud};
+window.OnePieceTools={tradePage,tradeItems,decksView,coachView,loadCloud,flushCloud,
+ bindTrade:()=>{h.tab="trade";bind();window.TradeOffers?.bind?.()},
+ bindDecks:()=>{h.tab="decks";bind()},
+ bindCoach:()=>{h.tab="coach";bind()}
+};
 })();
