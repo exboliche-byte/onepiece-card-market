@@ -182,7 +182,7 @@ function view(){
    updatedAt:m.independent?.updatedAt||new Date().toISOString(),days:m.days
  }:null);
  const loading=community?m.communityLoading:m.loading,error=community?m.communityError:m.error;
- const formats=[["auto","Formato más reciente"],["all","Todos los formatos"],...(m.global?.formats||[]).map(x=>[x,x])];
+ const formats=[["auto","Formato predominante"],["all","Todos los formatos"],...(m.global?.formats||[]).map(x=>[x,x])];
  const top='<div class="wrap meta-page"><div class="hero"><div><h1>⚔️ Meta</h1>'+
    '<p>Quién gana, contra quién y si importa salir primero.</p></div></div>'+
    '<div class="meta-tabs"><button data-meta-scope="global" class="'+(!community?"active":"")+'">🌍 Global</button>'+
@@ -196,7 +196,7 @@ function view(){
  const contents=(loading?'<p class="small">Consultando datos actuales…</p>':"")+
    (error?'<div class="notice">'+esc(error)+'</div>':"")+
    (d?'<p class="small">Actualizado '+esc(new Date(d.updatedAt||Date.now()).toLocaleString("es-ES"))+
-       (!community?' · '+esc(d.formatUsed||"formato sin identificar"):"")+
+       (!community?' · '+esc(d.formatUsed==="unknown"?"Formato no especificado":d.formatUsed||"formato sin identificar"):"")+
        (d.stale?' · copia anterior':"")+'</p>'+
       (community||m.global?statCards(d):'<p class="small">🎮 Datos de OPlay cargados. Limitless sigue consultando torneos…</p>')+
       (community||!m.global?"":'<div class="meta-sample-note"><b>'+integer(d.includedEvents)+' torneos analizados</b> de '+
@@ -237,7 +237,7 @@ async function loadGlobal(force=false){
     if(days===m.days&&format===m.format){
       m.global=json;
       m.globalRetryAfter=Date.now()+15*60000;
-      if(json.partial)m.error="Algunos torneos no pudieron consultarse. La muestra mostrada es parcial.";
+      if(json.partial)m.error="";
     }
   }catch(e){
     if(days===m.days&&format===m.format){
