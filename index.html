@@ -147,6 +147,10 @@
 .deck-cloud-status{min-height:23px;margin:8px 0;font-size:12px}
 button:focus-visible,a:focus-visible,summary:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}
+.active-filter-chips{display:flex;flex-wrap:wrap;gap:6px;margin:7px 0 12px}
+.active-filter-chips:empty{display:none}
+.active-filter-chips button{font-size:12px;padding:7px 10px;color:var(--text);background:var(--panel2);border:1px solid var(--line);border-radius:20px;cursor:pointer}
+.active-filter-chips button:hover{border-color:var(--accent)}
 </style>
 </head>
 <body>
@@ -955,7 +959,6 @@ function pagination(total,page,key){
 function catalogActiveFilterCount(){
   const f=state.catalog;let n=0;
   if(f.set!=="Todas")n++;
-  if(f.set!=="Todas")n++;
   if(f.category!=="Todos")n++;
   if(f.color!=="Todos")n++;
   if(f.rarity!=="Todos")n++;
@@ -966,6 +969,25 @@ function catalogActiveFilterCount(){
   if(f.minPower!==""||f.maxPower!=="")n++;
   if(f.minPrice!==""||f.maxPrice!=="")n++;
   return n;
+}
+function filterChipBar(mode){
+ return '<div id="'+(mode==="catalog"?"catalogActiveChips":"collectionActiveChips")+'" class="active-filter-chips" aria-label="Filtros activos"></div>';
+}
+function renderFilterChips(mode){
+ const host=document.getElementById(mode==="catalog"?"catalogActiveChips":"collectionActiveChips");
+ if(!host)return;
+ const filter=state[mode],fields={set:"Expansión",category:"Categoría",color:"Color",
+ rarity:"Rareza",type:"Tipo",attribute:"Atributo",ownership:"Colección",
+ quantity:"Cantidad",playset:"Playset",minCost:"Coste mín.",maxCost:"Coste máx.",
+ minPower:"Poder mín.",maxPower:"Poder máx.",minPrice:"Precio mín.",maxPrice:"Precio máx."};
+ const active=Object.entries(fields).filter(([key])=>Object.hasOwn(filter,key)&&!["Todas","Todos",""].includes(String(filter[key])));
+ host.innerHTML=active.map(([key,label])=>'<button type="button" data-clear-filter="'+key+'" aria-label="Quitar filtro '+esc(label)+'">'+esc(label)+': '+esc(filter[key])+' ×</button>').join("");
+ host.querySelectorAll("[data-clear-filter]").forEach(button=>button.onclick=()=>{
+  const key=button.dataset.clearFilter;
+  filter[key]=["set","ownership","quantity","playset"].includes(key)?"Todas":
+    ["minCost","maxCost","minPower","maxPower","minPrice","maxPrice"].includes(key)?"":"Todos";
+  filter.page=1;quantityOrderSnapshots[mode]=null;renderShell();
+ });
 }
 function filterLabel(label,control){
   return '<label class="control-label"><span>'+esc(label)+'</span>'+control+'</label>';
@@ -1002,12 +1024,13 @@ function catalogToolbar(){
       filterLabel("Orden",'<select id="catDir" class="field"><option value="asc" '+(f.dir==="asc"?"selected":"")+'>Ascendente</option><option value="desc" '+(f.dir==="desc"?"selected":"")+'>Descendente</option></select>')+
     '</div>'+
     '<button class="secondary btn filter-toggle" id="catalogFilterToggle" type="button" aria-expanded="'+(f.filtersOpen?"true":"false")+'">🔽 FILTRO'+(n?' ('+n+')':'')+'</button>'+
-  '</div>'+catalogFilterPanel()+
+  '</div>'+catalogFilterPanel()+filterChipBar("catalog")+
   '<div class="row" style="margin-bottom:10px"><span class="hint">Versiones agrupadas · '+state.cards.length.toLocaleString("es-ES")+' cartas en el catálogo.</span></div>';
 }
 
 async function renderCatalogResults(){
   const host=$("#catalogResults");if(!host)return;
+  renderFilterChips("catalog");
   if(state.loading&&!state.cards.length){host.innerHTML='<div class="notice">Cargando catálogo de cartas…</div>';return}
   const needsPrices=state.catalog.sort==="price"||state.catalog.minPrice!==""||state.catalog.maxPrice!=="";
   if(needsPrices){try{await ensurePrices();}catch(e){console.warn("catalog prices",e)}}
@@ -1067,12 +1090,13 @@ function collectionToolbar(){
       filterLabel("Orden",'<select id="colDir" class="field"><option value="asc" '+(f.dir==="asc"?"selected":"")+'>Ascendente</option><option value="desc" '+(f.dir==="desc"?"selected":"")+'>Descendente</option></select>')+
     '</div>'+
     '<button class="secondary btn filter-toggle" id="collectionFilterToggle" type="button" aria-expanded="'+(f.filtersOpen?"true":"false")+'">🔽 FILTRO'+(n?' ('+n+')':'')+'</button>'+
-  '</div>'+collectionFilterPanel()+
+  '</div>'+collectionFilterPanel()+filterChipBar("collection")+
   '<p class="hint">Aquí aparecen las cartas que tienes. Importar y exportar está en Cuenta → Datos y copias de seguridad.</p>';
 }
 
 async function renderCollectionResults(){
   const host=$("#collectionResults");if(!host)return;
+  renderFilterChips("collection");
   // Never block the collection UI on the market-price feed. The cards must render
   // from the local/cloud collection even when prices are temporarily unavailable.
   if(state.collection.sort==="price"){
