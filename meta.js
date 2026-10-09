@@ -1,9 +1,10 @@
 /* Meta competitivo: Limitless y estadísticas agregadas automáticas de torneos de la comunidad. */
 (function(){
 "use strict";
-const m={scope:"global",section:"tiers",days:90,format:"auto",leader:"",expanded:false,
+const m={scope:"global",section:"report",days:90,format:"auto",leader:"",expanded:false,
  global:null,community:null,loading:false,communityLoading:false,error:"",communityError:"",
- lastGlobalAttempt:"",lastCommunityAttempt:"",globalRetryAfter:0,communityRetryAfter:0};
+ lastGlobalAttempt:"",lastCommunityAttempt:"",globalRetryAfter:0,communityRetryAfter:0,
+ independent:null,independentBusy:false,independentAt:0};
 const css=".meta-page{max-width:1320px;padding-bottom:105px}.meta-tabs{display:flex;gap:7px;overflow-x:auto;padding:9px 0}.meta-tabs button{border:1px solid var(--line);background:var(--panel2);color:var(--text);border-radius:10px;padding:10px 12px;font-weight:800;white-space:nowrap}.meta-tabs button.active{border-color:var(--accent);color:var(--accent);background:#332d19}.meta-controls{display:flex;flex-wrap:wrap;gap:8px;align-items:end;margin:12px 0}.meta-controls label{display:grid;gap:5px;flex:1;min-width:115px;color:var(--muted);font-size:12px}.meta-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:12px 0}.meta-stat{border:1px solid var(--line);background:var(--panel);border-radius:12px;padding:11px}.meta-stat b{font-size:clamp(18px,3vw,25px);display:block}.meta-stat small{font-size:11px;color:var(--muted)}.meta-tier{display:flex;border:1px solid var(--line);background:var(--panel);border-radius:14px;overflow:hidden;margin-bottom:9px}.meta-tier-grade{width:51px;flex:none;display:grid;place-items:center;color:#16191e;font-size:26px;font-weight:950}.meta-tier-grade.s{background:#e9898e}.meta-tier-grade.a{background:#efbb79}.meta-tier-grade.b{background:#e9d68d}.meta-tier-grade.c{background:#a5c6a6}.meta-tier-grade.d{background:#8fb2cb}.meta-tier-grade.unknown{background:#8993a5}.meta-tier-items{display:flex;flex-wrap:wrap;gap:7px;min-width:0;padding:9px}.meta-leader-card{width:88px;border:1px solid var(--line);background:var(--panel2);color:var(--text);border-radius:9px;text-align:center;padding:5px}.meta-leader-card img{width:100%;aspect-ratio:.716;object-fit:cover;display:block;border-radius:5px}.meta-leader-card b{display:block;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-size:11px;margin-top:5px}.meta-leader-card small{display:block;color:var(--muted);font-size:10px}.meta-scroller{width:100%;max-height:70vh;overflow:auto;border:1px solid var(--line);border-radius:12px}.meta-table{width:100%;min-width:650px;border-collapse:separate;border-spacing:0;font-size:12px}.meta-table th,.meta-table td{padding:9px 8px;text-align:center;white-space:nowrap;border-right:1px solid #334052;border-bottom:1px solid #334052}.meta-table th{position:sticky;top:0;z-index:2;background:#283246}.meta-table th:first-child{left:0;z-index:4}.meta-table td:first-child{position:sticky;left:0;z-index:1;background:#192333;text-align:left}.meta-table small{display:block;color:#a0adbf;font-size:10px}.meta-win{background:#15513d;color:#bcf7db}.meta-mid{background:#554921;color:#fff4c7}.meta-loss{background:#592933;color:#ffcad4}.meta-no{background:#252b37;color:#929cac}.meta-source{color:var(--muted);font-size:12px;line-height:1.5}.meta-source a{color:var(--accent)}@media(max-width:650px){.meta-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.meta-tier-grade{width:40px;font-size:21px}.meta-leader-card{width:73px}.meta-tier-items{padding:6px;gap:5px}}";
 const s=document.createElement("style");s.textContent=css;document.head.appendChild(s);
 const $=x=>document.querySelector(x);
@@ -108,8 +109,9 @@ function view(){
     (loading?'<div class="notice">Procesando resultados…</div>':"")+(error?'<div class="notice">'+esc(error)+'</div>':"")+
     (d?'<p class="small">Actualizado '+esc(new Date(d.updatedAt||Date.now()).toLocaleString("es-ES"))+
        (community?" · Datos de todos los torneos finalizados; las muestras pequeñas quedan ocultas":" · Formato: "+esc(d.formatUsed||"—")+(d.formatUsed==="all"?" · Formatos combinados":"")+(d.partial?" · Consulta parcial":"")+(d.stale?" · Última copia disponible":""))+'</p>'+
-      statCards(d)+'<div class="meta-tabs">'+nav("tiers","Tier list")+nav("matrix","Matriz W/R")+nav("matchups","Matchups · 1.º / 2.º")+nav("leaders","Ranking")+'</div>'+
-      (m.section==="tiers"?tiers(d):m.section==="matrix"?matrix(d):m.section==="matchups"?matchupTable(d):ranking(d))+
+      statCards(d)+'<div class="meta-tabs">'+nav("report","Informe contrastado")+nav("tiers","Tier list")+nav("matrix","Matriz W/R")+nav("matchups","Matchups · 1.º / 2.º")+nav("leaders","Ranking")+'</div>'+
+      (m.section==="report"?(window.renderMetaComparisonReport?.(d,m.independent,m.independentBusy)||"Informe no disponible"):
+  m.section==="tiers"?tiers(d):m.section==="matrix"?matrix(d):m.section==="matchups"?matchupTable(d):ranking(d))+
       '<p class="meta-source">Solo se computan resultados identificados, sin inventar datos. Los tiers son orientativos, no predicciones oficiales.</p>':
       (!loading?'<div class="notice">'+(community?"Todavía no hay estadísticas comunitarias con suficiente muestra para mostrarlas. Todos los torneos finalizados ya cuentan automáticamente.":"No hay datos disponibles por el momento.")+'</div>':""))+'</div>';
 }
@@ -150,6 +152,18 @@ async function loadGlobal(force=false){
     }
   }finally{m.loading=false;if(state.tab==="meta")renderShell()}
 }
+async function loadIndependent(force=false){
+ if(m.independentBusy||(!force&&m.independent&&Date.now()-m.independentAt<45*60000))return;
+ m.independentBusy=true;
+ try{
+  const r=await fetch("/api/meta-comparison"+(force?"?refresh=1":""),{signal:AbortSignal.timeout(26000)});
+  if(!r.ok)throw Error("HTTP "+r.status);
+  const data=await r.json();
+  if(!Array.isArray(data?.sources))throw Error("Fuentes inválidas");
+  m.independent=data;m.independentAt=Date.now();
+ }catch(error){console.warn("Fuentes externas del Meta",error);m.independentAt=Date.now()}
+ finally{m.independentBusy=false;if(state.tab==="meta"&&m.scope==="global")renderShell()}
+}
 async function loadCommunity(force=false){
   const days=m.days,key=String(days);
   if(m.communityLoading||(!force&&m.lastCommunityAttempt===key&&
@@ -174,8 +188,11 @@ function bind(){
   $("#metaFormat")?.addEventListener("change",e=>{m.format=e.target.value;m.global=null;renderShell()});
   $("#metaLeaderSelect")?.addEventListener("change",e=>{m.leader=e.target.value;renderShell()});
   $("#metaExpand")?.addEventListener("click",()=>{m.expanded=!m.expanded;renderShell()});
-  $("#metaRefresh")?.addEventListener("click",()=>m.scope==="global"?void loadGlobal(true):void loadCommunity(true));
-  if(m.scope==="global")void loadGlobal();else void loadCommunity()
+  $("#metaRefresh")?.addEventListener("click",()=>{
+  if(m.scope==="global"){void loadGlobal(true);void loadIndependent(true)}
+  else void loadCommunity(true);
+});
+  if(m.scope==="global"){void loadGlobal();void loadIndependent()}else void loadCommunity()
 }
 window.metaView=view;window.metaBind=bind;
 })();
