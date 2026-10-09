@@ -26,7 +26,7 @@ function ids(s){return [...new Set((s.match(ID_RX)||[]).map(id=>id.toUpperCase()
 function ensure(ok,reason){if(!ok)throw Error("Official legality parser: "+reason)}
 const CIRCLED="⓪①②③④⑤⑥⑦⑧⑨⑩";
 function numberOfBlock(s){
- const token=String(s).match(/(?:Block Number|Block Icon)\s*([⓪-⑩]|\d+)/i)?.[1];
+ const token=String(s).match(/(?:Block Number|Block Icon)\s*([⓪①②③④⑤⑥⑦⑧⑨⑩]|\d+)/i)?.[1];
  return !token?null:CIRCLED.includes(token)?CIRCLED.indexOf(token):Number(token);
 }
 export function parseBandai(bannedHtml,blocksHtml,previous){
