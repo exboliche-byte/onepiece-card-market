@@ -127,33 +127,10 @@ export function createEngine(onProgress=()=>{}){
     const text=String(result?.data?.text||"");
     return {codes:codesFromText(text),text,mode,confidence:Number(result?.data?.confidence||0)};
   }
-  // Dedicated high-resolution code OCR for a photo of one or more cards.
-  // Unlike the live scanner, cycle through narrow bottom-right regions rather than names.
-  async function recognizeCode(frame){
-    const w=await init();
-    if(closed)throw Error("Escáner cerrado");
-    const api=window.Tesseract;
-    if(activeMode!=="line"){
-      await w.setParameters({tessedit_pageseg_mode:api.PSM?.SINGLE_LINE||"7"});
-      activeMode="line";
-    }
-    const regions=[[.45,.75,.54,.25,1700],[.30,.69,.69,.31,1400],[.02,.79,.96,.20,1400]];
-    const texts=[];
-    for(const region of regions){
-      if(closed)throw Error("Escáner cerrado");
-      const input=crop(frame,region,true);
-      const result=await w.recognize(input);
-      const raw=String(result?.data?.text||"");
-      texts.push(raw);
-      const codes=codesFromText(raw);
-      if(codes.length)return {codes,text:texts.join("\n"),confidence:Number(result?.data?.confidence||0)};
-    }
-    return {codes:[],text:texts.join("\n"),confidence:0};
-  }
   async function destroy(){
     closed=true;
     const created=worker;worker=null;
     if(created){try{await created.terminate()}catch{}}
   }
-  return {init,recognize,recognizeCode,destroy};
+  return {init,recognize,destroy};
 }
