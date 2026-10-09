@@ -55,3 +55,22 @@ test("optional tracking initially renders no badge when disabled or not loaded",
  const {api,saboDeck}=setup();
  assert.equal(api.statusMark(saboDeck),"");
 });
+
+test("status chip links directly to its own physical deck manager",async()=>{
+ const {api,saboDeck}=setup();await api.load();
+ const markup=api.statusMark(saboDeck);
+ assert.match(markup,/button type="button"/);
+ assert.match(markup,/data-physical-open="11111111-1111-4111-8111-111111111111"/);
+ assert.match(markup,/montado/);
+ assert.match(api.statusMark(saboDeck,false),/^<span /);
+});
+test("missing physical copy retains the requested print for its image",async()=>{
+ const {api,state}=setup(7);await api.load();
+ state.owned["OP11-011_p1"]=0;
+ const planned=api._testing.plan(state.decks[1]);
+ assert.equal(planned.missing.length,0,"donor has enough copies");
+ state.decks[1].cards["OP11-012"]=2;
+ const next=api._testing.plan(state.decks[1]);
+ assert.equal(next.missing[0].id,"OP11-012");
+ assert.equal(next.missing[0].quantity,2);
+});
