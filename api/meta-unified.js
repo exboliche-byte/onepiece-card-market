@@ -119,13 +119,38 @@ export default {async fetch(request){
   if(result.status!=="fulfilled"||!result.value.ok)return null;
   try{return await result.value.json()}catch{return null}
  };
- const t=await data(tour),e=await data(independent);
+ let t=await data(tour);
+ const e=await data(independent);
  const sim=e?.sources?.find(s=>s.id==="oplay"&&s.status==="ok"&&Array.isArray(s.leaders)&&s.leaders.length)||null;
+ let tournamentFallback=false;
+ if(!t?.leaders?.length){
+  // Public original endpoint can be CDN-cached even when Limitless is
+  // rate-limiting this particular serverless instance.
+  try{
+   const origin=new URL(request.url);
+   const fallbackUrl=(origin.hostname.endsWith(".vercel.app")?
+    origin.origin:"https://onepiece-card-market.vercel.app")+"/api/meta?"+query;
+   const ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),8000);
+   try{
+    const response=await fetch(fallbackUrl,{headers:{accept:"application/json"},signal:ctrl.signal});
+    if(response.ok){
+     const older=await response.json();
+     if(older?.leaders?.length){t=older;tournamentFallback=true}
+    }
+   }finally{clearTimeout(timer)}
+  }catch{/* no fabricated tournament results */}
+ }
  if(!Array.isArray(t?.leaders)&&!sim){
   if(previous)return respond({...previous.value,stale:true,partial:true});
   return respond({error:"Las fuentes del Meta no están disponibles."},502);
  }
  const v=combineMetas(t,sim);
+ v.partial=v.partial||v.sourcesAvailable<2;
+ v.sources.tournaments.cachedFallback=tournamentFallback;
+ v.sourceWarning=v.sourcesAvailable<2?
+  "Falta temporalmente una fuente; se muestran únicamente datos verificados.":
+  tournamentFallback?"Limitless: usando la última muestra almacenada por el servidor.":
+  "";
  if(t?.leaders?.length&&sim?.leaders?.length)cache.set(key,{at:Date.now(),value:v});
  else if(previous)return respond({...previous.value,stale:true,partial:true});
  return respond(v);
