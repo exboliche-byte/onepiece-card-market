@@ -70,5 +70,10 @@
     "deploymentEnabled": {
       "feature/deck-tools-pwa-20261009": false
     }
+  },
+  "functions": {
+    "api/yonko-decks.js": {
+      "maxDuration": 60
+    }
   }
 }
