@@ -1257,8 +1257,6 @@ function collectionView(){
   if(state.collectionStatsOpen)return collectionStatisticsView();
   if(state.collectionArchivedOpen)return '<div class="wrap collection-top"><div class="hero"><h1>Prohibidas y rotadas</h1></div>'+
     collectionViewNav("archived")+
-    '<p class="small muted collection-archive-note">Las prohibidas aparecen antes que las rotadas. Las reglas se sincronizan automáticamente con Bandai (Europa), sin borrar tus cartas. Las parejas prohibidas solo son ilegales cuando aparecen juntas en un mismo mazo.</p>'+
-    '<p class="small muted">Standard: bloque mínimo '+window.OnePieceLegality.info().minimumBlock+' · <a href="https://en.onepiece-cardgame.com/news/restriction.html" target="_blank" rel="noopener noreferrer">Prohibiciones oficiales</a> · <a href="https://en.onepiece-cardgame.com/news/blockicon-card.html" target="_blank" rel="noopener noreferrer">Rotación oficial</a></p>'+
     collectionToolbar()+'<div id="collectionResults"></div></div>';
   return '<div class="wrap collection-top"><div class="hero collection-title-row"><h1>Mi colección</h1>'+
     '<button class="secondary btn collection-share-icon" id="openCollectionShare" type="button" title="Compartir colección" aria-label="Compartir colección">↗</button></div>'+
@@ -1585,6 +1583,8 @@ function discardCompetitiveDraft(){
 async function saveCompetitiveDraft(){
   const d=state.decks.find(x=>x.id===state.deckId&&x.draftCompetitive);if(!d)return;
   if(!state.user){navigateApp(()=>{state.tab="account"});notify("Inicia sesión para guardar este mazo");return}
+  const prohibited=deckCreationProblem(d.leader,d.cards);
+  if(prohibited){notify("No se puede guardar: "+prohibited);return}
   // Competitive drafts are only client-side previews; saved Supabase deck IDs must be UUIDs.
   const previousId=d.id;
   d.id=crypto.randomUUID();
@@ -1880,6 +1880,8 @@ function validateDeckBackup(raw){
       copyCounts[id]=q;total+=q;
     }
     if(total>50)throw Error("El mazo "+(i+1)+" supera las 50 cartas.");
+    const prohibited=deckCreationProblem(leader,copyCounts);
+    if(prohibited)throw Error("Mazo "+(i+1)+": "+prohibited);
     return {name:name.trim(),description,leader,colors:colors.slice(),cards:copyCounts};
   });
 }
@@ -1978,6 +1980,38 @@ function parseDeckListLine(line){
   const qm=(before.match(/\d+/)||after.match(/\d+/)||["1"])[0];
   return {id,quantity:Math.max(1,Math.min(50,Number(qm)||1))};
 }
+
+function deckProhibitionReason(id,cards={}){
+  const key=String(baseId(id)||"").toUpperCase();
+  const rules=window.OnePieceLegality;
+  if(rules?.bannedIds?.().includes(key))return "La carta "+key+" está prohibida y no puede usarse en un mazo";
+  for(const [a,b] of rules?.bannedPairs?.()||[]){
+    const other=key===a?b:key===b?a:null;
+    if(other&&Object.entries(cards).some(([printId,q])=>Number(q)>0&&String(baseId(printId)).toUpperCase()===other))
+      return "Pareja prohibida: "+a+" y "+b+" no pueden estar juntas en un mazo";
+  }
+  return "";
+}
+function deckCreationProblem(leader,cards={}){
+  if(leader){
+    const reason=deckProhibitionReason(leader,cards);
+    if(reason)return reason;
+  }
+  const restricted=new Set(window.OnePieceLegality?.restrictedIds?.()||[]);
+  const counts=new Map();
+  for(const [id,value] of Object.entries(cards)){
+    const quantity=Number(value)||0;
+    if(quantity<=0)continue;
+    const reason=deckProhibitionReason(id,cards);
+    if(reason)return reason;
+    const key=String(baseId(id)).toUpperCase();
+    counts.set(key,(counts.get(key)||0)+quantity);
+    if(restricted.has(key)&&counts.get(key)>1)
+      return "La carta "+key+" está restringida a una copia por mazo";
+  }
+  return "";
+}
+
 function importDeckText(t,n=""){
   if(!state.user){notify("Inicia sesión para importar mazos");return false}
   let name=String(n||"Mazo importado").replace(/\.[^.]+$/,"")||"Mazo importado",description="",leader="",cards={};
@@ -1997,6 +2031,8 @@ function importDeckText(t,n=""){
     }
   }
   if(!leader){notify("La lista necesita un líder válido");return false}
+  const prohibited=deckCreationProblem(leader,cards);
+  if(prohibited){notify("No se puede importar: "+prohibited);return false}
   const leaderCard=card(leader);
   const incompatible=Object.keys(cards).map(card).filter(cc=>cc&&!deckCardAllowedByLeader(cc,leaderCard));
   if(incompatible.length){notify("La lista contiene "+incompatible.length+" carta(s) de color no compatible con el líder");return false}
@@ -2018,6 +2054,7 @@ function deckValidate(d){
   const pairs=window.OnePieceLegality?.bannedPairs?.()||[["OP07-115","EB04-058"],["OP11-040","OP11-067"],["OP11-040","OP08-069"]];
   const restricted=new Set(window.OnePieceLegality?.restrictedIds?.()||[]);
   let illegal=0;if(!leader)messages.push("Líder no seleccionado");if(total!==50)messages.push(total+"/50 cartas no líder");
+  if(d.leader&&banned.has(String(baseId(d.leader)).toUpperCase())){illegal++;messages.push("Líder "+baseId(d.leader)+" prohibido")}
   const ids=Object.entries(d.cards||{}),baseCounts=new Map();
   for(const [id,n] of ids){
     const c=card(id),base=baseId(id),limit=restricted.has(base)?1:deckCopyLimitForId(id);
@@ -2065,7 +2102,7 @@ async function renderDeckResults(){
   const host=$("#deckResults");if(!host)return;
   const d=state.decks.find(x=>x.id===state.deckId);if(!d){host.innerHTML="";return}
   const leader=card(d.leader),choosingLeader=!leader||state.deckChoosingLeader,q=norm(state.deckQuery),f=state.deckFilters;
-  let list=state.cards.slice();
+  let list=state.cards.filter(c=>!deckProhibitionReason(c.id,d.cards));
   if(choosingLeader)list=list.filter(c=>c.category==="Leader");
   else list=list.filter(c=>deckCardAllowedByLeader(c,leader));
   if(q){const searchGroups=new Set(state.cards.filter(c=>searchMatchesCard(c,q)).map(groupKey));list=list.filter(c=>searchGroups.has(groupKey(c)))}
@@ -2186,9 +2223,12 @@ function changeDeckGroupQty(code,delta){
 function changeDeckQty(id,delta){
   const d=state.decks.find(x=>x.id===state.deckId);if(!d)return;
   const cc=card(id);if(!cc||cc.category==="Leader")return;
-  const limit=deckCopyLimitForId(id);
+  const restricted=new Set(window.OnePieceLegality?.restrictedIds?.()||[]);
+  const limit=restricted.has(String(baseId(id)).toUpperCase())?1:deckCopyLimitForId(id);
   const used=Object.entries(d.cards||{}).filter(([x])=>deckPrintedCode(x)===deckPrintedCode(id)).reduce((sum,[,q])=>sum+Number(q||0),0);
   if(Number(delta)>0){
+    const prohibited=deckProhibitionReason(id,d.cards);
+    if(prohibited)return notify(prohibited);
     const leader=card(d.leader);if(!leader)return notify("Elige primero un líder");
     if(!deckCardAllowedByLeader(cc,leader))return notify("Esa carta no coincide con el color o colores del líder");
     if(deckCardTotal(d)>=50)return notify("El mazo ya tiene 50 cartas");
@@ -2203,6 +2243,8 @@ function changeDeckQty(id,delta){
 function beginLeaderChange(){state.deckChoosingLeader=true;state.deckQuery="";state.deckPage=1;renderShell()}
 function setLeader(id){
   const d=state.decks.find(x=>x.id===state.deckId),cc=card(id);if(!d||!cc||cc.category!=="Leader")return;
+  const prohibited=deckProhibitionReason(id,d.cards);
+  if(prohibited)return notify(prohibited);
   const incompatible=Object.entries(d.cards||{}).filter(([,q])=>Number(q)>0).map(([cardId])=>card(cardId)).filter(x=>x&&!deckCardAllowedByLeader(x,cc));
   if(incompatible.length)return notify("Ese líder no es compatible con "+incompatible.length+" carta(s) que ya hay en el mazo");
   d.leader=id;d.colors=cc.colors||[];if(d.draftCompetitive)d.draftDirty=true;d.updatedAt=new Date().toISOString();state.deckChoosingLeader=false;
@@ -3214,6 +3256,12 @@ function updateDeckSyncStatus(){
 }
 function syncDeck(d,{automatic=false}={}){
   if(d?.draftCompetitive||!state.sb||!state.user||!d)return Promise.resolve(false);
+  // Existing invalid decks remain visible so users can remove banned cards;
+  // never publish new user-initiated writes containing forbidden cards.
+  if(!automatic){
+    const prohibited=deckCreationProblem(d.leader,d.cards);
+    if(prohibited){notify("No se puede guardar: "+prohibited);return Promise.resolve(false)}
+  }
   ensureSavedDeckUuid(d);
   const userId=state.user.id,id=d.id,client=state.sb;
   const cards=Object.fromEntries(Object.entries(d.cards||{})
