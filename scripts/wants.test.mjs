@@ -21,8 +21,13 @@ test("a 60% deck with 37 games ranks below a 55% deck with 10000 games",()=>{
 test("wants module and integrated HTML parse",()=>{
  assert.doesNotThrow(()=>new vm.Script(wants));
  assert.match(html,/src="\/wants\.js"/);
- assert.match(html,/id="openWants"/);
- assert.match(html,/if\(state\.wantsOpen\)/);
+ assert.match(html,/\["wants","Wants"\]/);
+ assert.match(html,/state\.tab==="wants"\?wantsView\(\)/);
+ assert.match(html,/if\(state\.tab==="wants"\)window\.MyWants\?\.bind\?\.\(\)/);
+ assert.match(html,/\["MI[S]? CARTAS",\["collection","wants","scanner"\]\]/);
+ assert.doesNotMatch(html,/id="openWants"/);
+ assert.doesNotMatch(html,/state\.wantsOpen/);
+ assert.match(wants,/state\.tab==="wants"/);
  assert.match(html,/data-want-count/);
  assert.match(html,/MyWants\?\.consume\?\.\(id,n-old\)/);
  assert.match(html,/MyWants\?\.consumeBatch\?\.\(newlyOwned\)/);
