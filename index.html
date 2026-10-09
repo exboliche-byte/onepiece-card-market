@@ -151,6 +151,23 @@ button:focus-visible,a:focus-visible,summary:focus-visible,input:focus-visible,s
 .active-filter-chips:empty{display:none}
 .active-filter-chips button{font-size:12px;padding:7px 10px;color:var(--text);background:var(--panel2);border:1px solid var(--line);border-radius:20px;cursor:pointer}
 .active-filter-chips button:hover{border-color:var(--accent)}
+
+/* Acciones de carta compactas: detalle / versiones 2 tercios, Wants 1 tercio. */
+.card-action-row{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr);gap:5px;margin-top:7px}
+.card-action-row .btn{min-width:0;margin:0;padding:8px 3px;font-size:11px;line-height:1.2}
+.card-action-row .card-action-main:only-child{grid-column:1/-1}
+.card-action-row .card-action-want{font-size:16px;padding:6px 3px}
+/* Colección: encabezado y controles sin ocupar media pantalla. */
+.collection-top .hero{margin:2px 0 9px}
+.collection-top .hero h1{font-size:clamp(23px,4.2vw,29px)}
+.collection-tools{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin-bottom:9px}
+.collection-tools .btn{min-width:0;min-height:35px;padding:7px 4px;font-size:11px;font-weight:700;line-height:1.15}
+.collection-top .catalog-controls{grid-template-columns:minmax(170px,1.6fr) minmax(250px,2fr) minmax(94px,.65fr);align-items:end;gap:7px;margin-bottom:7px}
+.collection-top .catalog-controls .field{padding:8px 9px;font-size:12px}
+.collection-top .sort-controls{gap:6px}
+.collection-top .control-label{gap:3px}
+.collection-top .filter-toggle{padding:8px 6px;min-height:35px;font-size:12px;text-align:center}
+@media(max-width:760px){.collection-top .catalog-controls{grid-template-columns:minmax(0,1fr) auto}.collection-top .catalog-controls #collectionSearch{grid-column:1/-1}.collection-top .catalog-controls .sort-controls{grid-column:1}.collection-top .catalog-controls .filter-toggle{grid-column:2;align-self:end;width:auto}}
 </style>
 </head>
 <body>
@@ -889,7 +906,8 @@ function cardTile(c,extra=""){
     '<div class="chips">'+(c.colors||[]).map(x=>'<span class="chip">'+esc(x)+'</span>').join("")+'</div>'+
     '<div class="row"><span>'+(p!==null?money(p):"Precio —")+'</span><span class="small">'+q+'/'+target+'</span></div>'+
     (state.user&&state.collectionReady?'<div class="quick"><button class="secondary" data-qty="'+esc(c.id)+'" data-d="-1">−</button><div class="qty">'+q+'</div><button class="primary" data-qty="'+esc(c.id)+'" data-d="1">+</button></div>':'')+
-    (state.user&&state.collectionReady?'<button type="button" class="secondary btn" style="width:100%;margin-top:7px" aria-label="Añadir a mis wants" title="Añadir a mis wants" data-want="'+esc(c.id)+'" data-want-count="1">💛</button>':"")+
+    (state.tab==="catalog"?'<div class="card-action-row"><button type="button" class="secondary btn card-action-main" data-detail="'+esc(c.id)+'">Ver carta</button>'+
+      (state.user&&state.collectionReady?'<button type="button" class="secondary btn card-action-want" aria-label="Añadir a mis wants" title="Añadir a mis wants" data-want="'+esc(c.id)+'" data-want-count="1">💛</button>':"")+'</div>':"")+
     extra+'</div></article>';
 }
 // The catalog cover is the cheapest standard printing from the original
@@ -951,9 +969,9 @@ function groupedTile(g){
     '<div class="chips">'+g.sets.slice(0,5).map(x=>'<span class="chip">'+esc(x)+'</span>').join("")+(g.sets.length>5?'<span class="chip">+'+(g.sets.length-5)+'</span>':"")+'</div>'+
     '<div class="row"><span>'+priceLabel+'</span><span class="small">'+q+' copias</span></div>'+
     (state.user&&state.collectionReady?'<div class="quick"><button class="secondary" data-qty="'+esc(c.id)+'" data-d="-1">−</button><div class="qty">'+q+'</div><button class="primary" data-qty="'+esc(c.id)+'" data-d="1">+</button></div>':'')+
-    '<button class="secondary btn" style="width:100%;margin-top:8px" data-group="'+esc(c.id)+'">Ver versiones</button>'+
-    (state.user&&state.collectionReady?'<button type="button" class="secondary btn" style="width:100%;margin-top:7px" aria-label="Añadir a mis wants" title="Añadir a mis wants" data-want="'+esc(c.id)+'" data-want-count="1">💛</button>':"")+
-    '</div></article>';
+    '<div class="card-action-row"><button type="button" class="secondary btn card-action-main" data-group="'+esc(c.id)+'">Ver versiones</button>'+
+    (state.user&&state.collectionReady?'<button type="button" class="secondary btn card-action-want" aria-label="Añadir a mis wants" title="Añadir a mis wants" data-want="'+esc(c.id)+'" data-want-count="1">💛</button>':"")+
+    '</div></div></article>';
 }
 function pagination(total,page,key){
   const pages=Math.max(1,Math.ceil(total/PAGE));page=Math.min(page,pages);
@@ -1094,8 +1112,7 @@ function collectionToolbar(){
       filterLabel("Orden",'<select id="colDir" class="field"><option value="asc" '+(f.dir==="asc"?"selected":"")+'>Ascendente</option><option value="desc" '+(f.dir==="desc"?"selected":"")+'>Descendente</option></select>')+
     '</div>'+
     '<button class="secondary btn filter-toggle" id="collectionFilterToggle" type="button" aria-expanded="'+(f.filtersOpen?"true":"false")+'">🔽 FILTRO'+(n?' ('+n+')':'')+'</button>'+
-  '</div>'+collectionFilterPanel()+filterChipBar("collection")+
-  '<p class="hint">Aquí aparecen las cartas que tienes. Importar y exportar está en Cuenta → Datos y copias de seguridad.</p>';
+  '</div>'+collectionFilterPanel()+filterChipBar("collection");
 }
 
 async function renderCollectionResults(){
@@ -1126,11 +1143,11 @@ function collectionView(){
   if(state.boxesOpen)return window.CollectionBoxes?.view?.()||'<div class="notice">No se pudieron cargar tus cajas.</div>';
   if(state.wantsOpen)return window.MyWants?.view?.()||'<div class="notice">No se pudieron cargar Mis wants.</div>';
   if(state.collectionStatsOpen)return collectionStatisticsView();
-  return '<div class="wrap"><div class="hero"><div><h1>Mi colección</h1><p>Todas mis cartas, todos los sets, filtrables y ordenables.</p></div></div>'+
-    '<div class="inline-actions" style="margin-bottom:12px;gap:8px"><button type="button" class="secondary btn collection-stats-entry" id="openCollectionStats" style="padding:9px 13px;font-size:13px;font-weight:750">📊 Estadísticas de mi colección →</button>'+
-    '<button type="button" class="secondary btn" id="openCollectionShare" style="padding:9px 13px;font-size:13px">🔗 Compartir colección</button>'+
-     '<button type="button" class="primary btn" id="openWants" style="padding:9px 13px;font-size:13px">💛 Mis wants →</button>'+
-    '<button type="button" class="secondary btn" id="openCollectionBoxes" style="padding:9px 13px;font-size:13px">📦 Mis cajas →</button></div>'+
+  return '<div class="wrap collection-top"><div class="hero"><h1>Mi colección</h1></div>'+
+    '<div class="collection-tools"><button type="button" class="secondary btn collection-stats-entry" id="openCollectionStats">📊 Estadísticas</button>'+
+    '<button type="button" class="secondary btn" id="openCollectionShare">🔗 Compartir</button>'+
+    '<button type="button" class="primary btn" id="openWants">💛 Wants</button>'+
+    '<button type="button" class="secondary btn" id="openCollectionBoxes">📦 Cajas</button></div>'+
     collectionToolbar()+'<div id="collectionResults"></div></div>';
 }
 function collectionStatisticsBreakdowns(){
