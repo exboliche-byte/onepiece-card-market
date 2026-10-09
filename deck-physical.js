@@ -238,17 +238,34 @@ function plan(deck){
    if(take){put(next,deck.id,id,take);changes.push({id,from:null,to:deck.id,quantity:take});missingCount-=take}
   }
   if(!missingCount)continue;
-  // Choose incomplete donors first; avoid disturbing an intact box unnecessarily.
+  // Minimizar el número de cajas donantes: si una sola tiene todas las
+  // copias restantes, usarla antes de repartir el movimiento entre varias.
   const donors=decks().filter(d=>d.id!==deck.id&&next[d.id])
+   .map(d=>({
+    deck:d,
+    available:Object.entries(next[d.id]).reduce((sum,[id,n])=>
+     sum+(code(id)===row.code?integer(n):0),0),
+    intact:stats(d,next).status==="montado"
+   }))
+   .filter(item=>item.available>0)
    .sort((a,b)=>{
-    const aIncomplete=stats(a,next).status!=="montado"?0:1,bIncomplete=stats(b,next).status!=="montado"?0:1;
-    return aIncomplete-bIncomplete||a.name.localeCompare(b.name,"es");
+    const aCovers=a.available>=missingCount,bCovers=b.available>=missingCount;
+    if(aCovers!==bCovers)return aCovers?-1:1;
+    // Con una sola caja suficiente, evitar desmontar otra que siga completa.
+    if(a.intact!==b.intact)return a.intact?1:-1;
+    // Si no hay ninguna suficiente, coger primero la que más aporta.
+    // Si ambas bastan, vaciar el grupo de copias de una caja si se puede.
+    return (aCovers?a.available-b.available:b.available-a.available)||
+     a.deck.name.localeCompare(b.deck.name,"es");
    });
-  for(const donor of donors){
-   for(const id of Object.keys(next[donor.id]||{})){
+  for(const {deck:donor} of donors){
+   const ids=Object.keys(next[donor.id]||{})
+    .filter(id=>code(id)===row.code)
+    .sort((a,b)=>integer(next[donor.id][b])-integer(next[donor.id][a])||a.localeCompare(b,"es"));
+   for(const id of ids){
     if(!missingCount)break;
-    if(code(id)!==row.code)continue;
-    const take=Math.min(missingCount,integer(next[donor.id][id]));
+    const take=Math.min(missingCount,integer(next[donor.id]?.[id]));
+    if(!take)continue;
     put(next,donor.id,id,-take);
     put(next,deck.id,id,take);
     changes.push({id,from:donor.id,to:deck.id,quantity:take});
@@ -259,6 +276,13 @@ function plan(deck){
   if(missingCount)missing.push({id:row.preferred[0],code:row.code,title:row.title,quantity:missingCount});
  }
  return {next,changes,missing,current:stats(deck),after:stats(deck,next)};
+}
+function movementGroup(step){
+ return step.from===null&&step.to!==null?0:step.from!==null&&step.to!==null?1:2;
+}
+function orderedMovements(changes){
+ // Primero recoger del álbum, luego de otros mazos y, por último, devolver excedentes.
+ return [...changes].sort((a,b)=>movementGroup(a)-movementGroup(b));
 }
 function cardTitle(id){
  const cd=card(id);
@@ -294,9 +318,15 @@ function draw(){
   if(p.preview){
    html+='<h3>Movimientos para montar este mazo</h3>';
    if(result.changes.length){
-    html+='<div class="physical-movements">'+result.changes.map(step=>
-     '<div class="physical-movement">'+cardPhoto(step.id)+'<div class="physical-card-info"><b>'+step.quantity+' × '+cardTitle(step.id)+'</b>'+
-     '<div class="small">'+(step.to?fromTitle(step.from)+' → '+escape(selected.name):escape(selected.name)+' → Álbum')+'</div></div></div>').join("")+'</div>';
+    const ordered=orderedMovements(result.changes);
+    html+='<div class="physical-movements">'+ordered.map((step,i)=>{
+     const group=movementGroup(step);
+     const heading=i===0||movementGroup(ordered[i-1])!==group
+      ?'<h4 class="physical-source-heading">'+["Desde el álbum","Desde otros mazos","Devolver al álbum"][group]+'</h4>':"";
+     return heading+'<div class="physical-movement">'+cardPhoto(step.id)+
+      '<div class="physical-card-info"><b>'+step.quantity+' × '+cardTitle(step.id)+'</b>'+
+      '<div class="small">'+(step.to?fromTitle(step.from)+' → '+escape(selected.name):escape(selected.name)+' → Álbum')+'</div></div></div>';
+    }).join("")+'</div>';
    }else html+='<p class="notice">No necesitas mover ninguna copia.</p>';
    if(result.missing.length)html+='<div class="notice physical-warning"><b>No hay copias suficientes. Estas cartas seguirán pendientes:</b></div>'+
     '<div class="physical-movements">'+result.missing.map(x=>'<div class="physical-movement physical-missing">'+cardPhoto(x.id)+
@@ -429,5 +459,5 @@ async function clearDeleted(){
 }
 window.addEventListener('keydown',e=>{if(e.key==='Escape'&&p.modal){close();e.stopPropagation()}});
 window.DeckPhysical={bind,open,load,statusMark,pendingButton,activeTrackingButton,forgetDeleted,clearDeleted,
- _testing:{sanitize,requirements,stats,plan,pendingCards,discrepancies,usedByPrinting}};
+ _testing:{sanitize,requirements,stats,plan,orderedMovements,pendingCards,discrepancies,usedByPrinting}};
 })();
