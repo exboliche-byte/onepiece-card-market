@@ -400,7 +400,7 @@ async function loadDecks(){
     h.list=(Array.isArray(data.results)?data.results:[]).filter(x=>x?.cards&&x.leaderId);
     h.meta={scannedEvents:data.scannedEvents,rateLimited:data.rateLimited};h.loaded=true;
   }catch(err){h.error=String(err.message||err)}
-  finally{h.busy=false;if(state.tab==="decks")renderShell()}
+  finally{h.busy=false;if(state.tab==="decks"||state.tab==="deck-completion")renderShell()}
 }
 async function loadCoach(){
   h.coachBusy=true;h.coachError="";renderShell();

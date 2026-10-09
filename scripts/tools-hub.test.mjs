@@ -197,6 +197,13 @@ test("Mutual acceptance, exact-print transfer and private policies are present",
 });
 test("Recommendations and matchup coach are placed in Mazos and Torneos",()=>{
  assert.match(html,/id="openDeckCompletion"/);
+ assert.match(html,/href="\/deck-completion" target="_blank" rel="noopener noreferrer"/);
+ assert.doesNotMatch(html,/state\.deckToolsOpen/);
+ assert.match(html,/state\.tab==="deck-completion"\?deckCompletionView\(\)/);
+ assert.match(html,/if\(location\.pathname==="\/deck-completion"\)state\.tab="deck-completion"/);
+ assert.match(html,/if\(state\.tab==="deck-completion"\)window\.OnePieceTools\?\.bindDecks/);
+ assert.match(fs.readFileSync(path.join(root,"vercel.json"),"utf8"),/"source": "\/deck-completion"/);
+ assert.match(fs.readFileSync(path.join(root,"tools-hub.js"),"utf8"),/state\.tab==="deck-completion"\)renderShell/);
  assert.match(html,/OnePieceTools\?\.decksView/);
  const tournament=fs.readFileSync(path.join(root,"tournaments.js"),"utf8");
  assert.match(tournament,/id="tourneyCoachOpen"/);

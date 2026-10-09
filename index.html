@@ -162,7 +162,7 @@ const state={
   catalog:{set:"Todas",category:"Todos",color:"Todos",rarity:"Todos",type:"Todos",attribute:"Todos",ownership:"Todas",sort:"id",dir:"asc",page:1,grouped:true,minCost:"",maxCost:"",minPower:"",maxPower:"",minPrice:"",maxPrice:"",query:"",filtersOpen:false},
   owned:{},collectionReady:false,collection:{query:"",set:"Todas",category:"Todos",color:"Todos",rarity:"Todos",type:"Todos",attribute:"Todos",quantity:"Todas",playset:"Todas",sort:"id",dir:"asc",page:1,filtersOpen:false},
   album:{set:"",query:"",ownership:"Todas",sort:"id",dir:"asc",page:1},expansions:{query:"",type:"Todos",sort:"set",dir:"asc"},
-  deckQuery:"",deckPage:1,deckLibrary:true,deckChoosingLeader:false,deckDiscover:false,deckToolsOpen:false,deckDiscoverLeader:"",deckDiscoverLeaderQuery:"",deckDiscoverResults:[],deckDiscoverLoading:false,deckDiscoverError:"",deckDiscoverDays:90,deckDiscoverMinPlayers:32,deckDiscoverMeta:null,deckFilters:{set:"Todas",category:"Todos",color:"Todos",rarity:"Todos",type:"Todos",attribute:"Todos",ownership:"Todas",sort:"id",dir:"asc",filtersOpen:false},auth:false,authReady:false,authBusy:false,authError:"",authNotice:"",authRecovery:false,toast:"",loading:true
+  deckQuery:"",deckPage:1,deckLibrary:true,deckChoosingLeader:false,deckDiscover:false,deckDiscoverLeader:"",deckDiscoverLeaderQuery:"",deckDiscoverResults:[],deckDiscoverLoading:false,deckDiscoverError:"",deckDiscoverDays:90,deckDiscoverMinPlayers:32,deckDiscoverMeta:null,deckFilters:{set:"Todas",category:"Todos",color:"Todos",rarity:"Todos",type:"Todos",attribute:"Todos",ownership:"Todas",sort:"id",dir:"asc",filtersOpen:false},auth:false,authReady:false,authBusy:false,authError:"",authNotice:"",authRecovery:false,toast:"",loading:true
 };
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??"").replace(/[&<>'"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[c]));
@@ -1413,9 +1413,8 @@ function deckLibraryView(){
   }
   const savedDecks=state.decks.filter(d=>!d?.draftCompetitive);const tiles=savedDecks.map(d=>{const l=card(d.leader),v=deckValidate(d);return '<div class="setcard decktile"><button type="button" class="deck-tile-open" style="width:100%;background:transparent;border:0;color:inherit;text-align:left;cursor:pointer" data-open-deck="'+esc(d.id)+'">'+(l?cardImg(l,"deckleader"):'<div class="deckleader fallback" style="display:grid">Sin líder</div>')+'<div class="decktilebody"><b>'+esc(d.name)+'</b>'+(d.description?'<div class="small" style="white-space:pre-wrap;overflow-wrap:anywhere;margin:5px 0 7px">'+esc(d.description)+'</div>':'')+'<div class="small">'+v.total+'/50 cartas · '+deckUniqueCount(d)+' diferentes · '+(d.leader?"1 líder":"sin líder")+'</div><div class="small">'+(v.valid?"✓ Legal":"⚠ No legal")+' · Valor '+money(deckTotalValue(d))+' · te faltan '+money(deckMissingCost(d))+'</div></button></div>'}).join("");
   return '<div class="wrap"><div class="hero"><div><h1>Mazos</h1><p>Tus mazos sincronizados con '+esc(state.user.email||"tu cuenta")+'.</p></div><button class="secondary btn" id="importDeckBtn">Importar lista</button></div>'+
-    '<div class="deck-actions"><button class="deck-action" id="newDeck"><b>＋ Crear mazo</b><span>Construye un mazo desde cero eligiendo líder y cartas.</span></button><button class="deck-action" id="findCompetitiveDecks"><b>🏆 Buscar mazos</b><span>Busca listas con buenos resultados por líder e impórtalas directamente.</span></button><button class="deck-action" id="openDeckCompletion"><b>🃏 ¿Qué mazos puedo completar?</b><span>Encuentra listas que te requieren menos cartas o menos dinero.</span></button></div>'+
+    '<div class="deck-actions"><button class="deck-action" id="newDeck"><b>＋ Crear mazo</b><span>Construye un mazo desde cero eligiendo líder y cartas.</span></button><button class="deck-action" id="findCompetitiveDecks"><b>🏆 Buscar mazos</b><span>Busca listas con buenos resultados por líder e impórtalas directamente.</span></button><a class="deck-action" id="openDeckCompletion" href="/deck-completion" target="_blank" rel="noopener noreferrer" aria-label="Abrir Qué mazos puedo completar en una pestaña nueva"><b>🃏 ¿Qué mazos puedo completar? ↗</b><span>Encuentra listas que te requieren menos cartas o menos dinero en una pestaña nueva.</span></a></div>'+
     (state.deckDiscover?competitiveDeckSearchView():"")+
-    (state.deckToolsOpen?(window.OnePieceTools?.decksView?.()||""):"")+
     '<div class="sectionhead"><h2>Mis mazos</h2><span class="small">'+savedDecks.length+' guardado(s)</span></div>'+
     (tiles?'<div class="decklibrary">'+tiles+'</div>':'<div class="section center"><h2>Aún no tienes mazos</h2><p class="muted">Puedes crear uno desde cero o importar una lista competitiva.</p></div>')+'</div>';
 }
@@ -2257,6 +2256,10 @@ function nav(){
   const mobile='<nav class="nav mobile-nav" aria-label="Secciones principales">'+items.filter(([id])=>mobileMain.includes(id)).sort((a,b)=>mobileMain.indexOf(a[0])-mobileMain.indexOf(b[0])).map(item=>tabButton(item,false)).join("")+'<button type="button" id="mobileMoreToggle" class="'+(moreActive?"active":"")+'" aria-label="Más opciones" aria-expanded="false" aria-controls="mobileMorePanel">'+navIcon("more")+'<span>Más</span></button><div id="mobileMorePanel" class="mobile-more" hidden>'+mobileMore.map(item=>tabButton(item,false)).join("")+'<button type="button" data-scan-open aria-label="Abrir escáner de cartas">'+navIcon("scanner")+'<span>Escáner</span></button></div></nav>';
   return side+mobile;
 }
+function deckCompletionView(){
+  return '<div class="wrap"><div class="hero"><div><h1>🃏 ¿Qué mazos puedo completar?</h1><p>Descubre mazos competitivos para los que te faltan pocas cartas o poco presupuesto.</p></div><a class="secondary btn" href="/">← Volver a la web</a></div>'+
+    (window.OnePieceTools?.decksView?.()||'<div class="section">Cargando recomendaciones…</div>')+'</div>';
+}
 function renderShell(){
   if(reloadViewPending)return;
   if(state.publicCollection){
@@ -2264,7 +2267,7 @@ function renderShell(){
     $("#app").innerHTML=publicCollectionView();
     bindPublicCollection();return;
   }
-  let main=state.shared?sharedDeckView():(state.tab==="home"?homeView():state.tab==="catalog"?catalogView():state.tab==="collection"?collectionView():state.tab==="album"?albumView():state.tab==="decks"?decksView():state.tab==="tournaments"?(window.tournamentsView?.()||""):state.tab==="meta"?(window.metaView?.()||""):state.tab==="trades"?(window.OnePieceTools?.tradePage?.()||""):state.tab==="proxies"?proxyView():accountView());
+  let main=state.shared?sharedDeckView():(state.tab==="home"?homeView():state.tab==="catalog"?catalogView():state.tab==="collection"?collectionView():state.tab==="album"?albumView():state.tab==="decks"?decksView():state.tab==="deck-completion"?deckCompletionView():state.tab==="tournaments"?(window.tournamentsView?.()||""):state.tab==="meta"?(window.metaView?.()||""):state.tab==="trades"?(window.OnePieceTools?.tradePage?.()||""):state.tab==="proxies"?proxyView():accountView());
   const account='<button class="account" id="accountBtn">'+(state.user?esc(accountDisplayName()||"Cuenta"):"Cuenta")+'</button>';
   document.body.dataset.currentTab=state.tab;
   $("#app").innerHTML='<div class="app'+(sidebarCollapsed?' sidebar-collapsed':'')+'"><header class="top"><div class="brand"><b>ONE PIECE</b><span>MiAlbumOnePiece</span></div>'+account+'</header>'+main+nav()+(state.detail?detailView(state.detail):"")+(state.auth?authModal():"")+(state.newDeck?newDeckModal():"")+'</div>';
@@ -2310,7 +2313,7 @@ function bindSearch(id,fn){
 function authModal(){return '<div class="modalback"><div class="modal"><div class="sectionhead"><h2>Cuenta</h2><button class="close" data-close-auth>×</button></div><h3>Entrar</h3><input id="authLogin2" class="field" placeholder="Usuario o email" autocomplete="username"><input id="authPassword2" type="password" class="field" style="margin-top:8px" placeholder="Contraseña"><button class="linkbtn" id="forgotPassword2" type="button" style="margin-top:10px">He olvidado la contraseña</button><button class="primary btn" id="login2" style="margin-top:10px">Entrar</button><details style="margin-top:16px"><summary style="cursor:pointer;font-weight:800">Crear cuenta</summary><div style="margin-top:10px"><input id="registerUser2" class="field" placeholder="Usuario" autocomplete="username"><input id="registerEmail2" type="email" class="field" style="margin-top:8px" placeholder="Email"><input id="registerPassword2a" type="password" class="field" style="margin-top:8px" placeholder="Contraseña"><input id="registerPassword2b" type="password" class="field" style="margin-top:8px" placeholder="Confirmar contraseña"><button class="secondary btn" id="register2" style="margin-top:10px">Crear cuenta</button></div></details></div></div>'}
 
 const RELOAD_VIEW_KEY="mialbumonepiece_reload_view_v1";
-const RELOAD_ALLOWED_TABS=new Set(["home","catalog","collection","album","decks","tournaments","meta","trades","proxies","account"]);
+const RELOAD_ALLOWED_TABS=new Set(["home","catalog","collection","album","decks","deck-completion","tournaments","meta","trades","proxies","account"]);
 let reloadViewPending=false;
 function showReloadPlaceholder(){
   const labels={home:"Inicio",catalog:"Catálogo",collection:"Colección",album:"Expansiones",decks:"Mazos",tournaments:"Mis torneos",meta:"Meta",proxies:"Proxies",account:"Cuenta"};
@@ -2342,7 +2345,7 @@ function snapshotReloadView(){
 function readReloadView(){
   // A new visit or an external shared/auth URL must not reuse an old tab.
   if(performance.getEntriesByType?.("navigation")?.[0]?.type!=="reload")return null;
-  if(location.pathname.startsWith("/auth/")||location.pathname.startsWith("/deck/")||location.pathname.startsWith("/card/"))return null;
+  if(location.pathname==="/deck-completion"||location.pathname.startsWith("/auth/")||location.pathname.startsWith("/deck/")||location.pathname.startsWith("/card/"))return null;
   try{
     const raw=sessionStorage.getItem(RELOAD_VIEW_KEY);
     sessionStorage.removeItem(RELOAD_VIEW_KEY);
@@ -2555,10 +2558,6 @@ function bindShell(){
       d.name=name;d.description=description;d.updatedAt=new Date().toISOString();
       saveLocal();syncDeck(d);renderShell();notify("Mazo actualizado");
     });
-    $("#openDeckCompletion")?.addEventListener("click",()=>{
-      state.deckToolsOpen=!state.deckToolsOpen;renderShell();
-    });
-    if(state.deckToolsOpen)window.OnePieceTools?.bindDecks?.();
     $("#newDeck")?.addEventListener("click",()=>{state.newDeck=true;renderShell()});
     $("#newDeck2")?.addEventListener("click",()=>{state.newDeck=true;renderShell()});
     $("#createDeckConfirm")?.addEventListener("click",()=>{const name=$("#newDeckName")?.value.trim();if(!name)return notify("Pon un nombre");if(!state.user){state.newDeck=false;navigateApp(()=>{state.tab="account"});return}const d={id:crypto.randomUUID(),name,description:$("#newDeckDesc")?.value||"",leader:"",cards:{},colors:[],owner_id:state.user.id,updatedAt:new Date().toISOString()};state.decks.unshift(d);state.deckId=d.id;state.deckLibrary=false;state.newDeck=false;saveLocal();syncDeck(d);pushAppHistory();renderShell()});
@@ -2587,6 +2586,7 @@ function bindShell(){
   if(state.tab==="tournaments")window.tournamentsBind?.();
   if(state.tab==="meta")window.metaBind?.();
   if(state.tab==="trades")window.OnePieceTools?.bindTrade?.();
+  if(state.tab==="deck-completion")window.OnePieceTools?.bindDecks?.();
   if(state.auth){
     $("#login2")?.addEventListener("click",()=>loginFrom("#authLogin2","#authPassword2"));
     $("#register2")?.addEventListener("click",()=>registerFrom("#registerUser2","#registerEmail2","#registerPassword2a","#registerPassword2b"));
@@ -3699,6 +3699,7 @@ async function boot(){
   window.addEventListener("pagehide",snapshotReloadView);
   window.addEventListener("beforeunload",snapshotReloadView);
   loadLocal();
+  if(location.pathname==="/deck-completion")state.tab="deck-completion";
   loadCachedPrices();
   if(reloadViewPending)showReloadPlaceholder();
   else renderShell();

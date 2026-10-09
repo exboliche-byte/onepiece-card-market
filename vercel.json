@@ -2,6 +2,10 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
     {
+      "source": "/deck-completion",
+      "destination": "/index.html"
+    },
+    {
       "source": "/card/:id",
       "destination": "/index.html"
     },
