@@ -889,7 +889,7 @@ function cardTile(c,extra=""){
     '<div class="chips">'+(c.colors||[]).map(x=>'<span class="chip">'+esc(x)+'</span>').join("")+'</div>'+
     '<div class="row"><span>'+(p!==null?money(p):"Precio —")+'</span><span class="small">'+q+'/'+target+'</span></div>'+
     (state.user&&state.collectionReady?'<div class="quick"><button class="secondary" data-qty="'+esc(c.id)+'" data-d="-1">−</button><div class="qty">'+q+'</div><button class="primary" data-qty="'+esc(c.id)+'" data-d="1">+</button></div>':'')+
-    (state.user&&state.collectionReady?'<button type="button" class="secondary btn" style="width:100%;margin-top:7px" data-want="'+esc(c.id)+'" data-want-count="1">💛 Añadir a wants</button>':"")+
+    (state.user&&state.collectionReady?'<button type="button" class="secondary btn" style="width:100%;margin-top:7px" aria-label="Añadir a mis wants" title="Añadir a mis wants" data-want="'+esc(c.id)+'" data-want-count="1">💛</button>':"")+
     extra+'</div></article>';
 }
 // The catalog cover is the cheapest standard printing from the original
@@ -952,7 +952,7 @@ function groupedTile(g){
     '<div class="row"><span>'+priceLabel+'</span><span class="small">'+q+' copias</span></div>'+
     (state.user&&state.collectionReady?'<div class="quick"><button class="secondary" data-qty="'+esc(c.id)+'" data-d="-1">−</button><div class="qty">'+q+'</div><button class="primary" data-qty="'+esc(c.id)+'" data-d="1">+</button></div>':'')+
     '<button class="secondary btn" style="width:100%;margin-top:8px" data-group="'+esc(c.id)+'">Ver versiones</button>'+
-    (state.user&&state.collectionReady?'<button type="button" class="secondary btn" style="width:100%;margin-top:7px" data-want="'+esc(c.id)+'" data-want-count="1">💛 A wants (esta versión)</button>':"")+
+    (state.user&&state.collectionReady?'<button type="button" class="secondary btn" style="width:100%;margin-top:7px" aria-label="Añadir a mis wants" title="Añadir a mis wants" data-want="'+esc(c.id)+'" data-want-count="1">💛</button>':"")+
     '</div></article>';
 }
 function pagination(total,page,key){
@@ -1569,7 +1569,7 @@ function deckRows(d){
     const l=card(d.leader);
     if(l){
       const display=preferredOwnedDeckPrinting(l),lp=priceOf(l),have=Math.min(1,deckOwnedCopies(l)),missing=have<1;
-      r.push('<article class="card deck-owned-card '+(missing?"deckcard-missing":"")+'"><span class="tag">Líder</span><button class="linkbtn" data-detail="'+esc(display.id)+'" style="display:block;width:100%;padding:0">'+deckOwnedImg(display,have,1)+'</button><div class="cardbody"><div class="name">'+esc(l.name||l.id)+'</div><div class="small">'+esc(display.id)+' · '+esc(l.colors?.join("/")||"—")+'</div><div class="small deck-owned-status">'+(lp!==null?money(lp)+' · ':"")+(missing?"te falta 1":"en colección")+'</div>'+(state.user&&state.collectionReady&&qty(display.id)<99?'<button type="button" class="secondary btn" style="width:100%;margin:6px 0 3px;font-size:11px;padding:7px 3px" data-deck-collect="'+esc(display.id)+'">＋1 a colección</button>':'')+(state.user?'<button class="secondary btn" style="width:100%;margin-top:6px" data-want="'+esc(l.id)+'" data-want-count="1">💛 A wants</button>':"")+
+      r.push('<article class="card deck-owned-card '+(missing?"deckcard-missing":"")+'"><span class="tag">Líder</span><button class="linkbtn" data-detail="'+esc(display.id)+'" style="display:block;width:100%;padding:0">'+deckOwnedImg(display,have,1)+'</button><div class="cardbody"><div class="name">'+esc(l.name||l.id)+'</div><div class="small">'+esc(display.id)+' · '+esc(l.colors?.join("/")||"—")+'</div><div class="small deck-owned-status">'+(lp!==null?money(lp)+' · ':"")+(missing?"te falta 1":"en colección")+'</div>'+(state.user&&state.collectionReady&&qty(display.id)<99?'<button type="button" class="secondary btn" style="width:100%;margin:6px 0 3px;font-size:11px;padding:7px 3px" data-deck-collect="'+esc(display.id)+'">＋1 a colección</button>':'')+(state.user?'<button class="secondary btn" style="width:100%;margin-top:6px" aria-label="Añadir a mis wants" title="Añadir a mis wants" data-want="'+esc(l.id)+'" data-want-count="1">💛</button>':"")+
        '<button class="danger btn" style="width:100%;margin-top:6px" data-removeleader>Quitar líder</button></div></article>');
     }
   }
@@ -1583,7 +1583,7 @@ function deckRows(d){
     const info=total===null?"Precio —":money(total);
     const ownership=need?'Tienes '+have+'/'+n+' · faltan '+need:'Tienes '+have+'/'+n;
     const printInfo=g.entries.length>1?' · '+g.entries.length+' impresiones en el mazo':'';
-    r.push('<article class="card deck-owned-card '+(need?"deckcard-missing":"")+'"><span class="tag">×'+n+'</span><button class="linkbtn" data-detail="'+esc(display.id)+'" style="display:block;width:100%;padding:0">'+deckOwnedImg(display,have,n)+'</button><div class="cardbody"><div class="name">'+esc(source.name||source.id)+'</div><div class="small">'+esc(g.code)+' · '+esc(display.set||"—")+printInfo+'</div><div class="small deck-owned-status">'+info+'<br>'+ownership+'</div>'+(state.user&&state.collectionReady&&qty(display.id)<99?'<button type="button" class="secondary btn" style="width:100%;margin:6px 0 3px;font-size:11px;padding:7px 3px" data-deck-collect="'+esc(display.id)+'">＋1 a colección</button>':'')+(state.user?'<button class="secondary btn" style="width:100%;margin:6px 0" data-want="'+esc(source.id)+'" data-want-count="'+Math.max(1,need)+'">💛 A wants'+(need?' · faltan '+need:'')+'</button>':"")+
+    r.push('<article class="card deck-owned-card '+(need?"deckcard-missing":"")+'"><span class="tag">×'+n+'</span><button class="linkbtn" data-detail="'+esc(display.id)+'" style="display:block;width:100%;padding:0">'+deckOwnedImg(display,have,n)+'</button><div class="cardbody"><div class="name">'+esc(source.name||source.id)+'</div><div class="small">'+esc(g.code)+' · '+esc(display.set||"—")+printInfo+'</div><div class="small deck-owned-status">'+info+'<br>'+ownership+'</div>'+(state.user&&state.collectionReady&&qty(display.id)<99?'<button type="button" class="secondary btn" style="width:100%;margin:6px 0 3px;font-size:11px;padding:7px 3px" data-deck-collect="'+esc(display.id)+'">＋1 a colección</button>':'')+(state.user?'<button class="secondary btn" style="width:100%;margin:6px 0" aria-label="Añadir a mis wants" title="Añadir a mis wants" data-want="'+esc(source.id)+'" data-want-count="'+Math.max(1,need)+'">💛</button>':"")+
        '<div class="quick"><button class="secondary" data-deckqtygroup="'+esc(g.code)+'" data-d="-1">−</button><div class="qty">'+n+'</div><button class="primary" data-deckqtygroup="'+esc(g.code)+'" data-d="1">+</button></div></div></article>');
   }
   return r.join("")||'<div class="notice" style="grid-column:1/-1">Elige primero un líder.</div>';
@@ -1907,7 +1907,7 @@ function deckGroupedTile(g){
     '<button class="linkbtn" data-detail="'+esc(c.id)+'" style="display:block;width:100%;padding:0">'+cardImg(c,"cardimg")+'</button>'+
     '<div class="cardbody"><button class="linkbtn deck-card-open" data-detail="'+esc(c.id)+'"><div class="name">'+esc(c.name)+'</div><div class="small">'+esc(c.id)+' · '+g.versions.length+' versión(es)</div><div class="chips">'+g.sets.slice(0,3).map(x=>'<span class="chip">'+esc(x)+'</span>').join("")+'</div></button>'+
     '<div class="row"><span class="small">'+(ps.min===null?"Precio —":ps.max!==ps.min?"Desde "+money(ps.min):money(ps.min))+'</span><span class="small">'+(isLeader?"Líder "+inDeck:"Mazo "+inDeck)+'</span></div>'+controls+
-    (state.user?'<button type="button" class="secondary btn" data-want="'+esc(c.id)+'" data-want-count="1" style="width:100%;margin-top:7px">💛 Añadir a wants</button>':"")+'</div></article>';
+    (state.user?'<button type="button" class="secondary btn" aria-label="Añadir a mis wants" title="Añadir a mis wants" data-want="'+esc(c.id)+'" data-want-count="1" style="width:100%;margin-top:7px">💛</button>':"")+'</div></article>';
 }
 async function renderDeckResults(){
   const host=$("#deckResults");if(!host)return;
@@ -2133,7 +2133,7 @@ function detailView(c){
       '<div class="row" style="margin-top:10px"><b>Mi colección: '+q+'</b><b>'+(priceOf(c)!==null?money(priceOf(c)):"Precio —")+'</b></div>'+
       '<div class="small" style="margin-top:5px">Precio de salida (referencia): '+(priceMeta(c)?.launchPrice!==null&&priceMeta(c)?.launchPrice!==undefined?money(priceMeta(c).launchPrice):"—")+'</div>'+
       (deckMode?(c.category==="Leader"?'<div class="quick"><button class="secondary" data-removeleader="'+esc(c.id)+'">−</button><div class="qty">'+(state.decks.find(d=>d.id===state.deckId)?.leader===c.id?1:0)+'</div><button class="primary" data-setleader="'+esc(c.id)+'">+</button></div>':'<div class="quick"><button class="secondary" data-deckqty="'+esc(c.id)+'" data-d="-1">−</button><div class="qty">'+Number(state.decks.find(d=>d.id===state.deckId)?.cards?.[c.id]||0)+'</div><button class="primary" data-adddeck="'+esc(c.id)+'">+</button></div>'):(state.user&&state.collectionReady?'<div class="quick"><button class="secondary" data-qty="'+esc(c.id)+'" data-d="-1">−</button><div class="qty">'+q+'</div><button class="primary" data-qty="'+esc(c.id)+'" data-d="1">+</button></div>':'<p class="small">Inicia sesión para gestionar esta carta</p>'))+
-      (state.user?'<button type="button" class="secondary btn" style="width:100%;margin-top:8px" data-want="'+esc(c.id)+'" data-want-count="1">💛 Añadir esta versión a wants</button>':"")+
+      (state.user?'<button type="button" class="secondary btn" style="width:100%;margin-top:8px" aria-label="Añadir a mis wants" title="Añadir a mis wants" data-want="'+esc(c.id)+'" data-want-count="1">💛</button>':"")+
       (cmUrl?'<a class="secondary btn" style="display:block;text-align:center;margin-top:8px;text-decoration:none" target="_blank" rel="noopener" href="'+esc(cmUrl)+'">Cardmarket ↗</a>':'<div class="small" style="margin-top:8px">Enlace exacto de Cardmarket no disponible</div>')+
       '<h3 style="margin-top:18px">Versiones / reimpresiones</h3>'+(deckMode?'<p class="small">Toca una versión para verla y añadir o quitar esa impresión.</p>':'')+'<div class="version-list">'+versions.map(v=>'<button class="version secondary" data-detail="'+esc(v.id)+'">'+cardImg(v,"versionImg")+'<small>'+esc(cardPrintLabel(v))+' · '+(priceOf(v)!==null?money(priceOf(v)):"Precio —")+' · ×'+qty(v.id)+'</small></button>').join("")+'</div>'+
       renderCardmarketCollections(c)+
@@ -3994,6 +3994,11 @@ window.addEventListener("popstate",e=>{
 <script src="/meta.js"></script>
 <script src="/meta-report.js"></script>
 <script src="/collection-history.js"></script>
+<style>
+button[data-want]{box-sizing:border-box!important;width:36px!important;height:36px!important;min-width:36px!important;min-height:36px!important;
+ display:inline-flex!important;align-items:center!important;justify-content:center!important;padding:4px!important;margin:6px 2px!important;
+ border-radius:10px!important;font-size:17px!important;line-height:1!important;vertical-align:middle}
+</style>
 <script src="/wants.js"></script>
 <script src="/collection-boxes.js"></script>
 <script src="/tools-hub.js"></script>
