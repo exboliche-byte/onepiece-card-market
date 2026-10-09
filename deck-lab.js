@@ -30,6 +30,7 @@ function open(view){
  if(view==="simulate"){lab.first=true;lab.lifeCount=leaderLife(d);lab.target=counts(d).keys().next().value||"";lab.combo=[lab.target].filter(Boolean);lab.minCopies=1;reset()}
  else {lab.source="saved";lab.opponentId=state.decks.find(x=>x.id!==d.id&&!x.draftCompetitive)?.id||"";lab.externalError="";refreshSources();}
  render();
+ if(view==="assist"&&!lab.externalLoaded)void loadExternal();
 }
 function normalizedExternal(r){
  if(!r||typeof r!=="object"||!r.cards||typeof r.cards!=="object")return null;
@@ -197,14 +198,63 @@ function compareHtml(d){
  (lab.externalError?'<div class="notice">'+safe(lab.externalError)+'</div>':''))+
  body;
 }
+
+function assistSources(d){
+ const current=counts(d),leader=code(d.leader),prices=cheapestPrints(),stock=new Map();
+ for(const [id,q] of Object.entries(state.owned||{}))stock.set(code(id),(stock.get(code(id))||0)+n(q));
+ const sources=lab.external.filter(x=>code(x.leader)===leader&&entries(x).length===50);
+ const popularity=new Map();
+ for(const src of sources)for(const id of counts(src).keys())popularity.set(id,(popularity.get(id)||0)+1);
+ const candidates=sources.map(ref=>{
+   const target=counts(ref),shared=[...current].reduce((sum,[id,q])=>sum+Math.min(q,target.get(id)||0),0);
+   const owned=[...target].reduce((sum,[id,q])=>sum+Math.min(q,stock.get(id)||0),0);
+   const buy=neededToBuy(ref,prices);
+   return {ref,target,shared,owned,buy};
+ }).sort((a,b)=>b.shared-a.shared||b.owned-a.owned||a.buy.total-b.buy.total);
+ return {current,prices,stock,sources,popularity,choice:candidates[0]};
+}
+function assistHtml(d){
+ const {current,prices,stock,sources,popularity,choice}=assistSources(d);
+ let html='<h2 id="deckLabTitle">Asistente de construcción · '+safe(d.name)+'</h2>'+
+ '<p class="small">Sugerencias basadas en listas de torneos del mismo líder, tu colección y precios disponibles. Los cambios son orientativos, no garantizan mejores resultados ni modifican tu mazo.</p>'+
+ '<button id="labAssistReload" class="secondary btn">Actualizar listas competitivas</button>'+
+ (lab.externalError?'<p class="notice">'+safe(lab.externalError)+'</p>':'')+
+ '<p class="small">'+sources.length+' listas completas de 50 cartas encontradas para tu líder.'+(sources.length<5?' Muestra pequeña: no es una conclusión estadística sólida.':'')+'</p>';
+ if(!choice)return html+'<div class="notice">No hay listas competitivas de este líder con datos suficientes. Prueba a actualizar la búsqueda.</div>';
+ const rows=[...new Set([...current.keys(),...choice.target.keys()])].map(id=>{
+  const before=current.get(id)||0,after=choice.target.get(id)||0;
+  return {id,delta:after-before,after,c:prices.get(id)?.card||state.cards.find(x=>code(x.id)===id),
+   pct:Math.round(100*(popularity.get(id)||0)/sources.length),
+   missing:Math.max(0,after-(stock.get(id)||0))};
+ });
+ const added=rows.filter(x=>x.delta>0).sort((a,b)=>b.pct-a.pct),removed=rows.filter(x=>x.delta<0).sort((a,b)=>a.pct-b.pct);
+ const make=(r,add)=>'<div class="deck-lab-diff">'+(r.c?thumb(r.c.id):'')+
+ '<div class="grow"><b>'+safe(r.c?.name||r.id)+'</b><small>'+safe(r.id)+' · Presente en '+r.pct+'% de las listas'+
+ (add?' · Tienes '+(stock.get(r.id)||0)+' · Faltan '+r.missing:'')+'</small></div>'+
+ '<span class="'+(add?'lab-up':'lab-down')+'">'+(add?'+':'')+r.delta+'</span></div>';
+ const url=choice.ref.sourceUrl;
+ html+='<div class="deck-lab-metrics"><div><b>'+choice.shared+'/50</b><small>Copias comunes</small></div>'+
+ '<div><b>'+choice.owned+'/50</b><small>Copias disponibles en colección</small></div>'+
+ '<div><b>'+money(choice.buy.total)+'</b><small>Coste mínimo estimado'+(choice.buy.unknown?' (incompleto)':'')+'</small></div></div>'+
+ '<h3>Lista competitiva más parecida a tu mazo</h3><p>'+safe(choice.ref.name)+
+ (choice.ref.tournament?' · '+safe(choice.ref.tournament):'')+
+ (typeof url==="string"&&/^https:\/\//.test(url)?' · <a target="_blank" rel="noopener noreferrer" href="'+safe(url)+'">Fuente ↗</a>':'')+'</p>'+
+ '<button class="secondary btn" id="labAssistCompare">Ver comparación detallada</button>'+
+ '<h3>Qué añadiría</h3>'+(added.length?added.map(r=>make(r,true)).join(""):'<p class="small">No hay diferencias.</p>')+
+ '<h3>Qué quitaría</h3>'+(removed.length?removed.map(r=>make(r,false)).join(""):'<p class="small">No hay diferencias.</p>')+
+ '<p class="small">Coste calculado con las impresiones de menor precio conocido para completar la lista de referencia, sin gastos de envío. La frecuencia es presencia en la muestra, no tasa de victoria; comprueba la legalidad de las cartas antes de cambiar.</p>';
+ return html;
+}
 function render(){
  const d=active();if(!d){close();return}
  let layer=document.querySelector("#deckLabOverlay");
  if(!layer){layer=document.createElement("div");layer.id="deckLabOverlay";layer.className="deck-lab-overlay";document.body.appendChild(layer)}
  layer.innerHTML='<section class="deck-lab-dialog" role="dialog" aria-modal="true" aria-labelledby="deckLabTitle" tabindex="-1">'+
  '<div class="deck-lab-top"><span class="small">Herramientas de mazo · Solo lectura</span><button class="secondary btn" id="labClose" aria-label="Cerrar">✕</button></div>'+
- (lab.view==="simulate"?simulateHtml(d):compareHtml(d))+'</section>';
+ (lab.view==="simulate"?simulateHtml(d):lab.view==="assist"?assistHtml(d):compareHtml(d))+'</section>';
  layer.onclick=e=>{if(e.target===layer||e.target.closest("#labClose"))close()};
+ layer.querySelector("#labAssistReload")?.addEventListener("click",()=>void loadExternal());
+ layer.querySelector("#labAssistCompare")?.addEventListener("click",()=>{const d=active(),best=d?assistSources(d).choice:null;if(!best)return;lab.source="competitive";lab.opponentId=best.ref.id;lab.view="compare";render()});
  layer.querySelector("#labOrder")?.addEventListener("change",e=>{lab.first=e.target.value==="first";reset();render()});
  layer.querySelector("#labLife")?.addEventListener("change",e=>{lab.lifeCount=Math.max(0,Math.min(8,n(e.target.value)));reset();render()});
  layer.querySelector("#labReset")?.addEventListener("click",()=>{reset();render()});
@@ -227,5 +277,5 @@ function render(){
  layer.querySelector("#labParse")?.addEventListener("click",()=>{lab.pastedText=layer.querySelector("#labPaste")?.value||"";const result=parsePasted(lab.pastedText,d);lab.pasted=result.deck||null;lab.externalError=result.error||"";render()});
 }
 document.addEventListener("keydown",e=>{if(e.key==="Escape"&&lab.view)close()});
-window.OnePieceDeckLab={simulate:()=>open("simulate"),compare:()=>open("compare"),compareWithCompetitive,close,helpers:{counts,combination,probability,comboChance,neededToBuy,parsePasted,leaderLife,entries}};
+window.OnePieceDeckLab={simulate:()=>open("simulate"),compare:()=>open("compare"),assist:()=>open("assist"),compareWithCompetitive,close,helpers:{counts,combination,probability,comboChance,neededToBuy,parsePasted,leaderLife,entries}};
 })();
