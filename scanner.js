@@ -18,6 +18,7 @@ let autoAddEnabled=false,autoAddTimer=null,autoAddTicker=null,autoAddCandidate=n
 let autoWaitForChange="",autoMissingFrames=0;
 let lastScannedPrintId="";
 let lastSavedScan=null,undoBusy=false;
+let batchEnabled=false,batchQueue=new Map(),batchHeld="",batchBlank=0,batchLastAt=0,batchSaving=false;
 const $=q=>document.querySelector("#scanPanel "+q);
 const panel=()=>document.querySelector("#scanPanel");
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&#39;","'":"&#39;"}[c]));
@@ -64,6 +65,7 @@ function updateAutoControls(){
   const toggle=$("#scanAutoToggle"),stop=$("#scanAutoStop");
   if(toggle)toggle.checked=autoAddEnabled;
   if(stop)stop.hidden=!autoAddEnabled;
+  batchUI();
 }
 function stopAutoAdding(){
   autoAddEnabled=false;
@@ -99,6 +101,93 @@ function setAutoAdding(value){
   updateAutoControls();
   if(autoAddEnabled)startAutoCountdown();
 }
+
+function batchTotal(){return [...batchQueue.values()].reduce((a,r)=>a+r.count,0)}
+function batchUI(){
+ const t=$("#scanBatchToggle"),bar=$("#scanBatchBar"),auto=$("#scanAutoToggle"),counter=$("#scanBatchCount"),hint=$("#scanBatchHint");
+ if(t){t.checked=batchEnabled;t.disabled=autoAddEnabled}
+ if(auto)auto.disabled=batchEnabled;
+ if(bar)bar.hidden=!batchEnabled&&!batchQueue.size;
+ if(counter)counter.textContent=batchTotal()+" cartas · "+batchQueue.size+" referencias";
+ if(hint)hint.textContent=batchQueue.size?"Última: "+[...batchQueue.values()].at(-1).code+" · separa las cartas iguales antes de repetir":"Pasa una carta, retírala y pasa la siguiente";
+}
+function setBatch(enabled){
+ if(enabled&&autoAddEnabled)return;
+ batchEnabled=!!enabled;batchHeld="";batchBlank=0;recentVisualMatches=[];
+ batchUI();
+ if(!batchEnabled&&batchQueue.size)batchReview();
+}
+function batchCapture(c){
+ const code=idBase(c.id),base=scannerBaseCard(code);
+ if(!base||batchHeld===code||Date.now()-batchLastAt<650)return;
+ const row=batchQueue.get(code)||{code,printId:base.id,count:0};
+ row.count=Math.min(99,row.count+1);batchQueue.set(code,row);
+ batchHeld=code;batchLastAt=Date.now();batchBlank=0;recentVisualMatches=[];
+ batchUI();try{navigator.vibrate?.(35)}catch{}
+}
+function batchReview(){
+ if(!running||batchSaving)return;
+ locked=true;cancelAnimationFrame(scanTimer);panel()?.classList.add("locked");
+ batchRender();
+}
+function batchRender(){
+ const area=$("#scanDecision");if(!area)return;
+ area.hidden=false;
+ const rows=[...batchQueue.values()];
+ area.innerHTML='<h3>Escaneo continuo · '+batchTotal()+' cartas</h3>'+
+ '<p class="small">Aún no se ha guardado nada. Revisa la impresión exacta de cada carta. Las detectadas se presentan como base, no como paralela adivinada.</p>'+
+ '<div class="scanBatchList">'+rows.map(row=>{
+ const variants=cardByCode(row.code),c=variants.find(v=>v.id===row.printId)||scannerBaseCard(row.code);
+ return '<div class="scanBatchItem" data-batch-code="'+esc(row.code)+'">'+(c?cardImg(c,"scanCandidateImage"):'')+
+ '<div class="scanBatchInfo"><b>'+esc(c?.name||row.code)+'</b><small>'+esc(row.code)+'</small>'+
+ '<select class="scanBatchVariant" aria-label="Impresión de '+esc(row.code)+'">'+variants.map(v=>
+ '<option value="'+esc(v.id)+'"'+(v.id===row.printId?' selected':'')+'>'+esc(v.id)+' · '+esc(variantKindOf(v))+' · '+esc(printSetOf(v))+'</option>').join("")+'</select>'+
+ '<div class="scanBatchEdit"><label>Copias <input class="scanBatchQty" type="number" min="1" max="99" value="'+row.count+'"></label>'+
+ '<button type="button" class="scanBatchRemove">Quitar</button></div></div></div>';
+ }).join("")+'</div>'+
+ '<div class="scanChoiceButtons"><button class="primary" id="scanBatchSave"'+(!rows.length?' disabled':'')+'>Guardar '+batchTotal()+' en mi colección</button></div>'+
+ '<div class="scanChoiceButtons"><button id="scanBatchContinue">Seguir escaneando</button><button id="scanBatchClear"'+(!rows.length?' disabled':'')+'>Vaciar lista</button></div>';
+ area.querySelectorAll("[data-batch-code]").forEach(el=>{
+  const row=batchQueue.get(el.dataset.batchCode);if(!row)return;
+  el.querySelector(".scanBatchVariant").onchange=e=>{
+   if(cardByCode(row.code).some(c=>c.id===e.target.value))row.printId=e.target.value;
+   const c=state.cards.find(c=>c.id===row.printId),img=el.querySelector("img");
+   if(c&&img)img.src=imageCdnUrl(c);
+  };
+  el.querySelector(".scanBatchQty").onchange=e=>{
+   const q=Number(e.target.value);row.count=Number.isInteger(q)?Math.max(1,Math.min(99,q)):1;
+   batchRender();batchUI();
+  };
+  el.querySelector(".scanBatchRemove").onclick=()=>{batchQueue.delete(row.code);batchRender();batchUI()};
+ });
+ $("#scanBatchSave").onclick=()=>void batchSave();
+ $("#scanBatchContinue").onclick=resume;
+ $("#scanBatchClear").onclick=()=>{
+   if(batchQueue.size&&!confirm("¿Vaciar la lista sin guardar cartas?"))return;
+   batchQueue.clear();batchRender();batchUI();
+ };
+}
+async function batchSave(){
+ if(batchSaving||!state.user?.id||!state.collectionReady||!state.sb)return;
+ batchSaving=true;
+ const button=$("#scanBatchSave");if(button){button.disabled=true;button.textContent="Guardando…"}
+ const userId=state.user.id;let saved=0,errors=0;
+ for(const [code,row] of [...batchQueue]){
+  if(!running||!panel()||state.user?.id!==userId)break;
+  const c=cardByCode(code).find(v=>v.id===row.printId),before=c?ownedCount(c.id):0,after=before+row.count;
+  if(!c||!Number.isInteger(row.count)||row.count<1||after>99){errors++;continue}
+  let ok=false;try{ok=await setQty(c.id,after)}catch(e){console.warn("Lote: error Supabase",e)}
+  if(ok){
+    batchQueue.delete(code);saved+=row.count;
+    lastSavedScan={id:c.id,userId,before,after,amount:row.count};updateUndoButton();
+  }else errors++;
+ }
+ batchSaving=false;batchUI();
+ if(!running||!panel())return;
+ if(errors){batchRender();status("Error guardando "+errors+" grupo(s). Siguen pendientes; revisa las cantidades.");return}
+ resume();status("Guardadas "+saved+" cartas de tu lote.");
+}
+
 const style=document.createElement("style");style.id="scanStyles";
 style.textContent=[
 "#scanPanel{position:fixed;inset:0;z-index:9999;background:#080b11;color:#f6f6f6;font-family:system-ui,sans-serif;height:100vh;height:100dvh;overflow:hidden}",
@@ -135,6 +224,7 @@ style.textContent=[
 "#scanPanel .scanSearchResults{display:grid;gap:5px;margin-top:8px}#scanPanel .scanSearchResults button{width:100%;text-align:left}#scanPanel .scanScroll{max-height:43vh;overflow-y:auto}",
 "#scanPanel .scanNameChoices{display:grid;gap:6px;max-height:48vh;overflow-y:auto;margin-top:10px}#scanPanel .scanNameChoices button{display:flex;align-items:center;text-align:left;gap:10px;width:100%}#scanPanel .scanNameChoices img{width:48px;aspect-ratio:.716;object-fit:cover;border-radius:4px}#scanPanel .scanNameChoices span{display:grid;gap:3px}",
 "#scanPanel .scanHelp{font-size:11px;color:#a8b6cb;text-align:center;flex:none}",
+"#scanPanel .scanBatchBar{display:grid;gap:5px;background:#112332;padding:6px;border-radius:7px;font-size:12px}#scanPanel .scanBatchBar[hidden]{display:none}#scanPanel #scanBatchHint{font-size:11px;color:#bad0e0}#scanPanel #scanBatchReview{background:#ffd447;color:#131313}#scanPanel .scanBatchList{display:grid;gap:8px;max-height:43vh;overflow:auto}#scanPanel .scanBatchItem{display:flex;gap:9px;background:#182337;padding:8px;border-radius:8px}#scanPanel .scanBatchItem>img{width:56px;height:77px;object-fit:contain}#scanPanel .scanBatchInfo{flex:1;min-width:0;display:grid;gap:5px}#scanPanel .scanBatchInfo small{color:#bed0e2}#scanPanel .scanBatchInfo select{padding:6px;font-size:12px}#scanPanel .scanBatchEdit{display:flex;align-items:center;justify-content:space-between;gap:8px}#scanPanel .scanBatchEdit input{width:60px;padding:6px}",
 "@media (min-width:760px){#scanPanel .scanActions button{max-width:240px}}"
 ].join("");
 document.head.appendChild(style);
@@ -331,6 +421,18 @@ function handleVisualResults(ranked){
   const id=best&&best.score<=104&&best.art<=110?best.id:null;
   recentVisualMatches.push(id);
   if(recentVisualMatches.length>10)recentVisualMatches.shift();
+  // El modo de lote nunca congela la cámara ni escribe en la colección.
+  // Se rearma tras retirar la carta durante cinco fotogramas sin lectura.
+  if(batchEnabled){
+   if(!id){
+    if(++batchBlank>=5&&Date.now()-batchLastAt>=800){batchHeld="";batchBlank=0;recentVisualMatches=[]}
+    return;
+   }
+   batchBlank=0;
+   if(id!==batchHeld&&recentVisualMatches.filter(x=>x===id).length>=3&&
+       best.score<=92&&best.art<=101)batchCapture(known.get(id));
+   return;
+  }
   // Una misma carta que sigue bajo la cámara no se contabiliza de nuevo.
   // Rearmar tras otra carta o 12 fotogramas sin ninguna coincidencia válida.
   if(autoWaitForChange){
@@ -362,7 +464,7 @@ function handleVisualResults(ranked){
   }
 }
 async function scanOCR(){
-  if(!running||locked||!recognizerReady||!recognizer||ocrPending)return;
+  if(!running||locked||batchEnabled||!recognizerReady||!recognizer||ocrPending)return;
   const turn=session;
   ocrPending=true;
   try{
@@ -402,6 +504,7 @@ async function scanOCR(){
 }
 function showVisualChoices(heading="Posibles cartas según la ilustración"){
   if(!running||!visualResults.length)return;
+  if(batchEnabled){batchReview();return}
   autoAddCandidate=null;cancelAutoCountdown();updateScanCopiesLabel(null);
   locked=true;cancelAnimationFrame(scanTimer);
   shot=snapshot(true);
@@ -814,12 +917,15 @@ async function open(){
   }
   if(!state.cards?.length){alert("El catálogo aún no ha terminado de cargar.");return}
   running=true;locked=false;processing=false;attempts=0;lastCode="";repeatCount=0;session++;
+  batchEnabled=false;batchQueue.clear();batchHeld="";batchBlank=0;batchLastAt=0;
   stopAutoAdding();autoWaitForChange="";autoMissingFrames=0;lastScannedPrintId="";lastSavedScan=null;
   const turn=session;
   const p=document.createElement("section");p.id="scanPanel";
   p.innerHTML='<div class="scanLayout">'+
     '<div class="scanTop"><h2>Escáner visual · One Piece</h2><button id="scanClose">✕ Cerrar</button></div>'+
-    '<div class="scanAutoBar"><label><input type="checkbox" id="scanAutoToggle"> Añadir 1 copia automáticamente tras 5 s</label>'+
+    '<div class="scanAutoBar"><label><input type="checkbox" id="scanBatchToggle"> Escaneo continuo · varias cartas sin detenerse</label>'+ 
+    '<div class="scanBatchBar" id="scanBatchBar" hidden><b id="scanBatchCount">0 cartas</b><span id="scanBatchHint"></span><button id="scanBatchReview" type="button">Revisar y guardar</button></div>'+ 
+    '<label><input type="checkbox" id="scanAutoToggle"> Añadir 1 copia automáticamente tras 5 s</label>'+
     '<button type="button" id="scanAutoStop" hidden>⏹ PARAR AÑADIDO AUTOMÁTICO</button>'+
     '<div class="scanOwnedLive" id="scanOwnedLive" role="status" aria-live="polite" hidden></div></div>'+
     '<div id="scanStatus" role="status" aria-live="off"></div>'+
@@ -840,6 +946,8 @@ async function open(){
   camera=$(".scanStage video");
   $("#scanClose").onclick=()=>close();
   $("#scanAutoToggle").onchange=e=>setAutoAdding(e.target.checked);
+  $("#scanBatchToggle").onchange=e=>setBatch(e.target.checked);
+  $("#scanBatchReview").onclick=batchReview;
   $("#scanAutoStop").onclick=stopAutoAdding;
   updateAutoControls();
   $("#scanResume").onclick=resume;
@@ -874,6 +982,7 @@ function close({fromHistory=false}={}){
   }
   scannerHistoryActive=false;
   stopAutoAdding();autoWaitForChange="";autoMissingFrames=0;lastScannedPrintId="";lastSavedScan=null;
+  batchEnabled=false;batchQueue.clear();batchHeld="";batchBlank=0;
   running=false;locked=false;session++;
   cancelAnimationFrame(scanTimer);scanTimer=null;
   if(resizeWatcher){resizeWatcher.disconnect();resizeWatcher=null}
