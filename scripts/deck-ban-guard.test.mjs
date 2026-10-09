@@ -43,7 +43,7 @@ test("editing, selecting a leader, preview saving and import have real guards",(
 });
 test("collection archive no longer shows explanations or regulation links",()=>{
  const a=html.indexOf("if(state.collectionArchivedOpen)return");
- const b=html.indexOf("return '<div class=\\"wrap collection-top\\"><div class=\\"hero collection-title-row\\">",a);
+ const b=html.indexOf('class="hero collection-title-row"',a);
  assert.ok(a>=0&&b>a);
  const area=html.slice(a,b);
  assert.doesNotMatch(area,/Las prohibidas aparecen|Las reglas se sincronizan|Standard: bloque mínimo|Prohibiciones oficiales|Rotación oficial|collection-archive-note/);
