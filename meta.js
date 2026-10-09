@@ -1,7 +1,7 @@
 /* Meta competitivo: Limitless y estadísticas agregadas automáticas de torneos de la comunidad. */
 (function(){
 "use strict";
-const m={scope:"global",section:"report",days:90,format:"auto",leader:"",expanded:false,
+const m={scope:"global",section:"tiers",days:90,format:"auto",leader:"",expanded:false,tierSource:"simulator",turnSort:"games",
  global:null,community:null,loading:false,communityLoading:false,error:"",communityError:"",
  lastGlobalAttempt:"",lastCommunityAttempt:"",globalRetryAfter:0,communityRetryAfter:0,
  independent:null,independentBusy:false,independentAt:0};
@@ -50,17 +50,42 @@ function statCards(d){
   ];
   return '<div class="meta-stats">'+values.map(([val,title])=>'<div class="meta-stat"><b>'+val+'</b><small>'+title+'</small></div>').join("")+'</div>';
 }
-function tiers(d){
-  if(!d.leaders.length)return '<div class="notice">No hay líderes con suficientes datos públicos.</div>';
-  const groups={S:[],A:[],B:[],C:[],D:[],"—":[]};
-  for(const l of d.leaders)(groups[l.tier]||groups["—"]).push(l);
-  return '<p class="small">Clasificación orientativa según el W/R estabilizado; se necesitan 20 resultados por líder para recibir una letra. No es una predicción.</p>'+
-    Object.entries(groups).filter(([,list])=>list.length).map(([grade,list])=>
-      '<div class="meta-tier"><div class="meta-tier-grade '+(grade==="—"?"unknown":grade.toLowerCase())+'">'+grade+'</div><div class="meta-tier-items">'+
-      list.slice(0,m.expanded?150:20).map(x=>'<button class="meta-leader-card" data-meta-leader="'+esc(x.id)+'">'+art(x.id)+'<b>'+esc(name(x.id))+'</b><small>'+esc(x.id)+'</small><small>'+rate(x.wins,x.losses)+' · '+integer(x.games)+'</small></button>').join("")+
-      '</div></div>').join("")+
-    '<button class="secondary btn" id="metaExpand">'+(m.expanded?"Mostrar menos":"Mostrar todos los líderes")+'</button>';
+
+function simulatorData(){
+ const x=m.independent?.sources?.find(s=>s.id==="oplay"&&s.status==="ok");
+ return x?.leaders?.length?x:null;
 }
+function grade(x,sim){
+ if(x.games<(sim?200:20)||(sim&&x.players!=null&&x.players<10))return "—";
+ const value=(Number(x.wins)+12)/(Number(x.games)+24);
+ return value>=.555?"S":value>=.52?"A":value>=.48?"B":value>=.445?"C":"D";
+}
+function tiers(d){
+ const sim=m.scope==="global"&&m.tierSource==="simulator"?simulatorData():null;
+ const rows=sim?.leaders||d.leaders;
+ if(!rows.length)return '<div class="notice">No hay suficientes datos.</div>';
+ const groups={S:[],A:[],B:[],C:[],D:[],"—":[]};
+ for(const x of rows)groups[grade(x,!!sim)].push(x);
+ for(const g of Object.values(groups))g.sort((a,b)=>b.games-a.games);
+ const chooser=m.scope==="global"?'<div class="meta-source-switch">'+
+   '<button data-meta-tiersource="simulator" class="'+(m.tierSource==="simulator"?"selected":"")+
+   '"'+(!simulatorData()?' disabled':"")+'">🎮 OPlay · '+integer(simulatorData()?.games||0)+' partidas</button>'+
+   '<button data-meta-tiersource="tournaments" class="'+(m.tierSource==="tournaments"?"selected":"")+
+   '">🏆 Limitless · '+integer(m.global?.includedEvents||0)+' torneos</button></div>':"";
+ const note=sim?'Simulador: mínimo 200 partidas y 10 jugadores para tier.':'Torneos: mínimo 20 resultados por líder.';
+ return chooser+'<p class="small">'+note+' Los tiers son orientativos y nunca mezclan fuentes.</p>'+
+   Object.entries(groups).filter(([,list])=>list.length).map(([k,list])=>
+    '<section class="meta-tier meta-tier-visual"><div class="meta-tier-grade '+(k==="—"?"unknown":k.toLowerCase())+'">'+k+'</div>'+
+    '<div class="meta-tier-items">'+list.slice(0,m.expanded?100:14).map(x=>
+     '<button class="meta-leader-card meta-leader-visual" data-meta-leader="'+esc(x.id)+'">'+
+     art(x.id)+'<b>'+esc(name(x.id))+'</b><small>'+esc(x.id)+'</small>'+
+     '<strong>'+rate(x.wins,x.losses)+'</strong>'+
+     '<span class="meta-wr-bar"><span style="width:'+Math.max(0,Math.min(100,100*x.wins/x.games)).toFixed(1)+'%"></span></span>'+
+     '<small>'+integer(x.games)+' partidas'+(sim&&x.players!=null?' · '+integer(x.players)+' jugadores':"")+'</small></button>').join("")+
+    '</div></section>').join("")+
+   '<button class="secondary btn" id="metaExpand">'+(m.expanded?"Mostrar menos":"Ver todos los líderes")+'</button>';
+}
+
 const pairIndex=d=>new Map(d.matchups.map(x=>[x.leader+"|"+x.opponent,x]));
 function coloredCell(x){
   if(!x||x.games<6)return '<td class="meta-no" title="Muestra insuficiente">—</td>';
