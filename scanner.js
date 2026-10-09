@@ -873,10 +873,14 @@ async function open(){
     window.OnePiecePhotoScanner?.open();
     if(!document.querySelector("#photoScanPanel"))return;
     cancelAnimationFrame(scanTimer);locked=true;
+    // Liberar la cámara: algunos móviles no permiten fotografiar con el vídeo activo.
+    if(camera)camera.pause();
+    if(stream){stream.getTracks().forEach(t=>t.stop());stream=null}
+    track=null;if(camera)camera.srcObject=null;
     window.addEventListener("onepiece:photo-closed",()=>{
       if(!running)return;
       locked=previousLock;
-      if(!locked)plan();
+      if(!locked)void startCamera(session);
     },{once:true});
   };
   $("#scanUndo").onclick=()=>void undoLastSavedScan();
