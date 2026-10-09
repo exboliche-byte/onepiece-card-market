@@ -102,7 +102,7 @@ function qualityLabel(placing,players){
   if(players&&placing/players<=0.1)return "Top 10%";
   return "Buen resultado";
 }
-function toResult(event,row,leader,rules){
+function toResult(event,row,leader,rules,cardFilter=""){
   const decklist=row?.decklist;
   if(!decklist||typeof decklist!=="object")return null;
   const leaderId=cardIdOf(decklist.leader);
@@ -110,6 +110,7 @@ function toResult(event,row,leader,rules){
   const cards=deckCards(decklist);
   const mainCount=Object.values(cards).reduce((s,n)=>s+Number(n||0),0);
   if(mainCount!==50||!deckPlayable(leaderId,cards,rules))return null;
+  if(cardFilter&&leaderId!==cardFilter&&!Number(cards[cardFilter]||0))return null;
   const placing=Math.max(1,int(row.placing)||9999);
   const players=Math.max(0,int(event.players));
   const rec=row.record||{};
@@ -155,6 +156,10 @@ export default {
     try{
       const url=new URL(request.url);
       const leader=normalizeLeader(url.searchParams.get("leader"));
+      const cardFilter=String(url.searchParams.get("card")||"").trim().toUpperCase().replace(/_(?:P|R|C)\d+$/,"");
+      if(cardFilter&&!/^(?:[A-Z]{1,5}\d{0,2}|P)-\d{3}$/.test(cardFilter)){
+        return json({error:"Código de carta no válido",results:[]},400,"no-store");
+      }
       if(leader!=="all"&&!/^(?:[A-Z]{1,5}\d{0,2}|P)-\d{3}$/.test(leader)){
         return json({error:"Líder no válido",results:[]},400,"no-store");
       }
@@ -191,17 +196,17 @@ export default {
         for(const entry of settled){
           scanned++;
           for(const row of entry.rows){
-            const result=toResult(entry.event,row,leader,rules);
+            const result=toResult(entry.event,row,leader,rules,cardFilter);
             if(result)found.push(result);
           }
         }
         if(rateLimited)break;
-        if(found.length>=limit&&scanned>=12)break;
+        if(!cardFilter&&found.length>=limit&&scanned>=12)break;
       }
 
       found.sort((a,b)=>b.score-a.score||a.placing-b.placing||b.players-a.players);
       const perLeader=new Map();
-      const selected=leader==="all"?found.filter(r=>{
+      const selected=leader==="all"&&!cardFilter?found.filter(r=>{
         const n=perLeader.get(r.leaderId)||0;
         if(n>=3)return false;
         perLeader.set(r.leaderId,n+1);return true;
@@ -209,6 +214,7 @@ export default {
       const results=selected.slice(0,limit).map(({score,...r})=>r);
       return json({
         leader,
+        card:cardFilter||null,
         source:"Limitless",
         results,
         scannedEvents:scanned,
