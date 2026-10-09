@@ -1208,12 +1208,11 @@ async function renderCollectionResults(){
   }
 }
 function collectionViewNav(active){
-  const tab=(id,label,key)=>'<button class="secondary btn'+(active===key?' active':'')+'" type="button" '+(active===key?'disabled aria-current="page"':'id="'+id+'"')+'>'+label+'</button>';
   return '<nav class="collection-view-tabs" aria-label="Vistas de colección">'+
-    tab("openCollectionCards","Mis cartas","cards")+
-    tab("openCollectionBoxes","Cajas","boxes")+
-    tab("openCollectionStats","Estadísticas","stats")+
-    tab("openCollectionArchived","No jugables","archived")+'</nav>';
+    (active==="cards"?'<button class="secondary btn active" type="button" disabled aria-current="page">Mis cartas</button>':'<button class="secondary btn" type="button" id="openCollectionCards">Mis cartas</button>')+
+    (active==="boxes"?'<button class="secondary btn active" type="button" disabled aria-current="page">Cajas</button>':'<button class="secondary btn" type="button" id="openCollectionBoxes">Cajas</button>')+
+    (active==="stats"?'<button class="secondary btn active" type="button" disabled aria-current="page">Estadísticas</button>':'<button class="secondary btn" type="button" id="openCollectionStats">Estadísticas</button>')+
+    (active==="archived"?'<button class="secondary btn active" type="button" disabled aria-current="page">No jugables</button>':'<button class="secondary btn" type="button" id="openCollectionArchived">No jugables</button>')+'</nav>';
 }
 function collectionView(){
   if(!state.user)return '<div class="wrap"><div class="hero"><h1>Mi colección</h1></div><div class="section center"><h2>Inicia sesión para ver tu colección</h2><p class="muted">Solo se guarda y consulta desde tu cuenta de Supabase.</p><button class="primary btn" data-tab="account">Iniciar sesión</button></div></div>';
