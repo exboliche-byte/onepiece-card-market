@@ -19,7 +19,7 @@ function discardFrom(origin){
   deckDiscover:true,tab:"decks",deckPreviewOrigin:origin,deckPreviewScrollY:315};
  const ctx={state,confirm:()=>true,renderShell:()=>{},replaceAppHistory:()=>{ctx.savedSnapshot={tab:state.tab,deckId:state.deckId}},
    window:{scrollTo:args=>{ctx.scroll=args}}};
- vm.runInNewContext(fn("discardCompetitiveDraft","function saveCompetitiveDraft"),ctx,{timeout:1000});
+ vm.runInNewContext(fn("discardCompetitiveDraft","async function saveCompetitiveDraft"),ctx,{timeout:1000});
  ctx.discardCompetitiveDraft();
  return ctx;
 }

@@ -1401,7 +1401,9 @@ async function searchCompetitiveDecks(){
   }
 }
 function competitiveDraftName(result){
-  return (result.leaderName||result.leaderId)+" · "+(result.quality||result.placing+".º")+" · "+result.tournament;
+  // Tournament titles can be arbitrarily long; Supabase deck names are limited to 120.
+  return ((result.leaderName||result.leaderId)+" · "+
+    (result.quality||result.placing+".º")+" · "+(result.tournament||"Torneo")).slice(0,120);
 }
 function openCompetitiveDeckPreview(index,origin="decks"){
   const result=state.deckDiscoverResults[Number(index)];if(!result)return;
@@ -1437,11 +1439,15 @@ function discardCompetitiveDraft(){
   replaceAppHistory();renderShell();
   window.scrollTo({top:origin==="deck-completion"?state.deckPreviewScrollY:0,behavior:"auto"});
 }
-function saveCompetitiveDraft(){
+async function saveCompetitiveDraft(){
   const d=state.decks.find(x=>x.id===state.deckId&&x.draftCompetitive);if(!d)return;
   if(!state.user){navigateApp(()=>{state.tab="account"});notify("Inicia sesión para guardar este mazo");return}
   d.draftCompetitive=false;d.draftDirty=false;d.owner_id=state.user.id;d.updatedAt=new Date().toISOString();
-  saveLocal();syncDeck(d);renderShell();notify("Mazo guardado en Mis mazos");
+  saveLocal();renderShell();
+  const saved=await syncDeck(d);
+  renderShell();
+  notify(saved?"Mazo guardado en Mis mazos y en Supabase":
+    "Mazo conservado localmente. Comprueba la sincronización en Mis mazos.");
 }
 function deckLibraryView(){
   if(!state.user){
@@ -2302,7 +2308,7 @@ function nav(){
   return side+mobile;
 }
 function deckCompletionView(){
-  return '<div class="wrap"><div class="hero"><div><h1>🃏 ¿Qué mazos puedo completar?</h1><p>Descubre mazos competitivos para los que te faltan pocas cartas o poco presupuesto.</p></div><a class="secondary btn" href="/">← Volver a la web</a></div>'+
+  return '<div class="wrap"><div class="hero"><div><h1>🃏 ¿Qué mazos puedo completar?</h1><p>Descubre mazos competitivos para los que te faltan pocas cartas o poco presupuesto.</p></div><button class="secondary btn" type="button" id="deckCompletionBack">← Volver</button></div>'+
     (window.OnePieceTools?.decksView?.()||'<div class="section">Cargando recomendaciones…</div>')+'</div>';
 }
 function renderShell(){
@@ -2490,6 +2496,10 @@ function navigateApp(mutator){
   window.scrollTo({top:0,behavior:"auto"});
 }
 function bindShell(){
+  $("#deckCompletionBack")?.addEventListener("click",()=>{
+    if(history.length>1){history.back();return}
+    navigateApp(()=>{state.tab="decks";state.deckLibrary=true;state.deckId=null;state.deckPreviewOrigin="";});
+  });
   $("#sidebarToggle")?.addEventListener("click",()=>{
     sidebarCollapsed=!sidebarCollapsed;
     document.querySelector(".app")?.classList.toggle("sidebar-collapsed",sidebarCollapsed);
@@ -2629,6 +2639,7 @@ function bindShell(){
       d.name=name;d.description=description;d.updatedAt=new Date().toISOString();
       saveLocal();syncDeck(d);renderShell();notify("Mazo actualizado");
     });
+    $("#retryDeckCloudSync")?.addEventListener("click",()=>void retryPendingDeckSync());
     $("#newDeck")?.addEventListener("click",()=>{state.newDeck=true;renderShell()});
     $("#newDeck2")?.addEventListener("click",()=>{state.newDeck=true;renderShell()});
     $("#createDeckConfirm")?.addEventListener("click",()=>{const name=$("#newDeckName")?.value.trim();if(!name)return notify("Pon un nombre");if(!state.user){state.newDeck=false;navigateApp(()=>{state.tab="account"});return}const d={id:crypto.randomUUID(),name,description:$("#newDeckDesc")?.value||"",leader:"",cards:{},colors:[],owner_id:state.user.id,updatedAt:new Date().toISOString()};state.decks.unshift(d);state.deckId=d.id;state.deckLibrary=false;state.newDeck=false;saveLocal();syncDeck(d);pushAppHistory();renderShell()});
@@ -2913,24 +2924,46 @@ function writeCollection(id,nextValue){
 function syncOne(id,n){return writeCollection(id,n)}
 const deckSyncWrites=new Map();
 const deckSyncErrors=new Map();
+const deckPendingSyncIds=new Set();
+function deckContentSignature(d){
+  // Compare logical content, not timestamps or object insertion order.
+  const cards=Object.entries(d.cards||{}).filter(([,q])=>Number(q)>0)
+    .map(([id,q])=>[id,Number(q)]).sort((a,b)=>a[0].localeCompare(b[0]));
+  return JSON.stringify([String(d.name||""),String(d.leader||""),
+    String(d.description||""),[...(d.colors||[])].sort(),cards]);
+}
+async function retryPendingDeckSync(){
+  if(!state.user||!state.sb)return;
+  const pending=state.decks.filter(d=>deckPendingSyncIds.has(d.id));
+  if(!pending.length)return;
+  let failed=0;
+  for(const deck of pending){if(!await syncDeck(deck))failed++}
+  renderShell();
+  notify(failed?failed+" mazo(s) sin sincronizar. Comprueba el estado del guardado.":"Mazos pendientes sincronizados");
+}
 function deckSyncStatusView(){
   if(!state.user)return "";
   const error=deckSyncErrors.size?[...deckSyncErrors.values()][0]:"";
-  return '<p id="deckCloudStatus" class="small deck-cloud-status" role="status" aria-live="polite">'+
-    esc(error?"⚠ "+error:deckSyncWrites.size?"Guardando mazos en Supabase…":"✓ Mazos sincronizados")+'</p>';
+  const pending=state.decks.filter(d=>deckPendingSyncIds.has(d.id)).length;
+  return '<div class="deck-sync-wrapper"><p id="deckCloudStatus" class="small deck-cloud-status" role="status" aria-live="polite">'+
+    esc(error?"⚠ "+error:deckSyncWrites.size?"Guardando mazos en Supabase…":pending?pending+" mazo(s) con cambios locales pendientes":"✓ Mazos sincronizados")+'</p>'+
+    (pending?'<button type="button" id="retryDeckCloudSync" class="secondary btn">Sincronizar pendientes</button>':"")+'</div>';
 }
 function updateDeckSyncStatus(){
   const status=document.getElementById("deckCloudStatus");if(!status)return;
   const error=deckSyncErrors.size?[...deckSyncErrors.values()][0]:"";
-  status.textContent=error?"⚠ "+error:deckSyncWrites.size?"Guardando mazos en Supabase…":"✓ Mazos sincronizados";
+  const pending=state.decks.filter(d=>deckPendingSyncIds.has(d.id)).length;
+  status.textContent=error?"⚠ "+error:deckSyncWrites.size?"Guardando mazos en Supabase…":pending?pending+" mazo(s) con cambios locales pendientes":"✓ Mazos sincronizados";
 }
 function syncDeck(d){
   if(d?.draftCompetitive||!state.sb||!state.user||!d)return Promise.resolve(false);
   const userId=state.user.id,id=d.id,client=state.sb;
+  const cards=Object.fromEntries(Object.entries(d.cards||{})
+    .filter(([,value])=>Number(value)>0));
   const snapshot={
     p_deck_id:id,p_name:d.name,p_leader:d.leader||"",p_description:d.description||"",
-    p_colors:d.colors||[],p_cards:{...(d.cards||{})},
-    p_updated_at:d.updatedAt||new Date().toISOString()
+    p_colors:d.colors||[],p_cards:cards,
+    p_updated_at:Number.isFinite(Date.parse(d.updatedAt))?new Date(d.updatedAt).toISOString():new Date().toISOString()
   };
   const prior=deckSyncWrites.get(id)||Promise.resolve();
   const operation=prior.catch(()=>{}).then(async()=>{
@@ -2938,11 +2971,13 @@ function syncDeck(d){
     const response=await client.rpc("deck_save_atomic",snapshot);
     if(response.error)throw response.error;
     deckSyncErrors.delete(id);
+    deckPendingSyncIds.delete(id);
     return true;
   }).catch(error=>{
     if(state.user?.id===userId){
       deckSyncErrors.set(id,"Mazo sin sincronizar: "+String(error?.message||error));
-      notify("No se pudo guardar en Supabase. Se conserva el mazo local.");
+      deckPendingSyncIds.add(id);
+      notify("No se pudo guardar el mazo en Supabase. Conservamos sus cambios locales.");
     }
     console.warn("Guardado atómico de mazo",error);
     return false;
@@ -3036,16 +3071,22 @@ async function syncCloudInternal(userId){
     const deletedResult=await state.sb.from("deck_tombstones").select("deck_id").eq("user_id",userId);
     if(deletedResult.error)throw deletedResult.error;
     const deletedIds=new Set((deletedResult.data||[]).map(row=>row.deck_id));
-    const remoteIdsSet=new Set(remote.map(d=>d.id)),unsynced=localDecks.filter(d=>!remoteIdsSet.has(d.id)&&!deletedIds.has(d.id)).map(d=>({...d,owner_id:state.user.id}));
-    // Offline edits to an existing deck must not be discarded by a refresh.
-    // Only the strictly newer local version is a candidate for cloud reconciliation.
+    const remoteIdsSet=new Set(remote.map(d=>d.id));
+    const unsynced=localDecks.filter(d=>!d.draftCompetitive&&!remoteIdsSet.has(d.id)&&!deletedIds.has(d.id))
+      .map(d=>({...d,owner_id:userId}));
     const remoteById=new Map(remote.map(d=>[d.id,d]));
     const pendingExisting=localDecks.filter(d=>!d.draftCompetitive&&!deletedIds.has(d.id)&&remoteById.has(d.id)&&
+      deckContentSignature(d)!==deckContentSignature(remoteById.get(d.id))&&
       Date.parse(d.updatedAt||"")>Date.parse(remoteById.get(d.id).updatedAt||""));
     const pendingById=new Map(pendingExisting.map(d=>[d.id,{...d,owner_id:userId}]));
     state.decks=[...remote.map(d=>pendingById.get(d.id)||d),...unsynced];
+    // Only an explicit edit or a retry writes to Supabase. Login/refresh is read-only:
+    // avoid retrying stale local timestamps and showing a false save error on every visit.
+    deckPendingSyncIds.clear();
+    deckSyncErrors.clear();
+    for(const d of [...pendingExisting,...unsynced])deckPendingSyncIds.add(d.id);
     saveLocal();
-    for(const d of [...pendingExisting,...unsynced])await syncDeck(d);
+    updateDeckSyncStatus();
     if(state.user?.id===userId&&state.authError?.startsWith("Sesión iniciada, pero no se pudo sincronizar"))state.authError="";
     if(state.user?.id===userId&&state.authError?.startsWith("No se pudo cargar tu colección"))state.authError="";
     return true;
