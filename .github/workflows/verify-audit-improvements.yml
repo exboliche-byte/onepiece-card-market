@@ -1,0 +1,31 @@
+name: Verify audit improvements
+on:
+  push:
+    branches:
+      - audit-implementation-2026-10-09
+    paths:
+      - "index.html"
+      - "scanner.js"
+      - "modal-accessibility.js"
+      - "sw.js"
+      - "scripts/**"
+      - "supabase/migrations/**"
+      - ".github/workflows/verify-audit-improvements.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Run all application checks and assemble production files
+        run: sh scripts/vercel-build.sh
+      - name: Validate database migration scripts
+        run: |
+          test -s supabase/migrations/20261009_atomic_persistence.sql
+          grep -q 'SECURITY INVOKER' supabase/migrations/20261009_atomic_persistence.sql
