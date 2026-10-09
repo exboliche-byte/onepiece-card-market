@@ -1417,6 +1417,7 @@ function competitiveLeaderGridHtml(){
 }
 function bindCompetitiveLeaderButtons(){
   document.querySelectorAll("[data-competitive-leader]").forEach(b=>b.onclick=()=>{
+    competitiveDeckSearchVersion++;
     state.deckDiscoverLeader=b.dataset.competitiveLeader||"";
     state.deckDiscoverResults=[];state.deckDiscoverMeta=null;state.deckDiscoverError="";
     const host=$("#competitiveLeaderGrid");if(host)host.innerHTML=competitiveLeaderGridHtml();
@@ -1521,6 +1522,7 @@ function competitiveResultHtml(result,index){
     '<div class="competitive-actions"><button class="primary btn" data-preview-competitive="'+index+'">Ver mazo</button><button class="secondary btn" data-compare-competitive="'+index+'">Comparar</button>'+(result.sourceUrl?'<a class="secondary btn" target="_blank" rel="noopener" href="'+esc(result.sourceUrl)+'">Limitless ↗</a>':'')+'</div></div></div>'+
     '<div class="competitive-source">Fuente: Limitless Tournament Platform.</div></article>';
 }
+let competitiveDeckSearchVersion=0;
 function competitiveCardOptions(){
  const query=norm(state.deckDiscoverCardQuery||"").trim();
  if(query.length<2)return [];
@@ -1545,6 +1547,7 @@ function competitiveCardGridHtml(){
 }
 function bindCompetitiveCardButtons(){
  $("#competitiveCardGrid")?.querySelectorAll("[data-competitive-card]").forEach(b=>b.onclick=()=>{
+  competitiveDeckSearchVersion++;
   state.deckDiscoverCard=b.dataset.competitiveCard;
   state.deckDiscoverCardQuery=state.deckDiscoverCard;
   state.deckDiscoverResults=[];state.deckDiscoverMeta=null;state.deckDiscoverError="";
@@ -1588,6 +1591,8 @@ function competitiveDeckSearchView(){
 async function searchCompetitiveDecks(){
   const byCard=state.deckDiscoverMode==="card";
   const leader=byCard?"all":String(state.deckDiscoverLeader||"").trim();
+  const wantedCard=state.deckDiscoverCard;
+  const searchVersion=++competitiveDeckSearchVersion;
   if(!byCard&&!leader)return notify("Selecciona un líder");
   if(byCard&&!state.deckDiscoverCard)return notify("Selecciona una carta");
   state.deckDiscoverDays=Number($("#competitiveDays")?.value||state.deckDiscoverDays||90);
@@ -1595,16 +1600,17 @@ async function searchCompetitiveDecks(){
   state.deckDiscoverLoading=true;state.deckDiscoverError="";state.deckDiscoverResults=[];state.deckDiscoverMeta=null;renderShell();
   try{
     const qs=new URLSearchParams({leader,days:String(state.deckDiscoverDays),minPlayers:String(state.deckDiscoverMinPlayers),limit:byCard?"40":"20"});
-    if(byCard)qs.set("card",state.deckDiscoverCard);
+    if(byCard)qs.set("card",wantedCard);
     const r=await fetch("/api/competitive-decks?"+qs.toString(),{headers:{accept:"application/json"}});
     const data=await r.json().catch(()=>({}));
+    if(searchVersion!==competitiveDeckSearchVersion)return;
     if(!r.ok)throw Error(data.error||"No se pudieron cargar los mazos");
     state.deckDiscoverResults=(Array.isArray(data.results)?data.results:[]).filter(x=>standardCompetitiveDeckPlayable(x.leaderId,x.cards)&&(!byCard||deckPrintedCode(x.leaderId)===state.deckDiscoverCard||Object.entries(x.cards||{}).some(([id,n])=>deckPrintedCode(id)===state.deckDiscoverCard&&Number(n)>0)));
     state.deckDiscoverMeta={scannedEvents:Number(data.scannedEvents||0),availableMatches:Number(data.availableMatches||0),rateLimited:!!data.rateLimited};
   }catch(e){
-    state.deckDiscoverError=e.message||"No se pudieron consultar los mazos competitivos.";
+    if(searchVersion===competitiveDeckSearchVersion)state.deckDiscoverError=e.message||"No se pudieron consultar los mazos competitivos.";
   }finally{
-    state.deckDiscoverLoading=false;renderShell();
+    if(searchVersion===competitiveDeckSearchVersion){state.deckDiscoverLoading=false;renderShell()}
   }
 }
 function competitiveDraftName(result){
@@ -2926,14 +2932,16 @@ function bindShell(){
     document.querySelectorAll("[data-competitive-mode]").forEach(b=>b.onclick=()=>{
       const mode=b.dataset.competitiveMode;
       if(mode!==state.deckDiscoverMode){
+        competitiveDeckSearchVersion++;
         state.deckDiscoverMode=mode;state.deckDiscoverResults=[];state.deckDiscoverMeta=null;
         state.deckDiscoverError="";state.deckDiscoverLoading=false;renderShell();
       }
     });
     const competitiveCardSearch=$("#competitiveCardSearch");
     competitiveCardSearch?.addEventListener("input",()=>{
+      competitiveDeckSearchVersion++;
       state.deckDiscoverCardQuery=competitiveCardSearch.value;
-      state.deckDiscoverCard="";state.deckDiscoverResults=[];state.deckDiscoverMeta=null;state.deckDiscoverError="";
+      state.deckDiscoverCard="";state.deckDiscoverLoading=false;state.deckDiscoverResults=[];state.deckDiscoverMeta=null;state.deckDiscoverError="";
       const grid=$("#competitiveCardGrid");if(grid)grid.innerHTML=competitiveCardGridHtml();
       bindCompetitiveCardButtons();
     });
