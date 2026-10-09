@@ -885,7 +885,13 @@ async function open(){
     window.addEventListener("onepiece:photo-closed",()=>{
       if(!running)return;
       locked=previousLock;
-      if(!locked)void startCamera(session);
+      const restoreCamera=()=>{
+        if(!running||locked||!panel()||document.querySelector("#photoScanPanel"))return;
+        if(cameraStarting){setTimeout(restoreCamera,120);return}
+        if(!stream?.active)void startCamera(session);
+        else camera?.play().then(plan).catch(()=>void startCamera(session));
+      };
+      if(!locked)restoreCamera();
     },{once:true});
   };
   $("#scanUndo").onclick=()=>void undoLastSavedScan();
