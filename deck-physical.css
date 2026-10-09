@@ -43,3 +43,6 @@ button.physical-chip.partial{color:#f1bd58;background:rgba(200,136,24,.1)}
 .physical-pending-count{font-size:14px;font-weight:750;color:var(--accent,#ffd447);margin:4px 0}
 .physical-pending-total{border-top:1px solid var(--line,#445);padding-top:12px;margin-top:14px}
 .physical-pending-row .small{margin-top:4px}
+
+.physical-movements .physical-source-heading{margin:10px 0 2px;font-size:13px;color:var(--muted,#aab);font-weight:700}
+.physical-movements .physical-source-heading:first-child{margin-top:0}
