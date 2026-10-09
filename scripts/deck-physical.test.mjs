@@ -139,6 +139,8 @@ test("prefer one donor covering the remainder even when a smaller donor is incom
 test("use the largest partial donor first when no box covers the shortage",async()=>{
  const {api,state,koalaDeck,allocations}=setup(5);
  const buffy="44444444-4444-4444-8444-444444444444";
+ state.owned["OP11-011"]=3;
+ state.owned["OP11-011_p1"]=2;
  state.decks.push({id:buffy,name:"Buffy",leader:"",cards:{"OP11-011":2}});
  allocations[sabo]={"OP11-011":3};
  allocations[buffy]={"OP11-011_p1":2};
@@ -163,4 +165,25 @@ test("show all free album movements before donor movements, regardless of card o
  assert.equal(display[2].from,sabo);
  assert.equal(display[2].quantity,1);
  assert.equal(planned.changes[1].from,sabo,"display order must not change calculation or confirmation");
+});
+
+test("two full partial donors beat a fragmented transfer across three boxes",async()=>{
+ const {api,state,koalaDeck,allocations}=setup(5);
+ const buffy="44444444-4444-4444-8444-444444444444";
+ const luffy="55555555-5555-4555-8555-555555555555";
+ state.owned={"OP11-011":2,"OP11-011_p1":2,"OP11-011_p2":1};
+ state.decks[0].cards={"OP11-011":2};
+ state.decks.push(
+  {id:buffy,name:"Buffy",leader:"",cards:{"OP11-011":2}},
+  {id:luffy,name:"Luffy",leader:"",cards:{"OP11-011":4}}
+ );
+ allocations[sabo]={"OP11-011":2};
+ allocations[buffy]={"OP11-011_p1":2};
+ allocations[luffy]={"OP11-011_p2":1};
+ await api.load();
+ const planned=api._testing.plan(koalaDeck);
+ assert.equal(planned.changes.length,2);
+ assert.equal(planned.changes.reduce((sum,x)=>sum+x.quantity,0),4);
+ assert.equal(planned.changes.some(x=>x.from===luffy),false,"avoid touching a third box with only one copy");
+ assert.equal(planned.next[luffy]["OP11-011_p2"],1);
 });
