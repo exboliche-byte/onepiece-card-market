@@ -15,7 +15,7 @@ const GLOBAL_META_CACHE="mialbumonepiece_meta_public_";
 function savedGlobalMeta(key){
   try{
     const entry=JSON.parse(localStorage.getItem(GLOBAL_META_CACHE+key)||"null");
-    if(entry&&entry.data?.source==="Unified"&&Date.now()-Number(entry.savedAt||0)<7*86400000&&
+    if(entry&&entry.data?.source==="Unified"&&entry.data?.leaders?.every?.(x=>Number.isFinite(x.confidenceRate))&&Date.now()-Number(entry.savedAt||0)<7*86400000&&
        Array.isArray(entry.data?.leaders)&&Array.isArray(entry.data?.matchups))return entry.data;
   }catch(error){console.warn("Meta: caché local no disponible",error)}
   return null;
@@ -217,7 +217,7 @@ async function loadGlobal(force=false){
   }
   m.loading=true;m.error="";if(state.tab==="meta")renderShell();
   try{
-    const query=new URLSearchParams({days:String(days),format});
+    const query=new URLSearchParams({days:String(days),format,v:"2"});
     if(force)query.set("refresh","1");
     const r=await fetch("/api/meta-unified?"+query,{headers:{accept:"application/json"},
       signal:AbortSignal.timeout(59000)});
