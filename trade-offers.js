@@ -55,7 +55,7 @@ function view(mode="all"){
   '<div id="tradePeerSuggestions" class="trade-user-suggestions" role="listbox"></div></div>'+
   '<div class="trade-offer-actions"><button class="primary btn" id="tradeSendOffer"'+(box.saving?" disabled":"")+'>'+
    (box.saving?"Enviando…":"Enviar propuesta")+'</button></div>'+
-  '<p class="small">Solo se transfieren copias reales de la versión seleccionada, nunca equivalentes o sustituciones automáticas. Ambos deben conservar las copias necesarias hasta el momento de aceptar.</p></section>'+
+  '<p class="small">Solo se transfieren copias reales de la versión seleccionada, nunca equivalentes o sustituciones automáticas. Ambos deben conservar las copias necesarias hasta el momento de aceptar.</p></section>';
  const proposals='<div class="sectionhead"><h2>Mis propuestas</h2><button class="secondary btn" id="tradeRefresh">'+(box.loading?"Cargando…":"Actualizar")+'</button></div>'+
   (box.error?'<div class="notice">'+html(box.error)+'</div>':"")+
   (box.loading?'<div class="notice">Consultando propuestas en Supabase…</div>':
