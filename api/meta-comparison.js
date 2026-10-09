@@ -6,6 +6,45 @@ const trim=x=>String(x||"").replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi," ")
  .replace(/&[a-z]+;|&#\d+;/gi," ").replace(/\s+/g," ").trim();
 const toInt=x=>Number(String(x??"").replace(/[^\d]/g,""));
 const idRe=/\b(?:OP|EB|ST|PRB)-?\d{2}-\d{3}\b/i;
+export function extractOPlayMatchups(html){
+ // Next.js flight contains OPlay's published per-leader matchup records.
+ // Raw payloads have escaped JSON quotes; parsing bounded 'm' arrays avoids
+ // execution of any embedded JavaScript or trusting visible link labels.
+ if(typeof html!=="string")return [];
+ const flat=html.replace(/\\\"/g,'"');
+ const header=/"g":(\\d+),"l":"((?:OP|ST|EB|PRB)\\d{2}-\\d{3})","m":\\[/g;
+ const rows=new Map();let hit;
+ while((hit=header.exec(flat))!==null){
+   let depth=0,end=-1;
+   for(let i=header.lastIndex-1;i<Math.min(flat.length,header.lastIndex+200000);i++){
+     if(flat[i]==="[")depth++;
+     if(flat[i]==="]"&&!--depth){end=i+1;break}
+   }
+   if(end<0)continue;
+   let matches;
+   try{matches=JSON.parse(flat.slice(header.lastIndex-1,end))}catch{continue}
+   if(!Array.isArray(matches))continue;
+   const leader=hit[2];
+   for(const x of matches){
+     const opponent=String(x?.o||"").toUpperCase();
+     const g=Number(x?.g),w=Number(x?.w);
+     if(!/^(?:OP|ST|EB|PRB)\\d{2}-\\d{3}$/.test(opponent)||opponent===leader||
+       !Number.isSafeInteger(g)||g<1||g>10000000||
+       !Number.isSafeInteger(w)||w<0||w>g)continue;
+     const key=leader+"|"+opponent,firstGames=Number(x?.gf),firstWins=Number(x?.wf);
+     const firstValid=Number.isInteger(firstGames)&&firstGames>=0&&firstGames<=g&&
+       Number.isInteger(firstWins)&&firstWins>=0&&firstWins<=Math.min(w,firstGames)&&
+       w-firstWins<=g-firstGames;
+     const first=firstValid&&firstGames>0?{wins:firstWins,losses:firstGames-firstWins,games:firstGames}:null;
+     const second=firstValid&&g-firstGames>0?
+       {wins:w-firstWins,losses:g-firstGames-(w-firstWins),games:g-firstGames}:null;
+     const record={leader,opponent,wins:w,losses:g-w,games:g,first,second};
+     if(!rows.has(key)||g>rows.get(key).games)rows.set(key,record);
+   }
+   header.lastIndex=end;
+ }
+ return [...rows.values()];
+}
 export function extractOPlayHtml(html){
  if(typeof html!=="string"||html.length<100)return null;
  const rows=[...html.matchAll(/<tr\b[^>]*>[\s\S]*?<\/tr>/gi)];
@@ -52,7 +91,7 @@ export function extractOPlayHtml(html){
  const dateMatch=header.match(/Actualizado\s+el\s+(\d{1,2}\s+de\s+\w+\s+de\s+\d{4})/i);
  return leaders.length?{leaders:leaders.sort((a,b)=>b.games-a.games),
   games:observed||Math.round(leaders.reduce((sum,l)=>sum+l.games,0)/2),
-  measuredAt:dateMatch?.[1]||null,kind:"simulator",
+  measuredAt:dateMatch?.[1]||null,matchups:extractOPlayMatchups(html),kind:"simulator",
   sample:"Partidas de simulador; estadísticas publicadas de OPlayTCG"}:null;
 }
 export function extractEverythingHtml(html){
