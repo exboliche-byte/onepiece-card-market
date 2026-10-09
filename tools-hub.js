@@ -2,7 +2,7 @@
 "use strict";
 /* This module never changes collection quantities or deck records. */
 const h={tab:"trade",tradeSection:"prepare",searchLimit:36,owner:null,trade:[[],[]],q:"",list:[],meta:{},loaded:false,busy:false,error:"",
-  sort:"missing",mode:"complete",maxMissing:"12",maxCost:"",cloudReady:false,cloudLoading:false,cloudError:"",cloudConflict:false,
+  sort:"missing",mode:"complete",preference:"competitive",metaData:null,metaLoading:false,metaError:"",maxMissing:"12",maxCost:"",cloudReady:false,cloudLoading:false,cloudError:"",cloudConflict:false,
   revision:null,pending:false,localRevision:null,hasCache:false,serial:0,saveTimer:null,writing:false,lastCloudAt:0};
 const key=id=>"mialbumonepiece_tools_"+id;
 const text=s=>esc(s);
@@ -283,16 +283,24 @@ function missing(r,prices){
   }
   return {owned,absent,cost,unknown,total:owned+absent};
 }
+function personalStats(leader){
+ const id=printed(leader);let wins=0,losses=0;
+ for(const t of state.tournaments||[])if(printed(t.leaderId)===id)for(const round of t.rounds||[]){
+  if(round.kind==="bye"||round.kind==="noshow")continue;
+  if(round.result==="W")wins++;else if(round.result==="L")losses++;
+ }
+ return {wins,losses,games:wins+losses,smoothed:(wins+3)/(wins+losses+6)};
+}
 function deckFit(r,m){
-  const total=Math.max(1,m.total),leader=printed(r.leaderId);
-  const preferred=new Set((state.decks||[]).filter(d=>!d.draftCompetitive).map(d=>printed(d.leader)));
-  const familiar=preferred.has(leader);
-  const players=Math.max(0,Number(r.players)||0),placing=Math.max(0,Number(r.placing)||0);
-  const resultQuality=players&&placing?Math.max(0,1-(placing-1)/players):0.35;
-  const costScore=m.unknown?0:1/(1+m.cost/40);
-  const score=100*(0.72*m.owned/total+0.14*Number(familiar)+0.08*resultQuality+0.06*costScore);
-  return {score,reason:familiar?"Ya utilizas este líder":m.owned>=m.total?"Lo tienes completo":
-    "Aprovecha "+Math.round(100*m.owned/total)+"% de tus cartas"};
+ const id=printed(r.leaderId),meta=(h.metaData?.leaders||[]).find(x=>printed(x.id)===id);
+ const personal=personalStats(id),familiar=(state.decks||[]).some(d=>!d.draftCompetitive&&printed(d.leader)===id);
+ const trusted=meta&&Number(meta.games)>=10&&Number.isFinite(Number(meta.confidenceRate));
+ const metaStrength=trusted?Math.max(0,Math.min(1,Number(meta.confidenceRate)/100)):0.43;
+ const affinity=0.5+Math.min(1,personal.games/20)*(personal.smoothed-0.5)+(familiar?0.1:0);
+ const owned=m.owned/Math.max(1,m.total),cost=m.unknown?0:1/(1+m.cost/60);
+ const weights={competitive:[0.65,0.20,0.10,0.05],balanced:[0.48,0.22,0.20,0.10],budget:[0.30,0.15,0.30,0.25]}[h.preference]||[0.65,0.20,0.10,0.05];
+ const score=100*(weights[0]*metaStrength+weights[1]*affinity+weights[2]*owned+weights[3]*cost);
+ return {score,personal,meta,reason:trusted?"Meta fiable: "+Number(meta.confidenceRate).toFixed(1)+"% · "+Number(meta.games).toLocaleString("es-ES")+" partidas":"Meta sin muestra suficiente; recomendación provisional"};
 }
 function decksView(){
   const personalized=h.mode==="mine";
@@ -302,34 +310,46 @@ function decksView(){
     const maximum=h.maxMissing===""?Infinity:Number(h.maxMissing);
     const ceiling=h.maxCost===""?Infinity:Number(h.maxCost);
     let rows=h.list.map((r,i)=>{const m=missing(r,prices);return {r,i,m,fit:deckFit(r,m)}});
-    rows=rows.filter(x=>x.m.absent<=maximum&&(h.maxCost===""||(!x.m.unknown&&x.m.cost<=ceiling)));
-    rows.sort((a,b)=>h.sort==="fit"?b.fit.score-a.fit.score||a.m.absent-b.m.absent:
-      h.sort==="cost"?
-      Number(!!a.m.unknown)-Number(!!b.m.unknown)||a.m.cost-b.m.cost||a.m.absent-b.m.absent:
-      a.m.absent-b.m.absent||Number(!!a.m.unknown)-Number(!!b.m.unknown)||a.m.cost-b.m.cost);
-    body='<div class="tools-filters"><label class="control-label">Ordenar por<select class="field" id="toolsSort">'+
+    if(personalized){
+      rows.sort((a,b)=>b.fit.score-a.fit.score||(Number(b.r.players)||0)-(Number(a.r.players)||0));
+      const leaderMap=new Map();
+      for(const entry of rows){const key=printed(entry.r.leaderId);if(!leaderMap.has(key))leaderMap.set(key,entry)}
+      rows=[...leaderMap.values()]; // one representative list per archetype
+    }else{
+      rows=rows.filter(x=>x.m.absent<=maximum&&(h.maxCost===""||(!x.m.unknown&&x.m.cost<=ceiling)));
+      rows.sort((a,b)=>h.sort==="cost"?
+        Number(!!a.m.unknown)-Number(!!b.m.unknown)||a.m.cost-b.m.cost||a.m.absent-b.m.absent:
+        a.m.absent-b.m.absent||Number(!!a.m.unknown)-Number(!!b.m.unknown)||a.m.cost-b.m.cost);
+    }
+    body=(personalized?'<div class="tools-filters"><label class="control-label">Priorizar<select class="field" id="toolsPreference">'+
+      [["competitive","Competitividad"],["balanced","Equilibrio"],["budget","Presupuesto"]].map(([id,label])=>
+      '<option value="'+id+'"'+(h.preference===id?" selected":"")+'>'+label+'</option>').join("")+
+      '</select></label><p class="small">Un mazo por líder · Meta y tus partidas primero · no se requiere poseer las cartas.</p></div>':
+      '<div class="tools-filters"><label class="control-label">Ordenar por<select class="field" id="toolsSort">'+
       (personalized?'<option value="fit"'+(h.sort==="fit"?" selected":"")+'>Más recomendable para mí</option>':'')+
       '<option value="missing"'+(h.sort==="missing"?" selected":"")+'>Menos cartas faltantes</option>'+
       '<option value="cost"'+(h.sort==="cost"?" selected":"")+'>Menor presupuesto</option></select></label>'+
       '<label class="control-label">Máximo faltantes<select class="field" id="toolsMaxMissing">'+
       [["","Sin límite"],["0","0"],["4","4"],["8","8"],["12","12"],["20","20"]].map(([v,l])=>
       '<option value="'+v+'"'+(h.maxMissing===v?" selected":"")+'>'+l+'</option>').join("")+'</select></label>'+
-      '<label class="control-label">Presupuesto máximo (€)<input id="toolsMaxCost" class="field" type="number" min="0" step="1" value="'+text(h.maxCost)+'" placeholder="Sin límite"></label></div>'+
+      '<label class="control-label">Presupuesto máximo (€)<input id="toolsMaxCost" class="field" type="number" min="0" step="1" value="'+text(h.maxCost)+'" placeholder="Sin límite"></label></div>')+
       '<div class="small">'+rows.length+' mazos visibles de '+h.list.length+' listas · '+Number(h.meta.scannedEvents||0)+' torneos consultados'+
       (h.meta.rateLimited?' · Resultados parciales':"")+'</div>';
+    if(personalized&&h.metaError)body+='<div class="notice">Meta no disponible: '+text(h.metaError)+'. Recomendaciones provisionales.</div>';
     if(!rows.length)body+='<div class="notice">Ninguna lista cumple los filtros. Prueba ampliándolos.</div>';
     else body+='<div class="tools-deckgrid">'+rows.slice(0,48).map(({r,i,m,fit})=>{
       const c=resolveDeckImportCard(r.leaderId);
       return '<div class="tools-item">'+(c?cardImg(c,"thumb"):"")+'<div class="grow"><b>'+text(r.leaderName||r.leaderId)+'</b>'+
         '<div class="small">'+text(r.quality||"")+' · '+text(r.tournament||"")+'</div>'+ 
-         (personalized?'<div class="small tools-good"><b>'+Math.round(fit.score)+' / 100 · '+text(fit.reason)+'</b></div>':'')+
+         (personalized?'<div class="small tools-good"><b>'+Math.round(fit.score)+' / 100 · '+text(fit.reason)+'</b></div>'+
+            (fit.personal.games?'<div class="small">Tus torneos: '+fit.personal.wins+'W / '+fit.personal.losses+'L ('+fit.personal.games+')</div>':''):'')+
         '<div class="tools-numbers"><b>'+m.absent+' faltantes</b><b>'+(m.unknown?"Desde ":"")+money(m.cost)+'</b></div>'+
         '<div class="small">'+m.owned+'/'+m.total+' copias disponibles'+(m.unknown?' · '+m.unknown+' sin precio':'')+'</div>'+
-        '<button class="primary btn" data-tools-preview="'+i+'">Ver lista y faltantes</button></div></div>';
+        '<div class="tools-controls"><button class="primary btn" data-tools-preview="'+i+'">Ver mazo</button><button class="secondary btn" data-tools-compare="'+i+'">Comparar</button></div></div></div>';
     }).join("")+'</div>';
   }
   return '<div class="section"><h2>'+(personalized?'Recomendados para ti':'Mazos que casi puedes construir')+'</h2>'+
-    '<p class="small">'+(personalized?'Ordenamos listas competitivas según el porcentaje de cartas que ya tienes, líderes de tus mazos, resultado del torneo y coste conocido de las faltantes. La puntuación es afinidad, no tasa de victorias.':'Analizamos listas públicas competitivas de distintos líderes y las comparamos con las cartas que tienes, contando conjuntamente sus impresiones equivalentes para jugar.')+'</p>'+
+    '<p class="small">'+(personalized?'Recomendamos líderes distintos por Meta unificado con confianza estadística, tus resultados en torneos y preferencia competitiva. Te podemos recomendar mazos aunque todavía no los tengas.':'Analizamos listas públicas competitivas de distintos líderes y las comparamos con las cartas que tienes, contando conjuntamente sus impresiones equivalentes para jugar.')+'</p>'+
     (!state.user?'<div class="notice">Inicia sesión para calcular las cartas que te faltan.</div>':
       !state.collectionReady?'<div class="notice">Cargando tu colección desde Supabase…</div>':"")+
     '<button class="primary btn" id="toolsLoadDecks" '+(h.busy||!state.collectionReady||!state.user?"disabled":"")+'>'+
@@ -379,9 +399,22 @@ function summary(){
   return "MiAlbumOnePiece — Intercambio\n\n"+side(0,"ENTREGO")+"\n\n"+side(1,"RECIBO")+
     "\n\nDiferencia: "+money(total(1).amount-total(0).amount)+"\nValor orientativo; las cartas sin precio no se suman.";
 }
+async function loadMetaForDiscovery(){
+ if(h.metaLoading)return;
+ h.metaLoading=true;h.metaError="";
+ try{
+  const r=await fetch("/api/meta-unified?days=90",{headers:{accept:"application/json"}});
+  if(!r.ok)throw Error("No se pudo consultar el Meta");
+  const data=await r.json();
+  if(!Array.isArray(data.leaders))throw Error("Respuesta incompleta");
+  h.metaData=data;
+ }catch(e){h.metaData=null;h.metaError=String(e.message||e)}
+ finally{h.metaLoading=false}
+}
 async function loadDecks(){
   if(!state.user||!state.collectionReady)return notify("Inicia sesión y carga tu colección");
   h.busy=true;h.error="";renderShell();
+  const metaRequest=loadMetaForDiscovery();
   try{
     const res=await fetch("/api/competitive-decks?leader=all&days=90&minPlayers=16&limit=120");
     const data=await res.json();
@@ -389,7 +422,7 @@ async function loadDecks(){
     h.list=(Array.isArray(data.results)?data.results:[]).filter(x=>x?.cards&&x.leaderId);
     h.meta={scannedEvents:data.scannedEvents,rateLimited:data.rateLimited};h.loaded=true;
   }catch(err){h.error=String(err.message||err)}
-  finally{h.busy=false;if(state.tab==="decks"||state.tab==="deck-completion")renderShell()}
+  finally{await metaRequest;h.busy=false;if(state.tab==="decks"||state.tab==="deck-completion")renderShell()}
 }
 function bind(){
   document.querySelector("#toolsCloudRetry")?.addEventListener("click",()=>h.cloudReady?void flushCloud():void loadCloud(true));
@@ -427,8 +460,12 @@ function bind(){
   if(h.tab==="decks"){
     document.querySelector("#toolsLoadDecks")?.addEventListener("click",loadDecks);
     document.querySelector("#toolsSort")?.addEventListener("change",ev=>{h.sort=ev.target.value;renderShell()});
+    document.querySelector("#toolsPreference")?.addEventListener("change",ev=>{h.preference=ev.target.value;renderShell()});
     document.querySelector("#toolsMaxMissing")?.addEventListener("change",ev=>{h.maxMissing=ev.target.value;renderShell()});
     document.querySelector("#toolsMaxCost")?.addEventListener("change",ev=>{h.maxCost=ev.target.value;renderShell()});
+    document.querySelectorAll("[data-tools-compare]").forEach(b=>b.onclick=()=>{
+      const r=h.list[Number(b.dataset.toolsCompare)];if(r)window.OnePieceDeckLab?.compareWithCompetitive?.(r);
+    });
     document.querySelectorAll("[data-tools-preview]").forEach(b=>b.onclick=()=>{
       const r=h.list[Number(b.dataset.toolsPreview)];if(!r)return;
       state.deckDiscoverResults=[r];state.deckDiscover=true;state.deckDiscoverLeader=printed(r.leaderId);
@@ -449,12 +486,13 @@ document.addEventListener?.("visibilitychange",()=>{
     else if(!h.pending&&!h.writing&&h.cloudReady&&Date.now()-h.lastCloudAt>10000)void loadCloud(true);
   }
 });
-window.OnePieceTools={tradePage,tradeItems,decksView,loadCloud,flushCloud,
+window.OnePieceTools={tradePage,tradeItems,decksView,competitiveLists:()=>h.list.slice(),loadCloud,flushCloud,
  getDeckMode:()=>h.mode,
  setDeckMode:mode=>{
    if(!["complete","mine"].includes(mode)||h.mode===mode)return;
    h.mode=mode;h.sort=mode==="mine"?"fit":"missing";h.maxMissing=mode==="mine"?"":"12";
    renderShell();
+   if(mode==="mine"&&h.loaded&&!h.metaData&&!h.metaLoading)void loadMetaForDiscovery().then(()=>{if(state.tab==="deck-completion")renderShell()});
    if(mode==="mine"&&!h.loaded&&!h.busy&&state.user&&state.collectionReady)void loadDecks();
  },
  bindTrade:()=>{h.tab="trade";bind();
