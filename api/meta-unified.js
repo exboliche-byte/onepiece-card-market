@@ -7,9 +7,17 @@ const cache=new Map(),TTL=15*60*1000;
 const num=x=>Number.isFinite(Number(x))?Math.max(0,Number(x)):0;
 const round=x=>Math.round(x*10)/10;
 const id=x=>String(x||"").trim().toUpperCase();
-function grade(rate,games){
+// Lower Wilson bound: an excellent rate with a tiny sample is not an S-tier
+// result. One-sided 95% confidence (z=1.645); retains real observed WR separately.
+export function confidenceRate(rate,games){
+ const n=Math.max(0,Number(games)||0),p=Math.max(0,Math.min(1,(Number(rate)||0)/100));
+ if(!n)return 0;
+ const z=1.645,z2=z*z,den=1+z2/n;
+ return round(100*((p+z2/(2*n)-z*Math.sqrt((p*(1-p)+z2/(4*n))/n))/den));
+}
+function grade(score,games){
  if(games<20)return "—";
- const p=((rate/100)*Math.min(games,500)+12)/(Math.min(games,500)+24);
+ const p=score/100;
  return p>=.555?"S":p>=.52?"A":p>=.48?"B":p>=.445?"C":"D";
 }
 export function combineMetas(tournaments,simulator){
@@ -42,10 +50,13 @@ export function combineMetas(tournaments,simulator){
   const simWeight=b&&a?1-tourWeight:b?1:0;
   const weightedRate=100*(tourWeight*(a?a.wins/a.games:0)+simWeight*(b?b.wins/b.games:0));
   const games=tourGames+simGames,wins=(a?.wins||0)+(b?.wins||0),losses=(a?.losses||0)+(b?.losses||0);
-  return {...row,wins,losses,games,rate:round(weightedRate),tier:grade(weightedRate,games),
+  const effectiveGames=Math.min(2000,tourGames)+Math.min(2500,simGames);
+  const confidence=confidenceRate(weightedRate,effectiveGames);
+  return {...row,wins,losses,games,rate:round(weightedRate),confidenceRate:confidence,
+   confidenceGames:effectiveGames,tier:grade(confidence,effectiveGames),
    tournamentWeight:round(100*tourWeight),simulatorWeight:round(100*simWeight),
    sourcesCount:Number(!!a)+Number(!!b),share:0};
- }).sort((a,b)=>b.games-a.games||a.id.localeCompare(b.id));
+ }).sort((a,b)=>b.confidenceRate-a.confidenceRate||b.games-a.games||a.id.localeCompare(b.id));
  const totalGames=num(tournaments?.games)+num(simulator?.games);
  const leaderTotal=result.reduce((sum,x)=>sum+x.games,0);
  for(const row of result)row.share=leaderTotal?round(100*row.games/leaderTotal):0;
@@ -94,7 +105,7 @@ export function combineMetas(tournaments,simulator){
   partial:!!tournaments?.partial,truncated:!!tournaments?.truncated,rateLimited:!!tournaments?.rateLimited,
   coverageLimit:num(tournaments?.coverageLimit),sourcesAvailable:Number(tourLeaders.length>0)+Number(simLeaders.length>0),
   leaders:result,matchups,firstSecondAvailable:simLeaders.some(x=>num(x.firstGames)>0),
-  methodology:"W/R global: 60% torneos y 40% simulador para líderes con muestra de al menos 100 resultados de torneos; la ponderación de torneos aumenta gradualmente si hay menos. No se inventan enfrentamientos ni órdenes de salida.",
+  methodology:"W/R global ponderado entre torneos y simulador; los tiers y posiciones se clasifican por límite inferior de Wilson al 95%, penalizando resultados con pocas partidas. Las muestras muy grandes tienen un tope de peso efectivo por fuente. Las partidas registradas y W/R reales siguen mostrándose intactos.",
   matchupSource:simulator?.matchups?.length?"Limitless + OPlayTCG (cruces reales)":"Limitless (sin cruces de OPlayTCG)",
   sources:{tournaments:{available:tourLeaders.length>0,events:num(tournaments?.includedEvents),games:num(tournaments?.games),
     date:tournaments?.updatedAt||null,partial:!!tournaments?.partial},

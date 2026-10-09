@@ -63,5 +63,5 @@ test("Expanded public coverage pages through tournaments, tracks limits and pres
 test("Production build copies the preparation module and runs its tests",()=>{
  const build=fs.readFileSync(path.join(root,"scripts/vercel-build.sh"),"utf8");
  assert.match(build,/scripts\/tournament-prep\.test\.mjs/);
- assert.match(build,/tournament-prep\.js public\//);
+ assert.match(build,/tournament-prep\.js wants\.js public\//);
 });

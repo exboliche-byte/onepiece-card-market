@@ -15,7 +15,7 @@ const GLOBAL_META_CACHE="mialbumonepiece_meta_public_";
 function savedGlobalMeta(key){
   try{
     const entry=JSON.parse(localStorage.getItem(GLOBAL_META_CACHE+key)||"null");
-    if(entry&&entry.data?.source==="Unified"&&Date.now()-Number(entry.savedAt||0)<7*86400000&&
+    if(entry&&entry.data?.source==="Unified"&&entry.data?.leaders?.every?.(x=>Number.isFinite(x.confidenceRate))&&Date.now()-Number(entry.savedAt||0)<7*86400000&&
        Array.isArray(entry.data?.leaders)&&Array.isArray(entry.data?.matchups))return entry.data;
   }catch(error){console.warn("Meta: caché local no disponible",error)}
   return null;
@@ -65,8 +65,9 @@ function tiers(d){
  if(!d.leaders.length)return '<div class="notice">Sin datos suficientes para clasificar líderes.</div>';
  const groups={S:[],A:[],B:[],C:[],D:[],"—":[]};
  for(const x of d.leaders)(groups[x.tier]||groups["—"]).push(x);
- for(const list of Object.values(groups))list.sort((a,b)=>b.games-a.games);
- return '<p class="small">Clasificación única: W/R combinado de torneos y simulador, ponderado para que ninguna fuente tape a la otra. Toca un líder para analizarlo.</p>'+
+ for(const list of Object.values(groups))list.sort((a,b)=>
+   Number(b.confidenceRate||0)-Number(a.confidenceRate||0)||b.games-a.games);
+ return '<p class="small">Clasificación por fiabilidad estadística: el tier y el orden tienen en cuenta las partidas jugadas (margen de confianza al 95%). El W/R mostrado es el real combinado, sin penalizarlo artificialmente. Toca un líder para analizarlo.</p>'+
   Object.entries(groups).filter(([,list])=>list.length).map(([k,list])=>
     '<section class="meta-tier meta-tier-visual"><div class="meta-tier-grade '+(k==="—"?"unknown":k.toLowerCase())+'">'+k+'</div>'+
     '<div class="meta-tier-items">'+list.slice(0,m.expanded?100:24).map(x=>
@@ -74,7 +75,8 @@ function tiers(d){
       art(x.id)+'<b>'+esc(name(x.id))+'</b><small>'+esc(x.id)+'</small>'+
       '<strong>'+Number(x.rate).toLocaleString("es-ES",{maximumFractionDigits:1})+' %</strong>'+
       '<span class="meta-wr-bar"><span style="width:'+Math.max(0,Math.min(100,Number(x.rate))).toFixed(1)+'%"></span></span>'+
-      '<small>'+integer(x.games)+' partidas · '+(x.sourcesCount===2?'2 fuentes':'1 fuente')+'</small></button>').join("")+
+      '<small>'+integer(x.games)+' partidas · '+(x.sourcesCount===2?'2 fuentes':'1 fuente')+'</small>'+
+      '<small>Índice fiable: '+Number(x.confidenceRate??x.rate).toLocaleString("es-ES",{maximumFractionDigits:1})+' %</small></button>').join("")+
     '</div></section>').join("")+
   '<button class="secondary btn" id="metaExpand">'+(m.expanded?"Mostrar menos":"Ver todos los líderes")+'</button>';
 }
@@ -215,7 +217,7 @@ async function loadGlobal(force=false){
   }
   m.loading=true;m.error="";if(state.tab==="meta")renderShell();
   try{
-    const query=new URLSearchParams({days:String(days),format});
+    const query=new URLSearchParams({days:String(days),format,v:"2"});
     if(force)query.set("refresh","1");
     const r=await fetch("/api/meta-unified?"+query,{headers:{accept:"application/json"},
       signal:AbortSignal.timeout(59000)});
