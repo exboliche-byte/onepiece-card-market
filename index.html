@@ -2208,17 +2208,21 @@ function removeFromDeckGroup(id){
   const exact=ids.includes(id)?id:ids[ids.length-1];
   changeDeckQty(exact,-1);
 }
-// The deck builder displays the normal leader printing, not the first variant
-// in the catalog (which may be a parallel). Other card groups are unchanged.
-function deckLeaderStandardPrinting(g){
+// Deck construction always shows the ordinary original illustration for every
+// logical card. A filtered parallel may be the group's first variant, so consult
+// the complete catalog, without changing any saved deck/collection printing IDs.
+function deckDefaultPrinting(g){
   const sample=g?.card;
-  if(!sample||sample.category!=="Leader")return sample;
-  const code=deckPrintedCode(sample);
-  const standard=state.cards.find(c=>c.category==="Leader"&&c.id===code&&!c.isParallel);
-  return standard||g.versions.find(c=>c.id===code)||sample;
+  if(!sample)return sample;
+  const base=baseId(sample.id);
+  const candidates=(state.cards||[]).filter(c=>baseId(c.id)===base&&c.category===sample.category);
+  const exact=candidates.find(c=>c.id===base&&!c.isParallel&&variantKindOf(c)!=="parallel");
+  const standard=candidates.find(c=>!c.isParallel&&variantKindOf(c)==="base");
+  const ordinary=candidates.find(c=>!c.isParallel&&variantKindOf(c)!=="parallel");
+  return exact||standard||ordinary||sample;
 }
 function deckGroupedTile(g){
-  const c=deckLeaderStandardPrinting(g),q=deckOwnedCopies(c),d=state.decks.find(x=>x.id===state.deckId),isLeader=c.category==="Leader",leaderInGroup=isLeader&&d?.leader&&g.versions.some(v=>v.id===d.leader),inDeck=isLeader?(leaderInGroup?1:0):g.versions.reduce((s,v)=>s+Number(d?.cards?.[v.id]||0),0),ps=groupPriceStats(g);
+  const c=deckDefaultPrinting(g),q=deckOwnedCopies(c),d=state.decks.find(x=>x.id===state.deckId),isLeader=c.category==="Leader",leaderInGroup=isLeader&&d?.leader&&g.versions.some(v=>v.id===d.leader),inDeck=isLeader?(leaderInGroup?1:0):g.versions.reduce((s,v)=>s+Number(d?.cards?.[v.id]||0),0),ps=groupPriceStats(g);
   const controls=isLeader?'<div class="quick"><button class="secondary" disabled>−</button><div class="qty">'+inDeck+'</div><button class="primary" data-setleader="'+esc(c.id)+'">+</button></div>':'<div class="quick"><button class="secondary" data-deckremovegroup="'+esc(c.id)+'">−</button><div class="qty">'+inDeck+'</div><button class="primary" data-adddeck="'+esc(c.id)+'">+</button></div>';
   return '<article class="card">'+(q?'<span class="tag">×'+q+' total</span>':'<span class="tag missing">Falta</span>')+
     '<button class="linkbtn" data-detail="'+esc(c.id)+'" style="display:block;width:100%;padding:0">'+cardImg(c,"cardimg")+'</button>'+
@@ -2248,7 +2252,9 @@ async function renderDeckResults(){
   const value=g=>{switch(f.sort){case"name":return norm(g.card?.name);case"set":return packSortKey(g.card?.set);case"rarity":return norm(g.card?.rarity);case"cost":return groupNum(g,"cost");case"power":return groupNum(g,"power");case"price":return groupPriceStats(g).sort;case"quantity":return deckOwnedCopies(g.card);default:return g.card?.id}};
   const cmp=(a,b)=>{const am=a===null||a===undefined||Number.isNaN(a),bm=b===null||b===undefined||Number.isNaN(b);if(am||bm){if(am&&bm)return 0;return am?1:-1}if(Array.isArray(a)&&Array.isArray(b)){for(let i=0;i<Math.max(a.length,b.length);i++){const dd=cmp(a[i],b[i]);if(dd)return dd}return 0}if(typeof a==="number"&&typeof b==="number")return(a-b)*dir;return String(a).localeCompare(String(b),"es",{numeric:true,sensitivity:"base"})*dir};
   groups.sort((a,b)=>cmp(value(a),value(b))||String(a.card?.id||"").localeCompare(String(b.card?.id||""),"es",{numeric:true})*dir);
-  const page=Math.max(1,state.deckPage),start=(page-1)*PAGE,vis=groups.slice(start,start+PAGE);
+  const page=Math.max(1,Math.min(Number(state.deckPage)||1,Math.max(1,Math.ceil(groups.length/PAGE))));
+  state.deckPage=page;
+  const start=(page-1)*PAGE,vis=groups.slice(start,start+PAGE);
   const msg=choosingLeader?"Elige tu líder. Toca una carta para escoger su versión exacta.":"Añade cartas con +. Toca una carta para cambiar a otra versión exacta.";
   host.innerHTML='<div class="notice">'+msg+' · '+groups.length.toLocaleString("es-ES")+' resultados.</div><div class="grid deck-card-grid">'+vis.map(deckGroupedTile).join("")+'</div>'+pagination(groups.length,page,"deck");
   bindResultEvents(host);
@@ -2724,7 +2730,19 @@ function bindResultEvents(root){
   root.querySelectorAll("[data-qty]").forEach(b=>b.onclick=e=>{e.preventDefault();changeQty(b.dataset.qty,Number(b.dataset.d))});
   root.querySelectorAll("[data-want]").forEach(b=>b.onclick=e=>{e.preventDefault();void window.MyWants?.add?.(b.dataset.want,Number(b.dataset.wantCount)||1)});
   root.querySelectorAll("[data-deck-collect]").forEach(b=>b.onclick=()=>addDeckCardToCollection(b.dataset.deckCollect));
-  root.querySelectorAll("[data-page]").forEach(b=>b.onclick=()=>{const k=b.dataset.page;state[k].page=Math.max(1,state[k].page+Number(b.dataset.p));renderVisibleOnly();if(k==="catalog"||k==="collection")window.scrollTo({top:0,behavior:"smooth"})});
+  root.querySelectorAll("[data-page]").forEach(b=>b.onclick=()=>{
+    const k=b.dataset.page,delta=Number(b.dataset.p)||0;
+    if(k==="deck"){
+      state.deckPage=Math.max(1,(Number(state.deckPage)||1)+delta);
+      void renderDeckResults();
+      $("#deckResults")?.scrollIntoView({block:"start",behavior:"smooth"});
+      return;
+    }
+    if(!state[k])return;
+    state[k].page=Math.max(1,(Number(state[k].page)||1)+delta);
+    renderVisibleOnly();
+    if(k==="catalog"||k==="collection")window.scrollTo({top:0,behavior:"smooth"});
+  });
   root.querySelectorAll("[data-group]").forEach(b=>b.onclick=()=>openCardDetail(b.dataset.group));
   root.querySelectorAll("[data-deckgroup]").forEach(b=>b.onclick=()=>openCardDetail(b.dataset.deckgroup));
   root.querySelectorAll("[data-adddeck]").forEach(b=>b.onclick=()=>addToDeck(b.dataset.adddeck));
