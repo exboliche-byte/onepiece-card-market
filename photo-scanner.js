@@ -11,82 +11,13 @@ const cardCode=c=>base(c?.id);
 function baseCard(id){const code=base(id);return state.cards.find(c=>c.id===code)||state.cards.find(c=>cardCode(c)===code)||null}
 function group(code){return state.cards.filter(c=>cardCode(c)===code)}
 function tell(s,error=false){const x=$("#photoStatus");if(x){x.textContent=s;x.classList.toggle("photo-error",error)}}
-function median(a){const v=a.slice().sort((x,y)=>x-y);return v[Math.floor(v.length/2)]||0}
-function estimateBackground(data,w,h){
- const channels=[[],[],[]],n=Math.max(2,Math.round(Math.min(w,h)*.04));
- for(let y=0;y<h;y+=3)for(let x=0;x<w;x+=3){
-  if(x>n&&x<w-n&&y>n&&y<h-n)continue;
-  const p=(y*w+x)*4;
-  for(let c=0;c<3;c++)channels[c].push(data[p+c]);
- }
- return channels.map(median);
-}
-/* Conservative connected-component detector. Best with separated, face-up cards on a plain mat.
-   Every detected region can be corrected manually using the rectangle tool. */
-function detectCardRegions(pixels,w,h){
- const bg=estimateBackground(pixels,w,h),size=w*h;
- const mask=new Uint8Array(size),seen=new Uint8Array(size),queue=new Int32Array(size);
- const limit=Math.max(75,Math.min(155,Math.floor((Math.abs(bg[0]-bg[1])+Math.abs(bg[1]-bg[2]))*.55)+80));
- for(let y=1;y<h-1;y++)for(let x=1;x<w-1;x++){
-  const i=y*w+x,p=4*i,dist=Math.abs(pixels[p]-bg[0])+Math.abs(pixels[p+1]-bg[1])+Math.abs(pixels[p+2]-bg[2]);
-  if(dist>limit)mask[i]=1;
- }
- const expanded=new Uint8Array(size);
- for(let y=2;y<h-2;y++)for(let x=2;x<w-2;x++){
-  const i=y*w+x;
-  if(!mask[i])continue;
-  for(let yy=-2;yy<=2;yy++)for(let xx=-2;xx<=2;xx++)expanded[i+yy*w+xx]=1;
- }
- const candidates=[];
- const minArea=size*.0025,maxArea=size*.76;
- for(let i=0;i<size;i++){
-  if(!expanded[i]||seen[i])continue;
-  let head=0,tail=1;queue[0]=i;seen[i]=1;
-  let xmin=w,ymin=h,xmax=0,ymax=0,sx=0,sy=0,sxx=0,syy=0,sxy=0,total=0;
-  const sampled=[];
-  while(head<tail){
-   const at=queue[head++],x=at%w,y=Math.floor(at/w);
-   total++;xmin=Math.min(xmin,x);xmax=Math.max(xmax,x);ymin=Math.min(ymin,y);ymax=Math.max(ymax,y);
-   sx+=x;sy+=y;sxx+=x*x;syy+=y*y;sxy+=x*y;
-   if((total&3)===0)sampled.push([x,y]);
-   for(const next of [at-1,at+1,at-w,at+w]){
-    if(next<0||next>=size||seen[next]||!expanded[next])continue;
-    const nx=next%w;if(Math.abs(nx-x)>1)continue;
-    seen[next]=1;queue[tail++]=next;
-   }
-  }
-  const bw=xmax-xmin+1,bh=ymax-ymin+1,boxArea=bw*bh;
-  if(boxArea<minArea||boxArea>maxArea||bw<35||bh<45||total<minArea*.18)continue;
-  const cx=sx/total,cy=sy/total;
-  const theta=.5*Math.atan2(2*(sxy/total-cx*cy),(syy/total-cy*cy)-(sxx/total-cx*cx));
-  const ct=Math.cos(theta),st=Math.sin(theta);
-  let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity;
-  for(const [x,y] of sampled){
-   const dx=x-cx,dy=y-cy,px=dx*ct-dy*st,py=dx*st+dy*ct;
-   minX=Math.min(minX,px);maxX=Math.max(maxX,px);minY=Math.min(minY,py);maxY=Math.max(maxY,py);
-  }
-  let rw=maxX-minX+1,rh=maxY-minY+1,angle=theta;
-  if(rw>rh){const temp=rw;rw=rh;rh=temp;angle+=Math.PI/2}
-  const ratio=rw/rh,density=total/boxArea;
-  if(ratio<.47||ratio>.92||density<.12)continue;
-  candidates.push({cx,cy,w:rw*1.025,h:rh*1.025,angle,manual:false,area:boxArea});
- }
- candidates.sort((a,b)=>b.area-a.area);
- const chosen=[];
- for(const r of candidates){
-  const duplicate=chosen.some(c=>Math.hypot(c.cx-r.cx,c.cy-r.cy)<Math.min(c.w,r.w)*.42);
-  if(!duplicate)chosen.push(r);
-  if(chosen.length>=MAX_CARDS)break;
- }
- return chosen.sort((a,b)=>a.cy-b.cy||a.cx-b.cx);
-}
 function makeCrop(region,source=canvas,width=160,height=224){
  const out=document.createElement("canvas");out.width=width;out.height=height;
  const c=out.getContext("2d",{willReadFrequently:true});
  c.fillStyle="#fff";c.fillRect(0,0,width,height);
  c.translate(width/2,height/2);
  c.scale(width/region.w,height/region.h);
- c.rotate(region.angle||0);
+ c.rotate(-(region.angle||0));
  c.translate(-region.cx,-region.cy);
  c.drawImage(source,0,0);
  return out;
@@ -108,17 +39,42 @@ function normalizeImage(file){
   img.src=url;
  });
 }
+function stopDetection(){
+ if(detectWorker){detectWorker.terminate();detectWorker=null}
+ if(detectPending){const job=detectPending;detectPending=null;clearTimeout(job.timer);job.reject(Error("Detección cancelada"))}
+}
 function detectionRegions(source){
- const scale=Math.min(1,950/Math.max(source.width,source.height));
- const working=document.createElement("canvas");working.width=Math.round(source.width*scale);working.height=Math.round(source.height*scale);
- const cx=working.getContext("2d",{willReadFrequently:true});
- cx.drawImage(source,0,0,working.width,working.height);
- const data=cx.getImageData(0,0,working.width,working.height).data;
- const factors={x:source.width/working.width,y:source.height/working.height};
- return detectCardRegions(data,working.width,working.height).map(r=>({
-  cx:r.cx*factors.x,cy:r.cy*factors.y,w:r.w*factors.x,h:r.h*factors.y,
-  angle:r.angle,manual:r.manual
- }));
+ const scale=Math.min(1,780/Math.max(source.width,source.height));
+ const working=document.createElement("canvas");
+ working.width=Math.max(1,Math.round(source.width*scale));
+ working.height=Math.max(1,Math.round(source.height*scale));
+ const ctx=working.getContext("2d",{willReadFrequently:true});
+ ctx.drawImage(source,0,0,working.width,working.height);
+ const pixels=ctx.getImageData(0,0,working.width,working.height).data;
+ const sx=source.width/working.width,sy=source.height/working.height;
+ return new Promise((resolve,reject)=>{
+  let worker;
+  try{worker=new Worker("/photo-detector.js?v=2")}catch(error){reject(error);return}
+  detectWorker=worker;
+  const timer=setTimeout(()=>{
+   if(detectWorker===worker){detectWorker=null;detectPending=null;worker.terminate()}
+   reject(Error("La detección ha tardado demasiado; marca los recuadros manualmente."));
+  },14000);
+  detectPending={timer,reject};
+  worker.onmessage=({data})=>{
+   if(detectWorker!==worker)return;
+   detectWorker=null;detectPending=null;clearTimeout(timer);worker.terminate();
+   if(data.type==="error"){reject(Error(data.message));return}
+   if(data.type!=="detected"){reject(Error("Respuesta del detector no válida"));return}
+   resolve((data.regions||[]).map(r=>({cx:r.cx*sx,cy:r.cy*sy,w:r.w*sx,h:r.h*sy,angle:r.angle,manual:false})));
+  };
+  worker.onerror=()=>{
+   if(detectWorker!==worker)return;
+   detectWorker=null;detectPending=null;clearTimeout(timer);worker.terminate();
+   reject(Error("El detector no está disponible."));
+  };
+  worker.postMessage({type:"detect",requestId:1,width:working.width,height:working.height,pixels:pixels.buffer},[pixels.buffer]);
+ });
 }
 function workerStop(){if(worker)worker.terminate();worker=null;workerReady=false;if(matcher){matcher.reject(Error("Escaneo interrumpido"));matcher=null}}
 function workerStart(){
@@ -172,7 +128,7 @@ function drawPreview(){
  const ctx=preview.getContext("2d");ctx.drawImage(canvas,0,0);
  ctx.lineWidth=Math.max(3,canvas.width/230);ctx.font="bold "+Math.max(20,canvas.width/40)+"px system-ui";
  regions.forEach((r,i)=>{
-  ctx.save();ctx.translate(r.cx,r.cy);ctx.rotate(-r.angle);
+  ctx.save();ctx.translate(r.cx,r.cy);ctx.rotate(r.angle);
   ctx.strokeStyle="#ffd447";ctx.strokeRect(-r.w/2,-r.h/2,r.w,r.h);
   ctx.restore();
   ctx.fillStyle="#ffd447";ctx.fillText(String(i+1),r.cx-r.w/3,r.cy-r.h/3);
@@ -296,13 +252,19 @@ function refreshControls(){
 async function processFile(file){
  if(!file)return;
  if(!file.type.startsWith("image/")||file.size>MAX_FILE||file.size===0){tell("Selecciona una imagen JPG, PNG o WebP de hasta 22 MB.",true);return}
- const gen=++generation;workerStop();busy=true;regions=[];rows=[];
+ const gen=++generation;workerStop();stopDetection();busy=true;regions=[];rows=[];
  tell("Analizando fotografía…");refreshControls();$("#photoPreview").hidden=true;rowList();
  try{
   canvas=await normalizeImage(file);
   if(gen!==generation||!active)return;
-  regions=detectionRegions(canvas);
   $("#photoPreview").hidden=false;drawPreview();
+  try{regions=await detectionRegions(canvas)}catch(error){
+   if(gen!==generation||!active)return;
+   regions=[];tell("Detección fallida: "+(error.message||error)+". Marca los recuadros manualmente.",true);
+   return;
+  }
+  if(gen!==generation||!active)return;
+  drawPreview();
   if(!regions.length){
    tell("No se han detectado rectángulos. Dibuja un recuadro alrededor de cada carta sobre la fotografía.",true);
    return;
@@ -353,9 +315,7 @@ function close({fromHistory=false}={}){
  // Close synchronously: don't leave an unresponsive overlay waiting for popstate.
  const navigateBack=!fromHistory&&historyActive&&history.state?.onepiecePhoto===true;
  historyActive=false;generation++;active=false;busy=false;
- if(detectWorker){detectWorker.terminate();detectWorker=null}
- if(detectPending){const p=detectPending;detectPending=null;clearTimeout(p.timer);p.reject(Error("Fotografía cerrada"))}
- workerStop();canvas=null;regions=[];rows=[];drag=null;
+ stopDetection();workerStop();canvas=null;regions=[];rows=[];drag=null;
  $("#photoScanPanel")?.remove();
  document.querySelector("#photoStyles")?.remove();
  window.dispatchEvent(new Event("onepiece:photo-closed"));
@@ -410,7 +370,7 @@ function open(){
  $("#photoCameraFile").onchange=e=>{void processFile(e.target.files?.[0]);e.target.value=""};
  $("#photoReset").onclick=()=>{
   if(rows.length&&!confirm("¿Descartar los recortes sin guardar?"))return;
-  ++generation;workerStop();canvas=null;regions=[];rows=[];busy=false;
+  ++generation;workerStop();stopDetection();canvas=null;regions=[];rows=[];busy=false;
   $("#photoPreview").hidden=true;rowList();refreshControls();tell("Elige una imagen para empezar.");
  };
  $("#photoUndoBox").onclick=()=>{if(busy||!regions.length)return;regions.pop();rows.pop();drawPreview();rowList();refreshControls()};
