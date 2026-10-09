@@ -14,4 +14,7 @@ https://onepiece-card-market.vercel.app
 El catálogo se mantiene separado de los datos de colección y mazos para que nuevas cartas no destruyan datos del usuario.
 
 ## Desarrollo
-La aplicación es una SPA estática con funciones Vercel bajo \`/api\`. No necesita un build step.
+La aplicación es una SPA estática con funciones Vercel bajo \`/api\`. Vercel ejecuta `scripts/vercel-build.sh`, que valida el código, ejecuta pruebas y prepara los archivos publicados.
+
+## Recuperación
+Consulta [`BACKUP_MASSIVE_20261009.md`](BACKUP_MASSIVE_20261009.md) para restaurar código, despliegue y tablas de la aplicación.
