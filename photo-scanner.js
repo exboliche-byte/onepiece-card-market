@@ -6,16 +6,17 @@ const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&
 const base=id=>String(baseId(id||"")).toUpperCase();
 const MAX_FILE=22*1024*1024, MAX_CARDS=40;
 let canvas=null,regions=[],rows=[],worker=null,workerReady=false,matcher=null,active=false,busy=false,generation=0,drag=null,historyActive=false;
-let photoBackPending=false,detectWorker=null,detectPending=null;
+let photoBackPending=false,detectWorker=null,detectPending=null,photoOcr=null,photoOcrLoading=null;
 const cardCode=c=>base(c?.id);
 function baseCard(id){const code=base(id);return state.cards.find(c=>c.id===code)||state.cards.find(c=>cardCode(c)===code)||null}
 function group(code){return state.cards.filter(c=>cardCode(c)===code)}
 function tell(s,error=false){const x=$("#photoStatus");if(x){x.textContent=s;x.classList.toggle("photo-error",error)}}
-function makeCrop(region,source=canvas,width=160,height=224){
+function makeCrop(region,source=canvas,width=160,height=224,extraRotation=0){
  const out=document.createElement("canvas");out.width=width;out.height=height;
  const c=out.getContext("2d",{willReadFrequently:true});
  c.fillStyle="#fff";c.fillRect(0,0,width,height);
  c.translate(width/2,height/2);
+ c.rotate(extraRotation);
  c.scale(width/region.w,height/region.h);
  c.rotate(-(region.angle||0));
  c.translate(-region.cx,-region.cy);
@@ -76,7 +77,7 @@ function detectionRegions(source){
   worker.postMessage({type:"detect",requestId:1,width:working.width,height:working.height,pixels:pixels.buffer},[pixels.buffer]);
  });
 }
-function workerStop(){if(worker)worker.terminate();worker=null;workerReady=false;if(matcher){matcher.reject(Error("Escaneo interrumpido"));matcher=null}}
+function workerStop(){if(worker)worker.terminate();worker=null;workerReady=false;if(matcher){const job=matcher;matcher=null;clearTimeout(job.timer);job.reject(Error("Escaneo interrumpido"))}}
 function workerStart(){
  workerStop();
  return new Promise((resolve,reject)=>{
@@ -94,14 +95,22 @@ function workerStart(){
   task.postMessage({type:"init"});
  });
 }
-function recognize(region){
+function recognizeFrame(region,rotation=0){
  if(!workerReady||!worker)return Promise.reject(Error("Motor visual no disponible"));
- const crop=makeCrop(region),data=crop.getContext("2d",{willReadFrequently:true}).getImageData(0,0,160,224).data;
+ const crop=makeCrop(region,canvas,160,224,rotation);
+ const data=crop.getContext("2d",{willReadFrequently:true}).getImageData(0,0,160,224).data;
  return new Promise((resolve,reject)=>{
-  const timer=setTimeout(()=>{matcher=null;reject(Error("No se ha podido analizar la carta."))},14000);
+  const timer=setTimeout(()=>{matcher=null;reject(Error("Análisis visual agotó el tiempo"))},14000);
   matcher={resolve,reject,timer};
-  worker.postMessage({type:"frame",frames:1,pixels:data.buffer},[data.buffer]);
+  worker.postMessage({type:"frame",frames:1,pixels:data.buffer,limit:32},[data.buffer]);
  });
+}
+async function recognize(region){
+ const normal=await recognizeFrame(region);
+ // Additional pass when the card was photographed upside down.
+ if(normal[0]&&normal[0].score<=53)return normal;
+ const reversed=await recognizeFrame(region,Math.PI);
+ return reversed[0]&&reversed[0].score+5<(normal[0]?.score??999)?reversed:normal;
 }
 function baseSuggestions(ranked){
  const found=new Set(),options=[];
