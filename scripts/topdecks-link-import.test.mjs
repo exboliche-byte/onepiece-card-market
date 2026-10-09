@@ -27,7 +27,7 @@ test("Rejects unsupported hosts and links with no real deck",()=>{
  assert.throws(()=>parse(link.replace("4nOP08-036","4nFAKE-101")),/código/);
 });
 test("Normal text-based deck import still exists and pasted links do not fetch third parties",()=>{
- assert.match(html,/if\(\/\^https\?:\\\/\\\/\(\?:www\\\.\)\?onepiecetopdecks/);
+ assert.ok(html.includes("linked=parseTopDecksLink(input)"));
  assert.match(html,/t=JSON\.stringify\(linked\)/);
  assert.match(html,/faltan "\+missing\.length\+" cartas/);
  assert.match(html,/function parseDeckListLine\(line\)/);
