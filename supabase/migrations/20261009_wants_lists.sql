@@ -63,3 +63,25 @@ begin
 end $fn$;
 revoke all on function public.wants_consume_item(text,integer) from public,anon;
 grant execute on function public.wants_consume_item(text,integer) to authenticated;
+
+-- Bulk positive differences after CSV import: one request, validated atomically.
+create or replace function public.wants_consume_bulk(p_changes jsonb)
+returns integer language plpgsql security invoker set search_path to '' as $fn$
+declare row record; affected integer:=0; delta integer;
+begin
+ if (select auth.uid()) is null or p_changes is null
+   or jsonb_typeof(p_changes)<>'object'
+   or (select count(*) from jsonb_object_keys(p_changes))>20000 then
+   raise exception 'Importación de wants inválida';
+ end if;
+ for row in select key,value from jsonb_each_text(p_changes) loop
+  if row.key !~ '^[A-Za-z0-9_-]{3,140}$' or row.value !~ '^[1-9][0-9]?$' then
+   raise exception 'Impresión o cantidad inválida';
+  end if;
+  delta:=row.value::integer;
+  affected:=affected+public.wants_consume_item(row.key,delta);
+ end loop;
+ return affected;
+end $fn$;
+revoke all on function public.wants_consume_bulk(jsonb) from public,anon;
+grant execute on function public.wants_consume_bulk(jsonb) to authenticated;
