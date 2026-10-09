@@ -1,5 +1,6 @@
 // Meta de torneos públicos One Piece. Limitless no proporciona quién salió primero.
 const LIMITLESS_API_URL="https://play.limitlesstcg.com/api",cache=new Map(),TTL=20*60*1000;
+const eventCache=new Map(),EVENT_TTL=60*60*1000;
 const bounded=(v,a,b)=>Math.min(b,Math.max(a,Number(v)||a));
 const cardId=c=>{
   const s=String(c?.set||"").trim().toUpperCase().replace(/-$/,""),n=String(c?.number||"").trim();
@@ -17,9 +18,14 @@ async function get(path){
   }finally{clearTimeout(timer)}
 }
 async function eventData(e){
+  const key=String(e.id),cached=eventCache.get(key);
+  if(cached&&Date.now()-cached.at<EVENT_TTL)return cached.value;
   const path="/tournaments/"+encodeURIComponent(e.id);
   const [standings,pairings]=await Promise.all([get(path+"/standings"),get(path+"/pairings")]);
-  return {standings,pairings};
+  const value={standings,pairings};
+  eventCache.set(key,{at:Date.now(),value});
+  if(eventCache.size>250)eventCache.delete(eventCache.keys().next().value);
+  return value;
 }
 function aggregate(entries){
   const leaders=new Map(),matchups=new Map();let games=0;
