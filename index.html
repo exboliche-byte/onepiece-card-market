@@ -249,7 +249,7 @@ const state={
   catalog:{set:"Todas",category:"Todos",color:"Todos",rarity:"Todos",type:"Todos",attribute:"Todos",ownership:"Todas",sort:"id",dir:"asc",page:1,grouped:true,minCost:"",maxCost:"",minPower:"",maxPower:"",minPrice:"",maxPrice:"",query:"",filtersOpen:false},
   owned:{},collectionReady:false,collection:{query:"",set:"Todas",category:"Todos",color:"Todos",rarity:"Todos",type:"Todos",attribute:"Todos",quantity:"Todas",playset:"Todas",sort:"id",dir:"asc",page:1,filtersOpen:false},
   album:{set:"",query:"",ownership:"Todas",sort:"id",dir:"asc",page:1},expansions:{type:"Todos",sort:"set",dir:"asc"},
-  deckQuery:"",deckPage:1,deckLibrary:true,deckChoosingLeader:false,deckPreviewOrigin:"",deckPreviewScrollY:0,deckDiscover:false,deckDiscoverMode:"leader",deckDiscoverSource:"limitless",deckDiscoverCard:"",deckDiscoverCardQuery:"",deckDiscoverLeader:"",deckDiscoverLeaderQuery:"",deckDiscoverResults:[],deckDiscoverLoading:false,deckDiscoverError:"",deckDiscoverDays:90,deckDiscoverMinPlayers:32,deckDiscoverMeta:null,deckFilters:{set:"Todas",category:"Todos",color:"Todos",rarity:"Todos",type:"Todos",attribute:"Todos",ownership:"Todas",sort:"id",dir:"asc",filtersOpen:false},auth:false,authReady:false,authBusy:false,authError:"",authNotice:"",authRecovery:false,toast:"",loading:true
+  deckQuery:"",deckPage:1,deckLibrary:true,deckChoosingLeader:false,deckPreviewOrigin:"",deckPreviewScrollY:0,deckDiscover:false,deckDiscoverMode:"leader",deckDiscoverCard:"",deckDiscoverCardQuery:"",deckDiscoverLeader:"",deckDiscoverLeaderQuery:"",deckDiscoverResults:[],deckDiscoverLoading:false,deckDiscoverError:"",deckDiscoverDays:90,deckDiscoverMinPlayers:32,deckDiscoverMeta:null,deckFilters:{set:"Todas",category:"Todos",color:"Todos",rarity:"Todos",type:"Todos",attribute:"Todos",ownership:"Todas",sort:"id",dir:"asc",filtersOpen:false},auth:false,authReady:false,authBusy:false,authError:"",authNotice:"",authRecovery:false,toast:"",loading:true
 };
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??"").replace(/[&<>'"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[c]));
@@ -1563,12 +1563,12 @@ function savedDecksWithCompetitiveCard(code){
  }).filter(x=>x.copies>0);
 }
 function competitiveDeckSearchView(){
- const byCard=state.deckDiscoverMode==="card",topDecks=state.deckDiscoverSource==="topdecks";
+ const byCard=state.deckDiscoverMode==="card";
  let results="";
  if(state.deckDiscoverLoading)results='<div class="notice">Consultando listas públicas de torneos recientes…</div>';
  else if(state.deckDiscoverError)results='<div class="notice">'+esc(state.deckDiscoverError)+'</div>';
- else if(state.deckDiscoverResults.length)results='<div class="notice">'+state.deckDiscoverResults.length+' mazo(s) encontrado(s)'+(state.deckDiscoverMeta?.scannedEvents?' · '+state.deckDiscoverMeta.scannedEvents+(topDecks?' páginas consultadas':' torneos consultados'):'')+(state.deckDiscoverMeta?.rateLimited?' · resultados parciales por límite de la fuente':state.deckDiscoverMeta?.partial?' · algunas páginas no accesibles':'')+'</div><div class="competitive-results">'+state.deckDiscoverResults.map(competitiveResultHtml).join("")+'</div>';
- else if(state.deckDiscoverMeta)results='<div class="notice">No se encontraron listas públicas legales que incluyan '+(byCard?'esa carta':'ese líder')+' con estos filtros. Prueba ampliar el periodo o cambiar de fuente.</div>';
+ else if(state.deckDiscoverResults.length)results='<div class="notice">'+state.deckDiscoverResults.length+' mazo(s) encontrado(s)'+(state.deckDiscoverMeta?.scannedEvents?' · '+state.deckDiscoverMeta.scannedEvents+' torneos consultados':'')+(state.deckDiscoverMeta?.rateLimited?' · resultados parciales por límite de la fuente':'')+'</div><div class="competitive-results">'+state.deckDiscoverResults.map(competitiveResultHtml).join("")+'</div>';
+ else if(state.deckDiscoverMeta)results='<div class="notice">No se encontraron listas públicas legales que incluyan '+(byCard?'esa carta':'ese líder')+' con estos filtros. Prueba ampliar el periodo o bajar el mínimo de jugadores.</div>';
  const saved=byCard?savedDecksWithCompetitiveCard(state.deckDiscoverCard):[];
  const mine=saved.length?'<section class="section"><h3>Mis mazos que incluyen esta carta ('+saved.length+')</h3><div class="competitive-results">'+
    saved.map(x=>'<article class="competitive-deck"><div class="competitive-deck-head"><div><b>'+esc(x.deck.name)+'</b><div class="small">'+
@@ -1580,15 +1580,14 @@ function competitiveDeckSearchView(){
    (state.deckDiscoverCard?'<div class="notice">Carta seleccionada: <b>'+esc(state.deckDiscoverCard)+'</b> · '+esc(state.cards.find(c=>deckPrintedCode(c)===state.deckDiscoverCard)?.name||"")+'</div>':'<div class="notice">Selecciona una carta del catálogo para consultar los mazos que la juegan.</div>'):
    '<div class="competitive-leader-picker"><input id="competitiveLeaderSearch" class="field competitive-leader-search" inputmode="search" autocomplete="off" placeholder="🔎 Buscar líder por nombre o ID..." value="'+esc(state.deckDiscoverLeaderQuery)+'"><div id="competitiveLeaderGrid" class="competitive-leader-grid">'+competitiveLeaderGridHtml()+'</div></div>'+
    (state.deckDiscoverLeader?'<div class="notice">Líder seleccionado: <b>'+esc(state.deckDiscoverLeader)+'</b></div>':'<div class="notice">Selecciona un líder para buscar mazos.</div>');
- return '<div class="competitive-panel"><div class="sectionhead"><div><h2>Buscar mazos competitivos</h2><div class="small">Consulta listas legales de torneos de '+(topDecks?'One Piece Top Decks':'Limitless')+' '+(byCard?'que incluyen una carta':'por líder')+'.</div></div><button class="secondary btn" id="closeCompetitiveSearch">← Mis mazos</button></div>'+
+ return '<div class="competitive-panel"><div class="sectionhead"><div><h2>Buscar mazos competitivos</h2><div class="small">Consulta listas legales de torneos de Limitless '+(byCard?'que incluyen una carta':'por líder')+'.</div></div><button class="secondary btn" id="closeCompetitiveSearch">← Mis mazos</button></div>'+
    '<div class="competitive-mode-tabs"><button type="button" class="secondary btn'+(!byCard?' competitive-mode-active':'')+'" data-competitive-mode="leader">Por líder</button><button type="button" class="secondary btn'+(byCard?' competitive-mode-active':'')+'" data-competitive-mode="card">Por carta</button></div>'+
    picker+
    '<div class="competitive-controls">'+
-     '<label class="filter-label"><span>Fuente de mazos</span><select id="competitiveSource" class="field"><option value="limitless" '+(!topDecks?"selected":"")+'>Limitless</option><option value="topdecks" '+(topDecks?"selected":"")+'>One Piece Top Decks</option></select></label>'+
      '<label class="filter-label"><span>Periodo</span><select id="competitiveDays" class="field"><option value="90" '+(state.deckDiscoverDays===90?"selected":"")+'>90 días</option><option value="180" '+(state.deckDiscoverDays===180?"selected":"")+'>180 días</option><option value="365" '+(state.deckDiscoverDays===365?"selected":"")+'>1 año</option></select></label>'+
-     (topDecks?'':'<label class="filter-label"><span>Torneo mínimo</span><select id="competitiveMinPlayers" class="field"><option value="16" '+(state.deckDiscoverMinPlayers===16?"selected":"")+'>16 jugadores</option><option value="32" '+(state.deckDiscoverMinPlayers===32?"selected":"")+'>32 jugadores</option><option value="64" '+(state.deckDiscoverMinPlayers===64?"selected":"")+'>64 jugadores</option></select></label>')+
+     '<label class="filter-label"><span>Torneo mínimo</span><select id="competitiveMinPlayers" class="field"><option value="16" '+(state.deckDiscoverMinPlayers===16?"selected":"")+'>16 jugadores</option><option value="32" '+(state.deckDiscoverMinPlayers===32?"selected":"")+'>32 jugadores</option><option value="64" '+(state.deckDiscoverMinPlayers===64?"selected":"")+'>64 jugadores</option></select></label>'+
      '<button class="primary btn" id="runCompetitiveSearch" '+(state.deckDiscoverLoading?"disabled":"")+'>Buscar mazos</button>'+
-   '</div>'+(topDecks?'<div class="small">Top Decks: listas públicas del formato inglés. No siempre se conoce el número de participantes. Esta fuente no se incorpora al win rate del meta.</div>':'')+(byCard?mine:'')+results+'</div>';
+   '</div>'+ (byCard?mine:'')+results+'</div>';
 }
 async function searchCompetitiveDecks(){
   const byCard=state.deckDiscoverMode==="card";
@@ -1601,16 +1600,14 @@ async function searchCompetitiveDecks(){
   state.deckDiscoverMinPlayers=Number($("#competitiveMinPlayers")?.value||state.deckDiscoverMinPlayers||32);
   state.deckDiscoverLoading=true;state.deckDiscoverError="";state.deckDiscoverResults=[];state.deckDiscoverMeta=null;renderShell();
   try{
-    const fromTopDecks=state.deckDiscoverSource==="topdecks";
-    const qs=new URLSearchParams({leader,days:String(state.deckDiscoverDays),limit:byCard?"40":"20"});
-    if(!fromTopDecks)qs.set("minPlayers",String(state.deckDiscoverMinPlayers));
+    const qs=new URLSearchParams({leader,days:String(state.deckDiscoverDays),minPlayers:String(state.deckDiscoverMinPlayers),limit:byCard?"40":"20"});
     if(byCard)qs.set("card",wantedCard);
-    const r=await fetch((fromTopDecks?"/api/topdecks?":"/api/competitive-decks?")+qs.toString(),{headers:{accept:"application/json"}});
+    const r=await fetch("/api/competitive-decks?"+qs.toString(),{headers:{accept:"application/json"}});
     const data=await r.json().catch(()=>({}));
     if(searchVersion!==competitiveDeckSearchVersion)return;
     if(!r.ok)throw Error(data.error||"No se pudieron cargar los mazos");
     state.deckDiscoverResults=(Array.isArray(data.results)?data.results:[]).filter(x=>standardCompetitiveDeckPlayable(x.leaderId,x.cards)&&(!byCard||deckPrintedCode(x.leaderId)===state.deckDiscoverCard||Object.entries(x.cards||{}).some(([id,n])=>deckPrintedCode(id)===state.deckDiscoverCard&&Number(n)>0)));
-    state.deckDiscoverMeta={scannedEvents:Number(data.scannedEvents||0),availableMatches:Number(data.availableMatches||0),rateLimited:!!data.rateLimited,partial:!!data.partial};
+    state.deckDiscoverMeta={scannedEvents:Number(data.scannedEvents||0),availableMatches:Number(data.availableMatches||0),rateLimited:!!data.rateLimited};
   }catch(e){
     if(searchVersion===competitiveDeckSearchVersion)state.deckDiscoverError=e.message||"No se pudieron consultar los mazos competitivos.";
   }finally{
@@ -2963,13 +2960,6 @@ function bindShell(){
       state.deckPreviewOrigin="card-search";state.deckId=b.dataset.openCardDeck;
       state.deckLibrary=false;state.deckChoosingLeader=false;state.deckDiscover=false;
     }));
-    $("#competitiveSource")?.addEventListener("change",e=>{
-      if(e.target.value===state.deckDiscoverSource)return;
-      competitiveDeckSearchVersion++;
-      state.deckDiscoverSource=e.target.value==="topdecks"?"topdecks":"limitless";
-      state.deckDiscoverResults=[];state.deckDiscoverMeta=null;state.deckDiscoverError="";state.deckDiscoverLoading=false;
-      renderShell();
-    });
     $("#runCompetitiveSearch")?.addEventListener("click",searchCompetitiveDecks);
     $("#competitiveDays")?.addEventListener("change",e=>{state.deckDiscoverDays=Number(e.target.value)||90});
     $("#competitiveMinPlayers")?.addEventListener("change",e=>{state.deckDiscoverMinPlayers=Number(e.target.value)||32});
