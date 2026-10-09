@@ -21,3 +21,17 @@
 .physical-footer{border-top:1px solid var(--border,#444);padding-top:10px;margin-top:16px}
 .physical-footer button{font-size:12px}
 @media(max-width:480px){.physical-dialog{padding:15px}.physical-deck-line button{flex-shrink:0}}
+
+/* Estado pulsable fuera del gestor, sin botones anidados en las tarjetas de mazos. */
+button.physical-chip{appearance:none;background:transparent;color:inherit;cursor:pointer;line-height:1.35;font-family:inherit}
+button.physical-chip:hover,button.physical-chip:focus-visible{outline:2px solid var(--accent,#ffd447);outline-offset:2px}
+button.physical-chip.ok{color:#71e0b3;background:rgba(37,150,85,.1)}
+button.physical-chip.partial{color:#f1bd58;background:rgba(200,136,24,.1)}
+.decktile>.physical-chip{margin:0 8px 10px;max-width:calc(100% - 16px)}
+.physical-card-photo{display:block;width:58px;height:81px;object-fit:cover;border-radius:5px;flex:0 0 58px;background:var(--panel2,#171d2b);border:1px solid var(--line,#445)}
+.physical-card-photo-empty{font-size:10px;color:var(--muted,#aab);display:grid;place-items:center;text-align:center;padding:5px}
+.physical-movement,.physical-card-line{display:flex;align-items:center;gap:12px;min-width:0}
+.physical-card-info{min-width:0;overflow-wrap:anywhere}
+.physical-card-overview{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,215px),1fr));gap:8px;margin:12px 0}
+.physical-card-line{border:1px solid var(--border,#444);border-radius:10px;padding:8px}
+@media(max-width:480px){.physical-card-photo{width:50px;height:70px;flex-basis:50px}.physical-movement,.physical-card-line{gap:9px}}
