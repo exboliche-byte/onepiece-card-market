@@ -5,8 +5,8 @@ const $=q=>document.querySelector("#photoScanPanel "+q);
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&#39;","'":"&#39;"}[c]));
 const base=id=>String(baseId(id||"")).toUpperCase();
 const MAX_FILE=22*1024*1024, MAX_CARDS=40;
-let canvas=null,regions=[],rows=[],worker=null,workerReady=false,matcher=null,active=false,busy=false,generation=0,drag=null,historyActive=false;
-let photoBackPending=false,detectWorker=null,detectPending=null,photoOcr=null,photoOcrLoading=null;
+let canvas=null,regions=[],rows=[],worker=null,workerReady=false,matcher=null,active=false,busy=false,generation=0,drag=null;
+let detectWorker=null,detectPending=null,photoOcr=null,photoOcrLoading=null;
 const cardCode=c=>base(c?.id);
 function baseCard(id){const code=base(id);return state.cards.find(c=>c.id===code)||state.cards.find(c=>cardCode(c)===code)||null}
 function group(code){return state.cards.filter(c=>cardCode(c)===code)}
@@ -356,20 +356,15 @@ async function saveCards(){
  if(failed)tell("Guardadas "+saved+" cartas; "+failed+" impresiones no pudieron guardarse. Conservadas para reintentar.",true);
  else tell("Guardadas "+saved+" cartas. Ningún recorte pendiente.");
 }
-function consumePhotoBack(){const pending=photoBackPending;photoBackPending=false;return pending}
-function close({fromHistory=false}={}){
+function close(){
  if(!active)return;
- // Close synchronously: don't leave an unresponsive overlay waiting for popstate.
- const navigateBack=!fromHistory&&historyActive&&history.state?.onepiecePhoto===true;
- historyActive=false;generation++;active=false;busy=false;
- stopDetection();workerStop();if(photoOcr){void photoOcr.destroy();photoOcr=null}photoOcrLoading=null;canvas=null;regions=[];rows=[];drag=null;
+ generation++;active=false;busy=false;
+ stopDetection();workerStop();
+ if(photoOcr){void photoOcr.destroy();photoOcr=null}photoOcrLoading=null;
+ canvas=null;regions=[];rows=[];drag=null;
  $("#photoScanPanel")?.remove();
  document.querySelector("#photoStyles")?.remove();
  window.dispatchEvent(new Event("onepiece:photo-closed"));
- if(navigateBack){
-  photoBackPending=true;
-  history.back();
- }
 }
 function open(){
  if(active)return;
@@ -391,8 +386,6 @@ function open(){
  '<footer><button id="photoSave" type="button" disabled>Guardar 0 cartas en mi colección</button>'+
  '<span>Las fotos se procesan en este dispositivo. Nada se guarda sin confirmación.</span></footer></div>';
  document.body.appendChild(el);
- try{history.pushState({...history.state,onepiecePhoto:true},"",location.href);historyActive=true}
- catch(e){historyActive=false}
  const style=document.createElement("style");style.id="photoStyles";
  style.textContent="#photoScanPanel{position:fixed;inset:0;z-index:10020;background:#070b11;color:#f5f6fb;overflow-y:auto;font:14px system-ui,sans-serif}"+
  "#photoScanPanel *{box-sizing:border-box}#photoScanPanel .photo-shell{max-width:880px;margin:auto;padding:12px 12px 100px}"+
@@ -424,6 +417,6 @@ function open(){
  $("#photoSave").onclick=()=>void saveCards();
  bindPreview();refreshControls();
 }
-window.OnePiecePhotoScanner={open,close,consumePhotoBack};
+window.OnePiecePhotoScanner={open,close};
 window.openOnePiecePhotoScanner=open;
 })();
