@@ -1,8 +1,8 @@
 name: Verify multi-source Meta and automatic decks
 on:
   push:
-    branches: [feat-weighted-meta-wants-20261009, main]
-    paths: [index.html, meta.js, meta-report.js, api/meta.js, api/meta-unified.js, api/meta-comparison.js, tournament-prep.js, wants.js, supabase/migrations/**, scripts/**, .github/workflows/verify-metasources-autosync.yml]
+    branches: [feat-collection-boxes-wants-ui-20261009, main]
+    paths: [index.html, meta.js, meta-report.js, api/meta.js, api/meta-unified.js, api/meta-comparison.js, tournament-prep.js, wants.js, collection-boxes.js, supabase/migrations/**, scripts/**, .github/workflows/verify-metasources-autosync.yml]
   workflow_dispatch:
 permissions:
   contents: read
