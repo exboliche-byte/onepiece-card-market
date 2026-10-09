@@ -1630,7 +1630,7 @@ async function searchCompetitiveDecks(){
  state.deckDiscoverMinPlayers=Number($("#competitiveMinPlayers")?.value||state.deckDiscoverMinPlayers||32);
  state.deckDiscoverLoading=true;state.deckDiscoverError="";state.deckDiscoverResults=[];state.deckDiscoverMeta=null;renderShell();
  try{
-  const query=new URLSearchParams({leader,days:String(state.deckDiscoverDays),limit:byCard?"40":"30"});
+  const query=new URLSearchParams({leader,days:String(state.deckDiscoverDays),limit:"120"});
   if(byCard)query.set("card",wantedCard);
   const jobs=[];
   if(source!=="yonko"){
@@ -1670,7 +1670,7 @@ async function loadMoreYonkoDecks(){
  const leader=byCard?"all":String(state.deckDiscoverLeader||"");
  state.deckDiscoverLoading=true;renderShell();
  try{
-  const query=new URLSearchParams({leader,days:String(state.deckDiscoverDays),format:state.deckDiscoverFormat,page:String(page),limit:"60"});
+  const query=new URLSearchParams({leader,days:String(state.deckDiscoverDays),format:state.deckDiscoverFormat,page:String(page),limit:"120"});
   if(byCard)query.set("card",wantedCard);
   const response=await competitiveFetch("yonko",query);
   if(searchVersion!==competitiveDeckSearchVersion)return;
