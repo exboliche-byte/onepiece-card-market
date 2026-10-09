@@ -27,7 +27,7 @@ function stripHtml(html){
 }
 export function parseDeckComposition(raw){
  const text=String(raw||"").trim().toUpperCase();
- const entries=text.split("a").filter(Boolean);
+ const entries=text.split(/a/i).filter(Boolean);
  if(entries.length<2||entries.length>60)return null;
  const cards={};let leaderId="";
  for(let i=0;i<entries.length;i++){
