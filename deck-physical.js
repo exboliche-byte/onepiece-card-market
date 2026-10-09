@@ -221,16 +221,6 @@ function cardPhoto(id){
  return exact?cardImg(exact,"physical-card-photo"):
   '<div class="physical-card-photo physical-card-photo-empty" role="img" aria-label="Imagen no disponible">Sin imagen</div>';
 }
-function previewCardList(deck,allocations){
- const prints=allocations[deck.id]||{};
- return [...requirements(deck).values()].map(row=>{
-  const count=Object.entries(prints).reduce((sum,[id,n])=>sum+(code(id)===row.code?integer(n):0),0);
-  const ready=Math.min(row.need,count);
-  return '<div class="physical-card-line">'+cardPhoto(row.preferred[0])+
-   '<div class="physical-card-info"><b>'+escape(row.title)+'</b>'+
-   '<div class="small muted">'+escape(row.code)+' · '+ready+'/'+row.need+' copias en el mazo</div></div></div>';
- }).join("");
-}
 function draw(){
  if(!p.modal)return;
  const modal=p.modal;
@@ -258,8 +248,6 @@ function draw(){
    if(result.missing.length)html+='<div class="notice physical-warning"><b>No hay copias suficientes. Estas cartas seguirán pendientes:</b></div>'+
     '<div class="physical-movements">'+result.missing.map(x=>'<div class="physical-movement physical-missing">'+cardPhoto(x.id)+
     '<div class="physical-card-info"><b>Faltan '+x.quantity+' × '+escape(x.title)+'</b><div class="small muted">'+escape(x.code)+'</div></div></div>').join('')+'</div>';
-   html+='<h3>Cartas del mazo</h3><p class="small muted">Ilustraciones de la lista; los movimientos de arriba muestran las impresiones físicas exactas.</p>'+
-    '<div class="physical-card-overview">'+previewCardList(selected,result.next)+'</div>';
    html+='<p class="small muted">Después: '+result.after.assigned+'/'+result.after.required+
     ' copias. Se priorizan siempre las libres del álbum y se mantiene la impresión real de cada copia.</p>'+
     '<div class="physical-buttons">'+
