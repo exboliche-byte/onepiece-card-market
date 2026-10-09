@@ -39,9 +39,16 @@ function tier(x){
   const v=(Number(x.wins)+12)/(Number(x.games)+24);
   return v>=.555?"S":v>=.52?"A":v>=.48?"B":v>=.445?"C":"D";
 }
+function standardMetaData(v){
+ if(!v)return null;
+ const leaders=(v.leaders||[]).filter(x=>standardLeaderPlayable(x.id));
+ const available=new Set(leaders.map(x=>String(baseId(x.id)).toUpperCase()));
+ return {...v,leaders,matchups:(v.matchups||[]).filter(x=>
+   available.has(String(baseId(x.leader)).toUpperCase())&&available.has(String(baseId(x.opponent)).toUpperCase()))};
+}
 function active(){
-  const v=m.scope==="global"?m.global:m.community;
-  return v?{...v,leaders:(v.leaders||[]).map(x=>({...x,tier:tier(x)})),matchups:v.matchups||[]}:null;
+ const v=standardMetaData(m.scope==="global"?m.global:m.community);
+ return v?{...v,leaders:v.leaders.map(x=>({...x,tier:tier(x)})),matchups:v.matchups}:null;
 }
 function statCards(d){
   const isLocal=m.scope==="community";
@@ -56,7 +63,7 @@ function statCards(d){
 
 
 function simulatorData(){
- const x=m.global;
+ const x=standardMetaData(m.global);
  return x?.sources?.simulator?.available?
   {leaders:(x.leaders||[]).filter(l=>l.firstGames>0&&l.secondGames>0),
    games:x.simulatorGames,measuredAt:x.sources.simulator.date}:null;
@@ -228,7 +235,7 @@ async function loadGlobal(force=false){
       throw Error("La respuesta del Meta no contiene estadísticas válidas.");
     const lastGood=m.global?.sourcesAvailable===2?m.global:
       savedGlobalMeta(key)?.sourcesAvailable===2?savedGlobalMeta(key):null;
-    const shown=json.sourcesAvailable<2&&lastGood?{...lastGood,stale:true}:json;
+    const shown=standardMetaData(json.sourcesAvailable<2&&lastGood?{...lastGood,stale:true}:json);
     if(json.sourcesAvailable===2||!lastGood)persistGlobalMeta(key,json);
     if(days===m.days&&format===m.format){
       m.global=shown;

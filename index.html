@@ -1385,10 +1385,22 @@ function deckFilterPanel(){
   '</div>';
 }
 function deckTotalValue(d){let x=0,l=card(d?.leader);if(l)x+=Number(priceOf(l)||0);for(const [id,n] of Object.entries(d?.cards||{})){const cc=card(id);if(cc)x+=Number(n||0)*Number(priceOf(cc)||0)}return x}
+function standardLeaderPlayable(id){
+ const cc=resolveDeckImportCard(id);
+ return !!cc&&cc.category==="Leader"&&!collectionLegalityStatus(cc);
+}
+function standardCompetitiveDeckPlayable(leaderId,cards){
+ if(!standardLeaderPlayable(leaderId)||!cards||typeof cards!=="object"||Array.isArray(cards))return false;
+ if(deckCreationProblem(leaderId,cards))return false;
+ return Object.entries(cards).every(([id,n])=>{
+  const cc=resolveDeckImportCard(id);
+  return !!cc&&Number.isInteger(Number(n))&&Number(n)>0&&cc.category!=="Leader"&&!collectionLegalityStatus(cc);
+ });
+}
 function competitiveLeaderOptions(){
   const seen=new Set(),leaders=[];
   for(const c of state.cards){
-    if(c?.category!=="Leader")continue;
+    if(c?.category!=="Leader"||!standardLeaderPlayable(c.id))continue;
     const id=baseId(c.id).toUpperCase();
     if(seen.has(id))continue;
     seen.add(id);
@@ -1533,7 +1545,7 @@ async function searchCompetitiveDecks(){
     const r=await fetch("/api/competitive-decks?"+qs.toString(),{headers:{accept:"application/json"}});
     const data=await r.json().catch(()=>({}));
     if(!r.ok)throw Error(data.error||"No se pudieron cargar los mazos");
-    state.deckDiscoverResults=Array.isArray(data.results)?data.results:[];
+    state.deckDiscoverResults=(Array.isArray(data.results)?data.results:[]).filter(x=>standardCompetitiveDeckPlayable(x.leaderId,x.cards));
     state.deckDiscoverMeta={scannedEvents:Number(data.scannedEvents||0),availableMatches:Number(data.availableMatches||0),rateLimited:!!data.rateLimited};
   }catch(e){
     state.deckDiscoverError=e.message||"No se pudieron consultar los mazos competitivos.";
@@ -1548,6 +1560,7 @@ function competitiveDraftName(result){
 }
 function openCompetitiveDeckPreview(index,origin="decks"){
   const result=state.deckDiscoverResults[Number(index)];if(!result)return;
+  if(!standardCompetitiveDeckPlayable(result.leaderId,result.cards))return notify("La lista ya no es legal en Standard.");
   // A refreshed session can have owned print IDs not yet present in the
   // catalog. Recreate their display entries without writing to Supabase.
   if(state.user&&state.collectionReady)ensureOwnedCardsInCatalog();
@@ -4209,7 +4222,11 @@ async function boot(){
   loadCachedPrices();
   // Refresh the public legality data at every app start; never alters the collection.
   void window.OnePieceLegality?.load?.().then(changed=>{
-    if(changed){collectionLegalCache=null;if(state.tab==="collection"&&state.collectionReady&&!state.collectionStatsOpen&&!state.boxesOpen)renderVisibleOnly()}
+    if(changed){
+      collectionLegalCache=null;
+      if(state.tab==="collection"&&state.collectionReady&&!state.collectionStatsOpen&&!state.boxesOpen)renderVisibleOnly();
+      else if(["meta","decks","deck-completion","tournament-prep"].includes(state.tab))renderShell();
+    }
   }).catch(e=>console.warn("Official legality refresh",e));
   if(reloadViewPending)showReloadPlaceholder();
   else renderShell();

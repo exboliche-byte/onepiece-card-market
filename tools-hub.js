@@ -309,7 +309,7 @@ function decksView(){
     const prices=cheapest();
     const maximum=h.maxMissing===""?Infinity:Number(h.maxMissing);
     const ceiling=h.maxCost===""?Infinity:Number(h.maxCost);
-    let rows=h.list.map((r,i)=>{const m=missing(r,prices);return {r,i,m,fit:deckFit(r,m)}});
+    let rows=h.list.map((r,i)=>({r,i})).filter(({r})=>standardCompetitiveDeckPlayable(r.leaderId,r.cards)).map(({r,i})=>{const m=missing(r,prices);return {r,i,m,fit:deckFit(r,m)}});
     if(personalized){
       rows.sort((a,b)=>b.fit.score-a.fit.score||(Number(b.r.players)||0)-(Number(a.r.players)||0));
       const leaderMap=new Map();
@@ -419,7 +419,7 @@ async function loadDecks(){
     const res=await fetch("/api/competitive-decks?leader=all&days=90&minPlayers=16&limit=120");
     const data=await res.json();
     if(!res.ok)throw Error(data.error||"No se pudieron cargar las listas");
-    h.list=(Array.isArray(data.results)?data.results:[]).filter(x=>x?.cards&&x.leaderId);
+    h.list=(Array.isArray(data.results)?data.results:[]).filter(x=>x?.cards&&x.leaderId&&standardCompetitiveDeckPlayable(x.leaderId,x.cards));
     h.meta={scannedEvents:data.scannedEvents,rateLimited:data.rateLimited};h.loaded=true;
   }catch(err){h.error=String(err.message||err)}
   finally{await metaRequest;h.busy=false;if(state.tab==="decks"||state.tab==="deck-completion")renderShell()}
