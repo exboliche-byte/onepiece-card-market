@@ -66,35 +66,31 @@ test("collection sharing is wired with explicit public opt-in, retry, copy and r
   assert.match(sql,/GRANT EXECUTE ON FUNCTION public\.public_collection_snapshot\(text\) TO anon,authenticated/);
 });
 
-test("automatic scanner add is opt-in, waits five seconds, and has a prominent stop",()=>{
-  assert.match(scanner,/let autoAddEnabled=false/);
-  assert.match(scanner,/id="scanAutoToggle"/);
-  assert.match(scanner,/id="scanAutoStop" hidden/);
-  assert.match(scanner,/PARAR AÑADIDO AUTOMÁTICO/);
-  assert.match(scanner,/Date\.now\(\)\+5000/);
-  assert.match(scanner,/\},5000\)/);
-  assert.match(scanner,/autoAddCandidate!==candidate/);
-  assert.match(scanner,/\$\("#scanVariant"\)\?\.value!==candidate\.printId/);
-  assert.match(scanner,/if\(hit\.confidence==="visual"/);
-  assert.match(scanner,/autoWaitForChange/);
-  assert.match(scanner,/cancelAutoCountdown\(\)/);
+test("scanner uses a reviewable continuous batch instead of timed automatic saving",()=>{
+  assert.match(scanner,/let batchEnabled=false/);
+  assert.match(scanner,/id="scanBatchToggle"/);
+  assert.match(scanner,/id="scanBatchReview"/);
+  assert.match(scanner,/function batchCapture\(/);
+  assert.match(scanner,/async function batchSave\(/);
+  assert.match(scanner,/batchQueue\.delete\(code\)/);
   assert.match(scanner,/ok=await setQty/);
+  assert.doesNotMatch(scanner,/autoAddEnabled|scanAutoToggle|scanAutoStop|startAutoCountdown|cancelAutoCountdown/);
+  assert.doesNotMatch(scanner,/Date\.now\(\)\+5000|\},5000\)/);
 });
 
-test("scanner buttons show copies of the exact selected printing",()=>{
+test("scanner manually added copies show quantities of the exact selected printing",()=>{
   const block=between(scanner,"function ownedCount(id){","function chooseVariant(");
-  const buttons={"#scanAddOne":{textContent:""},"#scanAutoStop":{textContent:""}};
+  const buttons={"#scanAddOne":{textContent:""}};
   const refresh=new Function("qty","$",block+"\nreturn updateScanCopiesLabel;")(
     id=>({"OP01-001":3,"OP01-001_p1":1})[id]||0,
     selector=>buttons[selector]
   );
   refresh({id:"OP01-001_p1"});
   assert.match(buttons["#scanAddOne"].textContent,/Ya tienes 1$/);
-  assert.match(buttons["#scanAutoStop"].textContent,/1 copia\(s\) de OP01-001_p1/);
   refresh({id:"OP01-001"});
   assert.match(buttons["#scanAddOne"].textContent,/Ya tienes 3$/);
   refresh(null);
-  assert.equal(buttons["#scanAutoStop"].textContent,"⏹ PARAR AÑADIDO AUTOMÁTICO");
+  assert.equal(buttons["#scanAddOne"].textContent,"+1 y continuar");
 });
 
 test("scanner shows price for the exact selected printing, never a sibling",async()=>{
@@ -148,7 +144,6 @@ test("scanner updates selected and persistent copy counts after confirmed collec
   const nodes={
     "#scanVariant":{value:"OP01-001_p1"},
     "#scanAddOne":{textContent:""},
-    "#scanAutoStop":{textContent:""},
     "#scanExactCount":{textContent:""},
     "#scanGroupCount":{textContent:""},
     "#scanOwnedLive":{hidden:true,textContent:""}
