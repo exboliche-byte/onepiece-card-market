@@ -137,6 +137,17 @@ async function send(){
  await window.OnePieceTools?.flushCloud?.();
  const items=window.OnePieceTools?.tradeItems?.();
  if(!items||(!items[0]?.length&&!items[1]?.length))return notify("Añade al menos una carta para regalar, pedir o intercambiar; espera a que se guarde el borrador.");
+ if(!items[0].length||!items[1].length){
+  // Older databases reject an empty side. Detect capability before offering
+  // the user a transfer that the server cannot complete.
+  try{
+   const check=await state.sb.rpc("trade_validate_items",{p_items:[]});
+   if(check.error)throw check.error;
+  }catch(e){
+   box.error="Los regalos y peticiones están pendientes de activar en la base de datos. No se ha enviado nada.";
+   notify(box.error);renderShell();return;
+  }
+ }
  for(const x of items[0]){
   if(qty(x.id)<Number(x.q||0))return notify("No tienes suficientes copias de "+x.id);
  }
