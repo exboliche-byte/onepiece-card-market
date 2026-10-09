@@ -37,7 +37,7 @@ test("Backend filters playable tournament decklists by playable printed card ID"
  assert.match(api,/leader==="all"&&!cardFilter/);
 });
 test("Public lists are validated by Standard legality and cards are matched by printed code",()=>{
- assert.match(html,/standardCompetitiveDeckPlayable\(x\.leaderId,x\.cards\)/);
+ assert.match(html,/standardCompetitiveDeckPlayable\(deck\.leaderId,deck\.cards\)/);
  assert.match(html,/deckPrintedCode\(id\)===state\.deckDiscoverCard/);
  assert.match(html,/deckPrintedCode\(c\)/);
  assert.match(html,/competitiveDeckSearchVersion/);
