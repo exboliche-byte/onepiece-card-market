@@ -112,6 +112,9 @@ function bindSearchAdd(){
  });
 }
 function view(){
+ // Never render the previous account's cached list during an auth transition.
+ if(!state.user?.id||state.user.id!==ws.owner)
+  return '<div class="wrap wants-page"><div class="notice">Cargando las wants de tu cuenta…</div></div>';
  const l=active(),rows=listEntries(l);
  const priced=rows.filter(x=>x.c&&priceOf(x.c)!==null);
  const total=priced.reduce((sum,x)=>sum+x.q*priceOf(x.c),0);
@@ -158,6 +161,7 @@ async function showAdd(cardId,count=1){
  const c=printCard(cardId);
  if(!c){notify("No se ha encontrado esa versión de la carta.");return}
  await load();
+ if(ws.error){notify("No se pudieron cargar tus listas. Entra en Mis wants para reintentar.");return}
  if(!ws.lists.length){
   const created=await createList("Mis wants");if(!created)return;
  }
