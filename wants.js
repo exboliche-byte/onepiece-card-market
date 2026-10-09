@@ -3,7 +3,7 @@
 "use strict";
 const ws={lists:[],selected:"",owner:"",loaded:false,loading:false,busy:false,search:"",error:""};
 const h=x=>esc(x),currency=x=>money(x);
-function active(){return ws.lists.find(l=>l.id===ws.selected)||ws.lists[0]||null}
+function active(){return ws.lists.find(l=>l.id===ws.selected)||null}
 function printCard(key){return state.cards.find(x=>x.id===key)||null}
 function listEntries(l){
  return Object.entries(l?.items||{}).map(([id,q])=>({id,q:Number(q)||0,c:printCard(id)}))
@@ -22,7 +22,7 @@ async function load(force=false){
   if(r.error)throw r.error;
   if(state.user?.id!==user)return;
   ws.lists=r.data||[];
-  if(!ws.lists.some(l=>l.id===ws.selected))ws.selected=ws.lists[0]?.id||"";
+  if(!ws.lists.some(l=>l.id===ws.selected))ws.selected="";
   ws.loaded=true;ws.error="";
  }catch(error){
   ws.error=String(error.message||error);console.warn("wants load",error);
@@ -120,21 +120,32 @@ function view(){
  const total=priced.reduce((sum,x)=>sum+x.q*priceOf(x.c),0);
  const missing=rows.filter(x=>!x.c||priceOf(x.c)===null).length;
  const copies=rows.reduce((sum,x)=>sum+x.q,0);
- const lists='<div class="wants-list-switch">'+ws.lists.map(x=>
-  '<button type="button" data-wants-list="'+h(x.id)+'" class="'+(x.id===l?.id?"active":"")+'">'+
-  h(x.name)+' <small>('+Object.keys(x.items||{}).length+')</small></button>').join("")+'</div>';
+ const lists='<div class="wants-list-directory">'+ws.lists.map(x=>{
+   const all=listEntries(x),copies=all.reduce((sum,item)=>sum+item.q,0);
+   const known=all.filter(item=>item.c&&priceOf(item.c)!==null);
+   const total=known.reduce((sum,item)=>sum+item.q*priceOf(item.c),0);
+   const missing=all.length-known.length;
+   return '<button type="button" data-wants-list="'+h(x.id)+'" class="wants-list-choice">'+
+    '<span class="wants-list-icon">💛</span><span class="wants-list-label"><strong>'+h(x.name)+'</strong>'+
+    '<small>'+all.length+' cartas · '+copies+' copias pendientes</small>'+
+    '<small>Valor conocido: '+currency(total)+(missing?' · '+missing+' sin precio':'')+'</small></span>'+
+    '<span aria-hidden="true">›</span></button>';
+ }).join("")+'</div>';
  return '<div class="wrap wants-page"><div class="hero"><div><h1>💛 Mis wants</h1>'+
    '<p>Listas personales de cartas que quiero, con precios actualizados por impresión.</p></div>'+
    '<button class="secondary btn" id="closeWants" type="button">← Mi colección</button></div>'+
    (ws.error?'<div class="notice">No se pudieron cargar las listas: '+h(ws.error)+
     ' <button class="secondary btn" id="retryWants" type="button">Reintentar</button></div>':"")+
    (ws.loading&&!ws.loaded?'<div class="notice">Cargando wants desde tu cuenta…</div>':"")+
-   '<section class="wants-panel"><div class="wants-heading"><h3>Mis listas</h3>'+
-   '<button class="primary btn" id="newWantList" type="button">+ Nueva lista</button></div>'+
-   (lists||'<p class="small">Crea tu primera lista para guardar las cartas que quieres comprar.</p>')+'</section>'+
-   (l?'<section class="wants-panel"><div class="wants-heading"><h3>'+h(l.name)+'</h3>'+
+   (l?'<div class="wants-back"><button class="secondary btn" id="wantsBackToLists" type="button">← Todas mis listas</button></div>'+
+    '<section class="wants-panel"><div class="wants-heading"><h3>'+h(l.name)+'</h3>':
+    '<section class="wants-panel"><div class="wants-heading"><h3>Elige una lista</h3>'+
+    '<button class="primary btn" id="newWantList" type="button">+ Nueva lista</button></div>'+
+    (lists||'<p class="small">Crea tu primera lista para guardar cartas.</p>')+'</section>')+
+   (l?'<section class="wants-panel wants-list-details"><div class="wants-heading"><h3>Gestionar lista</h3>'+
    '<div class="wants-list-actions"><button class="secondary btn" id="renameWantList" type="button">Renombrar</button>'+
    '<button class="danger btn" id="deleteWantList" type="button">Eliminar lista</button></div></div>'+
+   '<div class="wants-market-action"><button type="button" class="primary btn" id="wantsSendCardmarket">🛒 Llevar lista a Cardmarket Wants</button></div>'+
    '<div class="wants-totals"><div><b>'+copies+'</b><small>Copias pendientes</small></div>'+
    '<div><b>'+currency(total)+'</b><small>Total conocido</small></div>'+
    '<div><b>'+rows.length+'</b><small>Impresiones diferentes</small></div></div>'+
@@ -156,6 +167,17 @@ function view(){
    }).join("")+'</div>':'<div class="notice">Lista vacía. Añade una carta desde aquí, el catálogo o tus mazos.</div>')+
    '</section>':"")+'</div>';
 }
+async function sendListToCardmarket(){
+ const list=active();
+ if(!list)return;
+ const rows=listEntries(list);
+ if(!rows.length)return notify("Esta lista no contiene cartas.");
+ if(rows.some(x=>!x.c?.name))return notify("Algunas cartas no tienen nombre en el catálogo. Revisa la lista antes de exportar.");
+ const text=rows.map(x=>x.q+"x "+String(x.c.name).trim()+" "+deckPrintedCode(x.id)).join("\n");
+ await window.openCardmarketWantsModal?.(text,
+  "Lista «"+list.name+"» preparada para importar en Cardmarket. Elige o crea una Wants List y pega las cartas en «Añadir decklist». Comprueba las versiones exactas: el formato de decklist puede resolver la impresión base.");
+}
+function overview(){ws.selected="";ws.search=""}
 async function showAdd(cardId,count=1){
  if(!needLogin())return;
  const c=printCard(cardId);
@@ -190,7 +212,9 @@ async function showAdd(cardId,count=1){
  };
 }
 function bind(){
- document.querySelector("#closeWants")?.addEventListener("click",()=>{state.wantsOpen=false;renderShell()});
+ document.querySelector("#closeWants")?.addEventListener("click",()=>{state.wantsOpen=false;overview();renderShell()});
+ document.querySelector("#wantsBackToLists")?.addEventListener("click",()=>{overview();renderShell()});
+ document.querySelector("#wantsSendCardmarket")?.addEventListener("click",()=>void sendListToCardmarket());
  document.querySelector("#retryWants")?.addEventListener("click",()=>void load(true));
  document.querySelector("#newWantList")?.addEventListener("click",()=>{
   const name=prompt("Nombre de la nueva lista de wants","");
@@ -230,8 +254,9 @@ function bind(){
  }
  if(!ws.loaded&&!ws.loading&&!ws.error)void load();
 }
-window.MyWants={view,bind,load,add:showAdd,consume,consumeBatch};
+window.MyWants={view,bind,load,add:showAdd,consume,consumeBatch,overview,sendListToCardmarket};
 const style=document.createElement("style");
 style.textContent=".wants-page{max-width:1080px;padding-bottom:110px}.wants-panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:14px}.wants-heading{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;margin-bottom:13px}.wants-heading h3{margin:0}.wants-list-switch{display:flex;flex-wrap:wrap;gap:8px}.wants-list-switch button{border-radius:10px;border:1px solid var(--line);background:var(--panel2);color:var(--text);padding:10px 14px;font-weight:700}.wants-list-switch button.active{border-color:var(--accent);color:var(--accent)}.wants-list-actions{display:flex;gap:7px}.wants-totals{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:12px 0}.wants-totals>div{background:var(--panel2);border:1px solid var(--line);padding:11px;border-radius:11px}.wants-totals b{font-size:clamp(16px,3vw,25px);display:block}.wants-totals small,.wants-card-info small,.wants-search-row small{display:block;color:var(--muted);font-size:11px}.wants-search-label{display:grid;gap:6px;margin-top:13px}.wants-search-grid{max-height:340px;overflow:auto;margin-top:9px}.wants-search-row{display:flex;align-items:center;gap:10px;padding:7px;border-bottom:1px solid var(--line)}.wants-search-row>div{flex:1;min-width:0}.wants-search-art{height:66px;width:46px;object-fit:cover;border-radius:5px;flex:none}.wants-cards{display:grid;gap:8px}.wants-card{display:flex;gap:12px;align-items:center;background:var(--panel2);border:1px solid var(--line);border-radius:11px;padding:10px;min-width:0}.wants-card-art{width:65px;height:91px;border-radius:5px;object-fit:cover;flex:none}.wants-card-info{flex:1;min-width:0}.wants-card-info strong,.wants-card-info span,.wants-card-info a{display:block;margin:3px 0}.wants-card-info a{font-size:12px;color:var(--accent)}.wants-card-controls{display:grid;grid-template-columns:repeat(3,auto);gap:5px;align-items:center;text-align:center}.wants-card-controls .wants-remove{grid-column:1/-1}.wants-add-modal .modal{max-width:430px;display:grid;gap:13px}.wants-add-modal label{display:grid;gap:6px}.wants-modal-card{display:flex;gap:11px;align-items:center}.wants-modal-card small{display:block;color:var(--muted)}@media(max-width:590px){.wants-totals{grid-template-columns:repeat(2,minmax(0,1fr))}.wants-card{flex-wrap:wrap}.wants-card-art{width:52px;height:73px}.wants-card-controls{margin-left:auto}}";
+style.textContent+=".wants-list-directory{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:11px}.wants-list-choice{display:flex;align-items:center;gap:12px;width:100%;border:1px solid var(--line);background:var(--panel2);color:var(--text);border-radius:13px;padding:15px;text-align:left}.wants-list-choice:hover{border-color:var(--accent)}.wants-list-label{flex:1;min-width:0}.wants-list-label strong,.wants-list-label small{display:block}.wants-list-label strong{font-size:16px}.wants-list-label small{font-size:11px;color:var(--muted);margin-top:5px}.wants-list-icon{font-size:26px}.wants-back{margin:0 0 12px}.wants-list-details{margin-top:0}.wants-market-action{margin:10px 0}.wants-market-action button{max-width:100%}";
 document.head.appendChild(style);
 })();
