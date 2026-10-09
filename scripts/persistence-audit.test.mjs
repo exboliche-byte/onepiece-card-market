@@ -52,3 +52,15 @@ test("modal accessibility and removable chips are present",()=>{
  assert.match(modal,/event\.key==="Escape"/);
  assert.match(modal,/event\.key==="Tab"/);
 });
+
+test("cross-device card edits check expected count atomically",()=>{
+ const block=html.split("function writeCollection(id,nextValue){")[1].split("function syncOne(")[0];
+ assert.match(block,/collection_write_atomic/);
+ assert.match(block,/p_expected:old,p_next:n/);
+ assert.doesNotMatch(block,/\.from\("collection_items"\)\.upsert/);
+ const write=read("supabase/migrations/20261009_atomic_collection_writes.sql");
+ assert.match(write,/CREATE OR REPLACE FUNCTION public\.collection_write_atomic/);
+ assert.match(write,/previous<>p_expected/);
+ assert.match(write,/pg_advisory_xact_lock/);
+ assert.match(write,/CREATE OR REPLACE FUNCTION public\.collection_clear_atomic/);
+});
