@@ -6,6 +6,7 @@ const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&
 const base=id=>String(baseId(id||"")).toUpperCase();
 const MAX_FILE=22*1024*1024, MAX_CARDS=40;
 let canvas=null,regions=[],rows=[],worker=null,workerReady=false,matcher=null,active=false,busy=false,generation=0,drag=null,historyActive=false;
+let photoBackPending=false,detectWorker=null,detectPending=null;
 const cardCode=c=>base(c?.id);
 function baseCard(id){const code=base(id);return state.cards.find(c=>c.id===code)||state.cards.find(c=>cardCode(c)===code)||null}
 function group(code){return state.cards.filter(c=>cardCode(c)===code)}
@@ -346,13 +347,22 @@ async function saveCards(){
  if(failed)tell("Guardadas "+saved+" cartas; "+failed+" impresiones no pudieron guardarse. Conservadas para reintentar.",true);
  else tell("Guardadas "+saved+" cartas. Ningún recorte pendiente.");
 }
+function consumePhotoBack(){const pending=photoBackPending;photoBackPending=false;return pending}
 function close({fromHistory=false}={}){
  if(!active)return;
- if(historyActive&&!fromHistory){history.back();return}
- historyActive=false;generation++;active=false;busy=false;workerStop();canvas=null;regions=[];rows=[];drag=null;
+ // Close synchronously: don't leave an unresponsive overlay waiting for popstate.
+ const navigateBack=!fromHistory&&historyActive&&history.state?.onepiecePhoto===true;
+ historyActive=false;generation++;active=false;busy=false;
+ if(detectWorker){detectWorker.terminate();detectWorker=null}
+ if(detectPending){const p=detectPending;detectPending=null;clearTimeout(p.timer);p.reject(Error("Fotografía cerrada"))}
+ workerStop();canvas=null;regions=[];rows=[];drag=null;
  $("#photoScanPanel")?.remove();
  document.querySelector("#photoStyles")?.remove();
  window.dispatchEvent(new Event("onepiece:photo-closed"));
+ if(navigateBack){
+  photoBackPending=true;
+  history.back();
+ }
 }
 function open(){
  if(active)return;
@@ -407,6 +417,6 @@ function open(){
  $("#photoSave").onclick=()=>void saveCards();
  bindPreview();refreshControls();
 }
-window.OnePiecePhotoScanner={open,close,detectCardRegions,estimateBackground};
+window.OnePiecePhotoScanner={open,close,consumePhotoBack};
 window.openOnePiecePhotoScanner=open;
 })();
