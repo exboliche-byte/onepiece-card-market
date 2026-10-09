@@ -115,15 +115,15 @@ test("Search returns 36 independent, well-nested card articles rather than matry
  input.value="newgate";
  input.handlers.input();
  const markup=output.innerHTML;
- assert.equal((markup.match(/<article\\b/g)||[]).length,36);
- assert.equal((markup.match(/<\\/article>/g)||[]).length,36);
+ assert.equal((markup.match(/<article\b/g)||[]).length,36);
+ assert.equal((markup.match(/<\/article>/g)||[]).length,36);
  // Validate every tag we produce, not only the article count. An omitted
  // closing div previously nested all following cards and caused giant rows.
- const tags=markup.match(/<\\/?(?:article|div|span|strong|button)\\b[^>]*>/g)||[];
+ const tags=markup.match(/<\/?(?:article|div|span|strong|button)\b[^>]*>/g)||[];
  const stack=[];
  let completed=0;
  for(const tag of tags){
-  const closing=tag.startsWith("</"),name=tag.match(/^<\\/?([a-z]+)/)[1];
+  const closing=tag.startsWith("</"),name=tag.match(/^<\/?([a-z]+)/)[1];
   if(closing){
    assert.equal(stack.pop(),name,"Misnested tag: "+tag);
    if(name==="article"){assert.equal(stack.length,0,"Article nested inside another card");completed++;}
