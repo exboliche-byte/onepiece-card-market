@@ -124,20 +124,28 @@ function selectedRow(region,ranked=[]){
 function drawPreview(){
  const preview=$("#photoPreview");
  if(!preview||!canvas)return;
- preview.width=canvas.width;preview.height=canvas.height;
- const ctx=preview.getContext("2d");ctx.drawImage(canvas,0,0);
- ctx.lineWidth=Math.max(3,canvas.width/230);ctx.font="bold "+Math.max(20,canvas.width/40)+"px system-ui";
+ const scale=Math.min(1,1120/Math.max(canvas.width,canvas.height));
+ const w=Math.max(1,Math.round(canvas.width*scale)),h=Math.max(1,Math.round(canvas.height*scale));
+ if(preview.width!==w||preview.height!==h){preview.width=w;preview.height=h}
+ const ctx=preview.getContext("2d");
+ ctx.clearRect(0,0,w,h);ctx.save();ctx.scale(w/canvas.width,h/canvas.height);
+ ctx.drawImage(canvas,0,0);
+ ctx.lineWidth=Math.max(3,canvas.width/250);ctx.font="bold "+Math.max(18,canvas.width/45)+"px system-ui";
  regions.forEach((r,i)=>{
-  ctx.save();ctx.translate(r.cx,r.cy);ctx.rotate(r.angle);
+  ctx.save();ctx.translate(r.cx,r.cy);ctx.rotate(r.angle||0);
   ctx.strokeStyle="#ffd447";ctx.strokeRect(-r.w/2,-r.h/2,r.w,r.h);
   ctx.restore();
   ctx.fillStyle="#ffd447";ctx.fillText(String(i+1),r.cx-r.w/3,r.cy-r.h/3);
  });
- if(drag){const a=drag,x=drag.endX,y=drag.endY;ctx.strokeStyle="#7af0e0";ctx.setLineDash([15,8]);ctx.strokeRect(a.startX,a.startY,x-a.startX,y-a.startY)}
+ if(drag){
+  const a=drag;ctx.strokeStyle="#7af0e0";ctx.setLineDash([15,8]);
+  ctx.strokeRect(a.startX,a.startY,a.endX-a.startX,a.endY-a.startY);
+ }
+ ctx.restore();
 }
 function coord(event){
  const el=$("#photoPreview"),r=el.getBoundingClientRect();
- return {x:(event.clientX-r.left)*el.width/r.width,y:(event.clientY-r.top)*el.height/r.height};
+ return {x:(event.clientX-r.left)*canvas.width/r.width,y:(event.clientY-r.top)*canvas.height/r.height};
 }
 function bindPreview(){
  const preview=$("#photoPreview");
@@ -151,8 +159,9 @@ function bindPreview(){
   if(!drag)return;const p=coord(e),a=drag;drag=null;
   const w=Math.abs(p.x-a.startX),h=Math.abs(p.y-a.startY);
   if(w>=40&&h>=55&&regions.length<MAX_CARDS){
-   const reg={cx:(a.startX+p.x)/2,cy:(a.startY+p.y)/2,w,h,angle:0,manual:true};
-   regions.push(reg);void recognizeAdded(reg);
+   const landscape=w>h;
+   const reg={cx:(a.startX+p.x)/2,cy:(a.startY+p.y)/2,w:landscape?h:w,h:landscape?w:h,angle:landscape?Math.PI/2:0,manual:true};
+   regions.push(reg);drawPreview();void recognizeAdded(reg);
   }else drawPreview();
  };
  preview.onpointercancel=()=>{drag=null;drawPreview()};
