@@ -101,7 +101,7 @@ test("External comparison access, PWA deferred updates and safe offline fallback
  assert.match(pwa,/updatefound/);
  assert.match(pwa,/registration\.waiting\.postMessage\("SKIP_WAITING"\)/);
  assert.match(pwa,/window\.addEventListener\("offline"/);
- assert.match(sw,/mialbumonepiece-v16/);
+ assert.match(sw,/mialbumonepiece-v17/);
  assert.match(sw,/\/offline\.html/);
  assert.match(sw,/url\.pathname\.startsWith\("\/api\/"\)/);
  assert.doesNotMatch(sw,/then\(\(\)=>self\.skipWaiting\(\)\)/);
