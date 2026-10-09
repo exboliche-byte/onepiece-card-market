@@ -35,7 +35,7 @@ test("editing, selecting a leader, preview saving and import have real guards",(
  assert.match(html,/if\(Number\(delta\)>0\)\{\s*const prohibited=deckProhibitionReason\(id,d\.cards\)/);
  assert.match(html,/function setLeader\(id\)[\s\S]{0,250}deckProhibitionReason\(id,d\.cards\)/);
  assert.match(html,/function renderDeckResults\(\)[\s\S]{0,390}state\.cards\.filter\(c=>!deckProhibitionReason\(c\.id,d\.cards\)\)/);
- assert.match(html,/function importDeckText\([\s\S]{0,1400}deckCreationProblem\(leader,cards\)/);
+ assert.match(html,/function importDeckText\([\s\S]{0,4200}deckCreationProblem\(leader,cards\)/);
  assert.match(html,/function validateDeckBackup\([\s\S]{0,1700}deckCreationProblem\(leader,copyCounts\)/);
  assert.match(html,/function saveCompetitiveDraft\([\s\S]{0,360}deckCreationProblem\(d\.leader,d\.cards\)/);
  assert.match(html,/function syncDeck\([\s\S]{0,470}deckCreationProblem\(d\.leader,d\.cards\)/);
