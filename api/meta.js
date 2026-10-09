@@ -78,9 +78,17 @@ export default {async fetch(request){
       .filter(x=>x?.id&&Number(x.players)>=16&&Number.isFinite(Date.parse(x.date))&&Date.parse(x.date)>=earliest&&Date.parse(x.date)<=now+86400000)
       .sort((a,b)=>Date.parse(b.date)-Date.parse(a.date));
     const formats=[...new Set(tournaments.map(t=>String(t.format||"")).filter(Boolean))];
-    const chosen=format==="all"?"all":format==="auto"?
-      String(tournaments.find(t=>t.format)?.format||"all"):format;
-    const eligible=tournaments.filter(x=>chosen==="all"||String(x.format||"")===chosen);
+    // API events often omit format; choosing the first nonempty label picked
+    // rare EXTRA events and excluded nearly the entire competitive field.
+    const byFormat=new Map();
+    for(const t of tournaments){
+      const key=String(t.format||"");
+      byFormat.set(key,(byFormat.get(key)||0)+1);
+    }
+    const dominant=[...byFormat].sort((a,b)=>b[1]-a[1])[0]?.[0]??"";
+    const chosen=format==="all"?"all":format==="auto"?(dominant||"unknown"):format;
+    const eligible=tournaments.filter(x=>chosen==="all"||
+      String(x.format||"")=== (chosen==="unknown"?"":chosen));
     // A 24-event limit hid most of the 90-day field. Scan broadly but stop
     // safely when the upstream API rate-limits or the function approaches its deadline.
     const cap=expanded?140:100;
