@@ -921,6 +921,9 @@ function close({fromHistory=false}={}){
 }
 // Captura el Atrás antes de que la navegación del álbum cambie de vista.
 window.addEventListener("popstate",event=>{
+  if(window.OnePiecePhotoScanner?.consumePhotoBack?.()){
+    event.stopImmediatePropagation();return;
+  }
   if(document.querySelector("#photoScanPanel")){
     event.stopImmediatePropagation();
     window.OnePiecePhotoScanner?.close({fromHistory:true});
