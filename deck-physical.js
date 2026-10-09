@@ -70,12 +70,16 @@ function stats(deck,raw=p.allocations){
  const status=required===0?"vacío":assigned===required&&!extra?"montado":assigned===0?"desmontado":"incompleto";
  return {required,assigned,extra,status};
 }
-function statusMark(deck){
+function statusMark(deck,clickable=true){
  account();
  if(!p.ready||!p.enabled||!state.collectionReady||!deck||deck.draftCompetitive)return "";
  const s=stats(deck),tone=s.status==="montado"?"ok":s.status==="incompleto"?"partial":"empty";
  const symbol=s.status==="montado"?"✓":s.status==="incompleto"?"◐":"○";
- return '<span class="physical-chip '+tone+'" title="Copias físicas asignadas: '+s.assigned+' de '+s.required+'">'+symbol+' '+escape(s.status)+' · '+s.assigned+'/'+s.required+'</span>';
+ const label=symbol+' '+escape(s.status)+' · '+s.assigned+'/'+s.required;
+ const title='Copias físicas asignadas: '+s.assigned+' de '+s.required;
+ return clickable
+  ?'<button type="button" class="physical-chip '+tone+'" data-physical-open="'+escape(deck.id)+'" aria-label="Gestionar copias de '+escape(deck.name)+': '+escape(s.status)+'" title="'+title+'">'+label+'</button>'
+  :'<span class="physical-chip '+tone+'" title="'+title+'">'+label+'</span>';
 }
 function discrepancies(raw=p.allocations){
  const used=usedByPrinting(raw);
@@ -199,7 +203,7 @@ function plan(deck){
    }
    if(!missingCount)break;
   }
-  if(missingCount)missing.push({code:row.code,title:row.title,quantity:missingCount});
+  if(missingCount)missing.push({id:row.preferred[0],code:row.code,title:row.title,quantity:missingCount});
  }
  return {next,changes,missing,current:stats(deck),after:stats(deck,next)};
 }
@@ -210,6 +214,22 @@ function cardTitle(id){
 }
 function fromTitle(id){
  return id?escape(getDeck(id)?.name||"Mazo eliminado"):"Álbum · libres";
+}
+// La ilustración siempre corresponde a la impresión exacta; nunca se sustituye por otra variante.
+function cardPhoto(id){
+ const exact=card(id);
+ return exact?cardImg(exact,"physical-card-photo"):
+  '<div class="physical-card-photo physical-card-photo-empty" role="img" aria-label="Imagen no disponible">Sin imagen</div>';
+}
+function previewCardList(deck,allocations){
+ const prints=allocations[deck.id]||{};
+ return [...requirements(deck).values()].map(row=>{
+  const count=Object.entries(prints).reduce((sum,[id,n])=>sum+(code(id)===row.code?integer(n):0),0);
+  const ready=Math.min(row.need,count);
+  return '<div class="physical-card-line">'+cardPhoto(row.preferred[0])+
+   '<div class="physical-card-info"><b>'+escape(row.title)+'</b>'+
+   '<div class="small muted">'+escape(row.code)+' · '+ready+'/'+row.need+' copias en el mazo</div></div></div>';
+ }).join("");
 }
 function draw(){
  if(!p.modal)return;
@@ -225,19 +245,21 @@ function draw(){
  }else if(selected){
   const s=stats(selected);
   html+='<button type="button" class="linkbtn physical-back" data-physical-back>← Todos mis mazos</button>'+
-   '<h3>'+escape(selected.name)+'</h3><p>'+statusMark(selected)+'</p>'+
+   '<h3>'+escape(selected.name)+'</h3><p>'+statusMark(selected,false)+'</p>'+
    '<p class="small muted">Asignadas '+s.assigned+' de '+s.required+' copias. Las demás permanecen donde están; la lista nunca se borra.</p>';
   const result=plan(selected);
   if(p.preview){
    html+='<h3>Movimientos para montar este mazo</h3>';
    if(result.changes.length){
     html+='<div class="physical-movements">'+result.changes.map(step=>
-     '<div class="physical-movement"><b>'+step.quantity+' × '+cardTitle(step.id)+'</b>'+
-     '<div class="small">'+(step.to?fromTitle(step.from)+' → '+escape(selected.name):escape(selected.name)+' → Álbum')+'</div></div>').join("")+'</div>';
+     '<div class="physical-movement">'+cardPhoto(step.id)+'<div class="physical-card-info"><b>'+step.quantity+' × '+cardTitle(step.id)+'</b>'+
+     '<div class="small">'+(step.to?fromTitle(step.from)+' → '+escape(selected.name):escape(selected.name)+' → Álbum')+'</div></div></div>').join("")+'</div>';
    }else html+='<p class="notice">No necesitas mover ninguna copia.</p>';
-   if(result.missing.length)html+='<div class="notice physical-warning"><b>No hay copias suficientes:</b> '+
-    result.missing.map(x=>x.quantity+' × '+escape(x.title)+' ('+escape(x.code)+')').join(' · ')+
-    '. Esas cartas seguirán pendientes.</div>';
+   if(result.missing.length)html+='<div class="notice physical-warning"><b>No hay copias suficientes. Estas cartas seguirán pendientes:</b></div>'+
+    '<div class="physical-movements">'+result.missing.map(x=>'<div class="physical-movement physical-missing">'+cardPhoto(x.id)+
+    '<div class="physical-card-info"><b>Faltan '+x.quantity+' × '+escape(x.title)+'</b><div class="small muted">'+escape(x.code)+'</div></div></div>').join('')+'</div>';
+   html+='<h3>Cartas del mazo</h3><p class="small muted">Ilustraciones de la lista; los movimientos de arriba muestran las impresiones físicas exactas.</p>'+
+    '<div class="physical-card-overview">'+previewCardList(selected,result.next)+'</div>';
    html+='<p class="small muted">Después: '+result.after.assigned+'/'+result.after.required+
     ' copias. Se priorizan siempre las libres del álbum y se mantiene la impresión real de cada copia.</p>'+
     '<div class="physical-buttons">'+
@@ -257,7 +279,7 @@ function draw(){
   if(!saved.length)html+='<p>Aún no tienes mazos guardados.</p>';
   else html+='<div class="physical-deck-list">'+saved.map(d=>{
    const s=stats(d);
-   return '<div class="physical-deck-line"><div><b>'+escape(d.name)+'</b><div>'+statusMark(d)+'</div></div>'+
+   return '<div class="physical-deck-line"><div><b>'+escape(d.name)+'</b><div>'+statusMark(d,false)+'</div></div>'+
     '<button type="button" class="secondary btn" data-physical-deck="'+escape(d.id)+'">Gestionar</button></div>';
   }).join("")+'</div>';
   html+='<div class="physical-footer"><button type="button" class="linkbtn" data-physical-disable>Desactivar seguimiento (conservar ubicaciones)</button></div>';
