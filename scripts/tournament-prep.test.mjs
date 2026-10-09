@@ -54,7 +54,7 @@ test("View includes source separation, personalized dice and turn-order analysis
 test("Expanded public coverage pages through tournaments, tracks limits and preserves standard meta",()=>{
  assert.match(meta,/coverage.*expanded/);
  assert.match(meta,/game=OP&limit=500&page=/);
- assert.match(meta,/expanded\?80:24/);
+ assert.match(meta,/expanded\?140:100/);
  assert.match(meta,/eligibleEvents:eligible\.length/);
  assert.match(meta,/truncated:eligible\.length>selected\.length/);
  assert.match(meta,/rateLimited/);
