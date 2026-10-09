@@ -1,7 +1,7 @@
 (function(){
 "use strict";
 /* This module never changes collection quantities or deck records. */
-const h={tab:"trade",tradeSection:"prepare",owner:null,trade:[[],[]],q:"",list:[],meta:{},loaded:false,busy:false,error:"",
+const h={tab:"trade",tradeSection:"prepare",searchLimit:36,owner:null,trade:[[],[]],q:"",list:[],meta:{},loaded:false,busy:false,error:"",
   sort:"missing",maxMissing:"12",maxCost:"",cloudReady:false,cloudLoading:false,cloudError:"",cloudConflict:false,
   revision:null,pending:false,localRevision:null,hasCache:false,serial:0,saveTimer:null,writing:false,lastCloudAt:0};
 const key=id=>"mialbumonepiece_tools_"+id;
@@ -199,7 +199,7 @@ function matches(query){
  }
  const terms=needle.split(" ").filter(Boolean);
  return searchIndex.filter(x=>terms.every(t=>x.keywords.includes(t))).map(x=>x.c)
-  .sort((a,b)=>qty(b.id)-qty(a.id)||String(a.id).localeCompare(String(b.id),"es",{numeric:true})).slice(0,36);
+  .sort((a,b)=>qty(b.id)-qty(a.id)||String(a.id).localeCompare(String(b.id),"es",{numeric:true}));
 }
 // Each hit is one fully closed article: never nest a result inside another.
 function searchResults(query){
@@ -207,7 +207,8 @@ function searchResults(query){
   if(input.length<2)return '<p class="small">Busca por nombre o código (mínimo 2 caracteres).</p>';
   const found=matches(input);
   if(!found.length)return '<p class="notice">No se encuentran cartas para esa búsqueda. Prueba con el nombre o código.</p>';
-  return found.map(c=>{
+  const visible=found.slice(0,h.searchLimit);
+  return '<p class="small">Resultados de todo el catálogo: '+visible.length+' de '+found.length+' versiones</p>'+visible.map(c=>{
     const id=text(c.id),name=text(c.name||c.id);
     const detail=id+' · '+text(c.set||"")+' · '+money(price(c))+' / copia'+(state.user?' · Tengo '+qty(c.id):"");
     return '<article class="tools-found" data-trade-result="'+id+'">'+
@@ -217,7 +218,7 @@ function searchResults(query){
       '<button class="secondary btn" type="button" aria-label="Añadir a lo que entrego" data-trade-add="0" data-card="'+id+'">←</button>'+
       '<button class="primary btn" type="button" aria-label="Añadir a lo que recibo" data-trade-add="1" data-card="'+id+'">→</button>'+
       '</div></article>';
-  }).join("");
+  }).join("")+(found.length>visible.length?'<button type="button" class="secondary btn" data-trade-more>Mostrar más cartas ('+(found.length-visible.length)+' restantes)</button>':"");
 }
 function total(i){
   let amount=0,unknown=0,copies=0;
@@ -343,6 +344,8 @@ function bindSearch(input,host,mode){
  const show=()=>{h.q=el.value;target.innerHTML=searchResults(h.q)};
  // Delegate clicks so replacing the results never destroys the add-card handler.
  target.addEventListener("click",event=>{
+  const more=event.target?.closest?.("[data-trade-more]");
+  if(more&&target.contains(more)){h.searchLimit+=36;target.innerHTML=searchResults(h.q);return}
   const b=event.target?.closest?.("[data-trade-add]");
   if(!b||!target.contains(b)||!readyToEdit())return;
   const side=Number(b.dataset.tradeAdd),id=b.dataset.card;
@@ -352,8 +355,8 @@ function bindSearch(input,host,mode){
   else h.trade[side].push({id,q:1,manual:null});
   save();renderShell();
  });
- el.addEventListener("input",show);
- el.addEventListener("search",show);
+ el.addEventListener("input",()=>{h.searchLimit=36;show()});
+ el.addEventListener("search",()=>{h.searchLimit=36;show()});
 }
 function summary(){
   const side=(i,label)=>label+"\n"+h.trade[i].map(x=>x.q+"x "+(card(x.id)?.name||x.id)+" ("+x.id+") a "+
