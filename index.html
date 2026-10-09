@@ -1443,7 +1443,7 @@ function competitiveResultHtml(result,index){
     '<div class="competitive-result-copy"><div class="competitive-deck-head"><div><h3>'+esc(result.leaderName||result.leaderId)+'</h3><div class="small">'+esc(result.tournament||"Torneo")+' · '+date+'</div></div><div><b>'+place+field+'</b></div></div>'+
     '<div class="competitive-badges"><span class="competitive-badge good">'+esc(result.quality||"Resultado")+'</span><span class="competitive-badge">'+esc(result.player||"Jugador")+'</span><span class="competitive-badge">Récord '+esc(record)+'</span>'+(result.country?'<span class="competitive-badge">'+esc(result.country)+'</span>':'')+'</div>'+
     '<div class="small"><b>Tu colección:</b> '+stats.owned+'/'+stats.total+' cartas cubiertas · faltan '+stats.missing+(stats.cost>0?' · aprox. '+money(stats.cost):'')+'</div>'+
-    '<div class="competitive-actions"><button class="primary btn" data-preview-competitive="'+index+'">Ver mazo</button>'+(result.sourceUrl?'<a class="secondary btn" target="_blank" rel="noopener" href="'+esc(result.sourceUrl)+'">Limitless ↗</a>':'')+'</div></div></div>'+
+    '<div class="competitive-actions"><button class="primary btn" data-preview-competitive="'+index+'">Ver mazo</button><button class="secondary btn" data-compare-competitive="'+index+'">Comparar</button>'+(result.sourceUrl?'<a class="secondary btn" target="_blank" rel="noopener" href="'+esc(result.sourceUrl)+'">Limitless ↗</a>':'')+'</div></div></div>'+
     '<div class="competitive-source">Fuente: Limitless Tournament Platform.</div></article>';
 }
 function competitiveDeckSearchView(){
@@ -1548,6 +1548,7 @@ function deckLibraryView(){
     '<div class="deck-actions"><button class="deck-action" id="newDeck"><b>＋ Crear</b><span>Construye un mazo desde cero eligiendo líder y cartas.</span></button><button class="deck-action" id="findCompetitiveDecks"><b>🏆 Buscar</b><span>Busca listas con buenos resultados por líder e impórtalas directamente.</span></button><button class="deck-action" id="openDeckCompletion" type="button" aria-label="Abrir Descubrir mazos"><b>🃏 Descubrir</b><span>Encuentra mazos con tus cartas.</span></button></div>'+
     deckSyncStatusView()+
     '<div class="sectionhead deck-library-heading"><h2>Mis mazos</h2><div class="deck-library-heading-actions">'+
+    (savedDecks.length?'<button type="button" class="secondary btn" id="compareLibraryDecks">⇄ Comparar</button>':'')+
     '<span class="small">'+savedDecks.length+' guardado(s)</span></div></div>'+
     (tiles?'<div class="decklibrary">'+tiles+'</div>':'<div class="section center"><h2>Aún no tienes mazos</h2><p class="muted">Puedes crear uno desde cero o importar una lista competitiva.</p></div>')+'</div>';
 }
@@ -2287,7 +2288,7 @@ function accountView(){
     '<button class="danger btn" id="deleteAccount" type="button">Eliminar mi cuenta</button>';
   return header+
     accountPanel("profile","Mi cuenta",account)+
-    accountPanel("app","Aplicación",'<div class="app-install-placeholder"><p class="small">Instala MiAlbumOnePiece desde tu navegador para abrirla como una aplicación. Con conexión podrás consultar el catálogo y sincronizar tus datos; sin conexión, algunas funciones no estarán disponibles.</p><button id="installAppBtn" class="primary btn" type="button">Instalar aplicación</button><p class="small" id="installAppStatus">Usa el menú de tu navegador para añadir la aplicación a la pantalla de inicio.</p></div>')+
+    accountPanel("app","Aplicación",'<div class="app-install-placeholder"><p class="small">Instala MiAlbumOnePiece desde tu navegador para abrirla como una aplicación. Con conexión podrás consultar el catálogo y sincronizar tus datos; sin conexión, algunas funciones no estarán disponibles.</p><button id="installAppBtn" class="primary btn" type="button">Instalar aplicación</button><p class="small" id="installAppStatus">Usa el menú de tu navegador para añadir la aplicación a la pantalla de inicio.</p><button id="pwaUpdateBtn" class="secondary btn" type="button" hidden>Actualizar aplicación</button><p class="small" id="pwaNetworkStatus" role="status" aria-live="polite"></p></div>')+
     accountPanel("backups","Datos y copias de seguridad",backups)+
     accountPanel("security","Seguridad",security)+
     accountPanel("danger","Eliminar cuenta",danger,"account-destructive")+
@@ -2752,6 +2753,11 @@ function bindShell(){
     });
     bindCompetitiveLeaderButtons();
     document.querySelectorAll("[data-preview-competitive]").forEach(b=>b.onclick=()=>openCompetitiveDeckPreview(b.dataset.previewCompetitive));
+    document.querySelectorAll("[data-compare-competitive]").forEach(b=>b.onclick=()=>{
+      const r=state.deckDiscoverResults[Number(b.dataset.compareCompetitive)];
+      if(r)window.OnePieceDeckLab?.compareWithCompetitive?.(r);
+    });
+    $("#compareLibraryDecks")?.addEventListener("click",()=>window.OnePieceDeckLab?.compare?.());
     $("#backCompetitiveResults")?.addEventListener("click",discardCompetitiveDraft);
     $("#saveCompetitiveDraft")?.addEventListener("click",saveCompetitiveDraft);
     document.querySelectorAll("[data-open-deck]").forEach(b=>b.onclick=()=>navigateApp(()=>{state.deckPreviewOrigin="";state.deckId=b.dataset.openDeck;state.deckLibrary=false;state.deckChoosingLeader=false;state.deckDiscover=false}));
