@@ -15,7 +15,7 @@ export function extractOPlayHtml(html){
   if(!id||seen.has(id))continue;
   const cells=[...row.matchAll(/<td\b[^>]*>([\s\S]*?)<\/td>/gi)]
     .map(m=>trim(m[1]));
-  const winLoss=cells.map(cell=>cell.match(/(\d[\d .,]*)\s*[-–]\s*(\d[\d .,]*)/))
+  const winLoss=cells.map(cell=>cell.match(/^\s*(\d[\d .,]*)\s*[-–]\s*(\d[\d .,]*)\s*$/))
     .find(Boolean);
   if(!winLoss)continue;
   const wins=toInt(winLoss[1]),losses=toInt(winLoss[2]),games=wins+losses;
@@ -23,7 +23,7 @@ export function extractOPlayHtml(html){
   const score=wins/games;
   if(score<0||score>1)continue;
   // Positions are isolated by the visible table labels, never borrowed from Limitless.
-  const wlIndex=cells.findIndex(cell=>/\d[\d .,]*\s*[-–]\s*\d[\d .,]*/.test(cell));
+  const wlIndex=cells.findIndex(cell=>/^\s*\d[\d .,]*\s*[-–]\s*\d[\d .,]*\s*$/.test(cell));
   const pctCells=cells.slice(wlIndex+1).filter(cell=>/\d[\d.,]*\s*%/.test(cell));
   const percentage=cell=>{
     const val=Number(String(cell||"").match(/(\d+(?:[,.]\d+)?)\s*%/)?.[1]?.replace(",","."));
