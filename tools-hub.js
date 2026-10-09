@@ -1,7 +1,7 @@
 (function(){
 "use strict";
 /* This module never changes collection quantities or deck records. */
-const h={tab:"trade",owner:null,trade:[[],[]],q:"",list:[],meta:{},loaded:false,busy:false,error:"",
+const h={tab:"trade",tradeSection:"prepare",owner:null,trade:[[],[]],q:"",list:[],meta:{},loaded:false,busy:false,error:"",
   sort:"missing",maxMissing:"12",maxCost:"",cloudReady:false,cloudLoading:false,cloudError:"",cloudConflict:false,
   revision:null,pending:false,localRevision:null,hasCache:false,serial:0,saveTimer:null,writing:false,lastCloudAt:0};
 const key=id=>"mialbumonepiece_tools_"+id;
@@ -327,8 +327,11 @@ function tradePage(){
   if(!h.cloudReady&&!h.cloudError)void loadCloud();
   else if(h.cloudReady&&!h.pending&&!h.writing&&!h.cloudConflict&&Date.now()-h.lastCloudAt>30000)void loadCloud(true);
  }
- return '<div class="wrap tools-wrap"><div class="hero"><div><h1>⇄ Intercambios</h1><p>Prepara un trato y envía una propuesta para que ambos la aceptéis.</p></div></div>'+
- cloudMessage()+tradeView()+(window.TradeOffers?.view?.()||"")+'</div>';
+ return '<div class="wrap tools-wrap"><div class="hero"><div><h1>⇄ Intercambios</h1></div></div>'+
+  '<nav class="trade-mode-tabs" aria-label="Gestión de intercambios">'+
+  '<button type="button" class="secondary btn '+(h.tradeSection==="prepare"?"active":"")+'" id="tradeModePrepare" '+(h.tradeSection==="prepare"?'aria-current="page"':'')+'>Preparar intercambio</button>'+
+  '<button type="button" class="secondary btn '+(h.tradeSection==="offers"?"active":"")+'" id="tradeModeOffers" '+(h.tradeSection==="offers"?'aria-current="page"':'')+'>Mis propuestas</button></nav>'+
+  (h.tradeSection==="prepare"?cloudMessage()+tradeView():(window.TradeOffers?.view?.()||""))+'</div>';
 }
 function tradeItems(){
  if(!h.cloudReady||!h.owner||h.cloudConflict||h.pending||h.writing)return null;
@@ -429,7 +432,11 @@ document.addEventListener?.("visibilitychange",()=>{
   }
 });
 window.OnePieceTools={tradePage,tradeItems,decksView,loadCloud,flushCloud,
- bindTrade:()=>{h.tab="trade";bind();window.TradeOffers?.bind?.()},
+ bindTrade:()=>{h.tab="trade";bind();
+  document.getElementById("tradeModePrepare")?.addEventListener("click",()=>{if(h.tradeSection!=="prepare"){h.tradeSection="prepare";renderShell()}});
+  document.getElementById("tradeModeOffers")?.addEventListener("click",()=>{if(h.tradeSection!=="offers"){h.tradeSection="offers";renderShell()}});
+  if(h.tradeSection==="offers")window.TradeOffers?.bind?.();
+ },
  bindDecks:()=>{h.tab="decks";bind()}
 };
 })();

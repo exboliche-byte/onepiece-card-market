@@ -105,6 +105,26 @@
 .wants-actions .btn{display:grid;place-items:center;min-height:43px;text-align:center;text-decoration:none}
 @media(max-width:500px){.wants-actions{grid-template-columns:1fr}}
 
+/* UI reorganizada: sin alterar colección, metajuego ni mazos persistidos. */
+.collection-title-row{display:flex;align-items:center;justify-content:space-between;gap:9px}
+.collection-title-row h1{margin:0}
+.collection-share-icon{width:36px;height:36px;min-height:36px;flex:none;padding:3px;font-size:20px}
+.collection-view-tabs,.discovery-view-tabs,.trade-mode-tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin:6px 0 12px}
+.collection-view-tabs .btn,.discovery-view-tabs .btn,.trade-mode-tabs .btn{min-width:0;min-height:38px;font-size:12px;padding:7px 5px}
+.collection-view-tabs .btn.active,.discovery-view-tabs .btn.active,.trade-mode-tabs .btn.active{border-color:var(--accent);background:#342f1a;color:var(--accent);opacity:1}
+.collection-view-tabs .btn:disabled,.discovery-view-tabs .btn:disabled{cursor:default;opacity:1}
+.discovery-view-tabs,.trade-mode-tabs{grid-template-columns:repeat(2,minmax(0,1fr))}
+.discovery-view-tabs .btn:not(.active):disabled{opacity:.62}
+.discovery-view-tabs small,.deck-feature-space small,.deck-compare-pending small{display:block;font-size:10px;color:var(--muted);font-weight:500;line-height:1.2}
+.deck-library-heading{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.deck-library-heading-actions{display:flex;align-items:center;gap:8px}
+.deck-compare-pending{min-height:34px;padding:5px 9px;font-size:12px;opacity:.65;cursor:default}
+.deck-feature-spaces{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:8px 0 13px}
+.deck-feature-space{min-width:0;min-height:54px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:8px;background:var(--panel2);border:1px dashed var(--line);opacity:.7;cursor:default}
+.deck-feature-space strong{font-size:13px}
+.deck-discover-page .competitive-panel{margin:0;padding:0;border:0;background:transparent;box-shadow:none}
+.app-install-placeholder .btn{width:100%;max-width:320px;opacity:.65;cursor:default}
+@media(max-width:520px){.collection-view-tabs .btn{font-size:11px}.deck-compare-pending{font-size:11px}.deck-library-heading .small{font-size:10px}}
 /* Navegación responsive: lateral plegable en ordenador, 5 accesos en móvil. */
 .desktop-side{display:none}
 @media(min-width:900px){
@@ -1161,10 +1181,12 @@ function collectionView(){
   if(!state.collectionReady)return '<div class="wrap"><div class="hero"><h1>Mi colección</h1></div><div class="notice">Cargando la colección desde Supabase…</div><button class="secondary btn" id="retryCollectionLoad">Reintentar carga</button></div>';
   if(state.boxesOpen)return window.CollectionBoxes?.view?.()||'<div class="notice">No se pudieron cargar tus cajas.</div>';
   if(state.collectionStatsOpen)return collectionStatisticsView();
-  return '<div class="wrap collection-top"><div class="hero"><h1>Mi colección</h1></div>'+
-    '<div class="collection-tools"><button type="button" class="secondary btn collection-stats-entry" id="openCollectionStats">📊 Estadísticas</button>'+
-    '<button type="button" class="secondary btn" id="openCollectionShare">🔗 Compartir</button>'+
-    '<button type="button" class="secondary btn" id="openCollectionBoxes">📦 Cajas</button></div>'+
+  return '<div class="wrap collection-top"><div class="hero collection-title-row"><h1>Mi colección</h1>'+
+    '<button class="secondary btn collection-share-icon" id="openCollectionShare" type="button" title="Compartir colección" aria-label="Compartir colección">↗</button></div>'+
+    '<nav class="collection-view-tabs" aria-label="Vistas de colección">'+
+    '<button class="secondary btn active" type="button" disabled aria-current="page">Mis cartas</button>'+
+    '<button class="secondary btn" type="button" id="openCollectionBoxes">Cajas</button>'+
+    '<button class="secondary btn" type="button" id="openCollectionStats">Estadísticas</button></nav>'+
     collectionToolbar()+'<div id="collectionResults"></div></div>';
 }
 function wantsView(){
@@ -1419,7 +1441,7 @@ function competitiveDeckSearchView(){
   else if(state.deckDiscoverError)results='<div class="notice">'+esc(state.deckDiscoverError)+'</div>';
   else if(state.deckDiscoverResults.length)results='<div class="notice">'+state.deckDiscoverResults.length+' mazo(s) encontrados'+(state.deckDiscoverMeta?.scannedEvents?' · '+state.deckDiscoverMeta.scannedEvents+' torneos consultados':'')+(state.deckDiscoverMeta?.rateLimited?' · resultados parciales por límite temporal de la fuente':'')+'</div><div class="competitive-results">'+state.deckDiscoverResults.map(competitiveResultHtml).join("")+'</div>';
   else if(state.deckDiscoverMeta)results='<div class="notice">No encontré listas públicas de ese líder con estos filtros. Prueba ampliando el periodo o bajando el mínimo de jugadores.</div>';
-  return '<div class="section competitive-panel"><div class="sectionhead"><div><h2>Buscar mazos competitivos</h2><div class="small">Elige el líder por su imagen y consulta resultados de torneos.</div></div><button class="secondary btn" id="closeCompetitiveSearch">Cerrar</button></div>'+
+  return '<div class="competitive-panel"><div class="sectionhead"><div><h2>Buscar mazos competitivos</h2><div class="small">Elige el líder por su imagen y consulta resultados de torneos.</div></div><button class="secondary btn" id="closeCompetitiveSearch">← Mis mazos</button></div>'+
     '<div class="competitive-leader-picker"><input id="competitiveLeaderSearch" class="field competitive-leader-search" inputmode="search" autocomplete="off" placeholder="🔎 Buscar líder por nombre o ID..." value="'+esc(state.deckDiscoverLeaderQuery)+'"><div id="competitiveLeaderGrid" class="competitive-leader-grid">'+competitiveLeaderGridHtml()+'</div></div>'+
     (state.deckDiscoverLeader?'<div class="notice">Líder seleccionado: <b>'+esc(state.deckDiscoverLeader)+'</b></div>':'<div class="notice">Selecciona un líder para buscar mazos.</div>')+
     '<div class="competitive-controls">'+
@@ -1502,17 +1524,21 @@ async function saveCompetitiveDraft(){
     "Mazo conservado localmente. Comprueba la sincronización en Mis mazos.");
 }
 function deckLibraryView(){
+  // Búsqueda competitiva en pantalla propia (sin biblioteca anidada).
+  if(state.deckDiscover)return '<div class="wrap deck-discover-page">'+competitiveDeckSearchView()+'</div>';
   if(!state.user){
     return '<div class="wrap"><div class="hero"><div><h1>Mazos</h1><p>Busca listas competitivas o inicia sesión para crear e importar tus mazos.</p></div></div>'+
       '<div class="deck-actions"><button class="deck-action" id="deckAccountBtn"><b>＋ Crear</b><span>Inicia sesión para guardar y sincronizar tus mazos.</span></button><button class="deck-action" id="findCompetitiveDecks"><b>🏆 Buscar</b><span>Busca resultados de torneos por líder e importa la lista.</span></button><a class="deck-action" href="/deck-completion" target="_blank" rel="noopener noreferrer" aria-label="Abrir Qué mazos puedo completar en una pestaña nueva"><b>🃏 Qué mazos ↗</b><span>Comprueba qué mazos puedes completar.</span></a></div>'+
-      (state.deckDiscover?competitiveDeckSearchView():"")+
+      
       '<div class="section center"><h2>Inicia sesión para gestionar tus mazos</h2><p class="muted">La búsqueda puede consultarse sin cuenta; para importar o guardar necesitas iniciar sesión.</p><button class="primary btn" id="deckAccountBtn2">Entrar o crear cuenta</button></div></div>';
   }
   const savedDecks=state.decks.filter(d=>!d?.draftCompetitive);const tiles=savedDecks.map(d=>{const l=card(d.leader),v=deckValidate(d);return '<div class="setcard decktile"><button type="button" class="deck-tile-open" style="width:100%;background:transparent;border:0;color:inherit;text-align:left;cursor:pointer" data-open-deck="'+esc(d.id)+'">'+(l?cardImg(l,"deckleader"):'<div class="deckleader fallback" style="display:grid">Sin líder</div>')+'<div class="decktilebody"><b>'+esc(d.name)+'</b>'+(d.description?'<div class="small" style="white-space:pre-wrap;overflow-wrap:anywhere;margin:5px 0 7px">'+esc(d.description)+'</div>':'')+'<div class="small">'+v.total+'/50 cartas · '+deckUniqueCount(d)+' diferentes · '+(d.leader?"1 líder":"sin líder")+'</div><div class="small">'+(v.valid?"✓ Legal":"⚠ No legal")+' · Valor '+money(deckTotalValue(d))+' · te faltan '+money(deckMissingCost(d))+'</div></button></div>'}).join("");
   return '<div class="wrap"><div class="hero"><div><h1>Mazos</h1><p>Tus mazos sincronizados con '+esc(state.user.email||"tu cuenta")+'.</p></div><button class="secondary btn" id="importDeckBtn">Importar lista</button></div>'+
     '<div class="deck-actions"><button class="deck-action" id="newDeck"><b>＋ Crear</b><span>Construye un mazo desde cero eligiendo líder y cartas.</span></button><button class="deck-action" id="findCompetitiveDecks"><b>🏆 Buscar</b><span>Busca listas con buenos resultados por líder e impórtalas directamente.</span></button><a class="deck-action" id="openDeckCompletion" href="/deck-completion" target="_blank" rel="noopener noreferrer" aria-label="Abrir Qué mazos puedo completar en una pestaña nueva"><b>🃏 Qué mazos ↗</b><span>Encuentra listas que te requieren menos cartas o menos dinero en una pestaña nueva.</span></a></div>'+
-    (state.deckDiscover?competitiveDeckSearchView():"")+deckSyncStatusView()+
-    '<div class="sectionhead"><h2>Mis mazos</h2><span class="small">'+savedDecks.length+' guardado(s)</span></div>'+
+    deckSyncStatusView()+
+    '<div class="sectionhead deck-library-heading"><h2>Mis mazos</h2><div class="deck-library-heading-actions">'+
+    '<button class="secondary btn deck-compare-pending" type="button" disabled>⇄ Comparar <small>Próximamente</small></button>'+
+    '<span class="small">'+savedDecks.length+' guardado(s)</span></div></div>'+
     (tiles?'<div class="decklibrary">'+tiles+'</div>':'<div class="section center"><h2>Aún no tienes mazos</h2><p class="muted">Puedes crear uno desde cero o importar una lista competitiva.</p></div>')+'</div>';
 }
 function decksView(){
@@ -1551,7 +1577,10 @@ function decksView(){
   const draftNotice=draft?'<div class="notice competitive-draft-note"><b>Vista previa — todavía no está guardado.</b> Puedes cambiar líder, cartas y cantidades con el creador de abajo. Pulsa “Guardar en mis mazos” solo cuando quieras conservarlo.'+(draftSource.unresolved?'<br>'+Number(draftSource.unresolved)+' copia(s) de la lista original no se pudieron resolver en el catálogo actual.':'')+'</div>':"";
   const deckMeta=draft?'': '<div class="section" id="deckMetaEditor" hidden><h2>Editar mazo</h2><label class="filter-label" for="editDeckName">Nombre</label><input class="field" id="editDeckName" maxlength="120" value="'+esc(d.name)+'"><label class="filter-label" for="editDeckDescription" style="display:block;margin-top:12px">Descripción</label><textarea class="field" id="editDeckDescription" rows="4" maxlength="2000" placeholder="Descripción del mazo...">'+esc(d.description||"")+'</textarea><div class="inline-actions" style="margin-top:12px"><button class="primary btn" id="saveDeckMeta">Guardar cambios</button><button class="secondary btn" id="cancelDeckMeta">Cancelar</button></div></div>';
   const deckDescription=d.description?'<div class="section" style="white-space:pre-wrap;overflow-wrap:anywhere">'+esc(d.description)+'</div>':'';
-  return '<div class="wrap">'+hero+deckSyncStatusView()+deckMeta+deckDescription+draftNotice+
+  const plannedDeckFeatures='<nav class="deck-feature-spaces" aria-label="Próximas funciones de mazo">'+
+    '<button class="secondary btn deck-feature-space" type="button" disabled><strong>♧ Simular</strong><small>Próximamente</small></button>'+
+    '<button class="secondary btn deck-feature-space" type="button" disabled><strong>⇄ Comparar</strong><small>Próximamente</small></button></nav>';
+  return '<div class="wrap">'+hero+plannedDeckFeatures+deckSyncStatusView()+deckMeta+deckDescription+draftNotice+
     '<div class="section">'+(l?'<div class="deck-leader-row">'+cardImg(preferredOwnedDeckPrinting(l),"thumb")+'<div class="grow"><b>Líder · '+esc(l.name)+'</b><div class="small">'+esc(preferredOwnedDeckPrinting(l).id)+' · '+(priceOf(l)!==null?money(priceOf(l)):"Precio —")+' · '+(deckOwnedCopies(l)?"en colección":"te falta")+'</div></div><button class="secondary btn" id="changeLeader">Cambiar</button><button class="danger btn" id="removeLeader">Quitar</button></div>':'<div class="notice"><b>1. Elige el líder.</b> Hasta que no selecciones uno, aquí solo aparecen líderes.</div>')+'</div>'+
     deckStats+
     deckCompositionView(d)+
@@ -2248,6 +2277,7 @@ function accountView(){
     '<button class="danger btn" id="deleteAccount" type="button">Eliminar mi cuenta</button>';
   return header+
     accountPanel("profile","Mi cuenta",account)+
+    accountPanel("app","Aplicación",'<div class="app-install-placeholder"><p class="small">La instalación como aplicación se habilitará en una próxima actualización.</p><button class="secondary btn" type="button" disabled>Instalar aplicación · Próximamente</button></div>')+
     accountPanel("backups","Datos y copias de seguridad",backups)+
     accountPanel("security","Seguridad",security)+
     accountPanel("danger","Eliminar cuenta",danger,"account-destructive")+
@@ -2358,11 +2388,11 @@ function nav(){
   const tabButton=([id,label],side)=>'<button type="button" class="'+(state.tab===id?"active":"")+'" data-tab="'+id+'" aria-label="'+label+'"'+(state.tab===id?' aria-current="page"':'')+'>'+navIcon(id)+'<span'+(side?' class="side-label"':'')+'>'+label+'</span></button>';
   const scanButton='<button type="button" data-scan-open aria-label="Abrir escáner de cartas">'+navIcon("scanner")+'<span class="side-label">Escáner</span></button>';
   const sideGroups=[
-    ["EXPLORAR",["catalog","album"]],
-    ["MIS CARTAS",["collection","wants","scanner"]],
-    ["JUGAR",["decks","tournaments","meta"]],
+    ["EXPLORAR",["catalog","album","meta"]],
+    ["MIS CARTAS",["collection","wants"]],
+    ["JUGAR",["decks","tournaments"]],
     ["COMUNIDAD",["trades"]],
-    ["CREAR",["proxies"]],
+    ["HERRAMIENTAS",["proxies","scanner"]],
     ["CUENTA",["account"]]
   ];
   const side='<aside class="desktop-side" aria-label="Menú principal"><div class="side-head"><span class="side-brand">ONE PIECE</span><button type="button" id="sidebarToggle" class="side-toggle" aria-label="Plegar o desplegar menú" aria-expanded="'+(!sidebarCollapsed)+'">'+navIcon("collapse")+'</button></div><nav class="side-items" aria-label="Secciones">'+
@@ -2378,8 +2408,11 @@ function nav(){
   return side+mobile;
 }
 function deckCompletionView(){
-  return '<div class="wrap"><div class="hero"><div><h1>🃏 ¿Qué mazos puedo completar?</h1><p>Descubre mazos competitivos para los que te faltan pocas cartas o poco presupuesto.</p></div><button class="secondary btn" type="button" id="deckCompletionBack">← Volver</button></div>'+
-    (window.OnePieceTools?.decksView?.()||'<div class="section">Cargando recomendaciones…</div>')+'</div>';
+  return '<div class="wrap"><div class="hero"><div><h1>Descubrir mazos</h1><p>Encuentra mazos que puedas completar con tus cartas.</p></div><button class="secondary btn" type="button" id="deckCompletionBack">← Volver</button></div>'+
+    '<nav class="discovery-view-tabs" aria-label="Opciones de descubrimiento">'+
+    '<button class="secondary btn active" type="button" disabled aria-current="page">Puedo completar</button>'+
+    '<button class="secondary btn" type="button" disabled>Para mí <small>Próximamente</small></button></nav>'+
+    (window.OnePieceTools?.decksView?.()||'<div class="section">Cargando mazos…</div>')+'</div>';
 }
 function renderShell(){
   if(reloadViewPending)return;
@@ -2534,7 +2567,7 @@ function restoreReloadView(saved){
 }
 
 function appViewSnapshot(){
-  return {tab:state.tab,albumSet:state.album.set||"",deckLibrary:state.deckLibrary!==false,deckId:state.deckId||null,deckPreviewOrigin:state.deckPreviewOrigin||"",tournamentId:state.tournamentId||null,collectionStatsOpen:state.tab==="collection"&&!!state.collectionStatsOpen};
+  return {tab:state.tab,albumSet:state.album.set||"",deckLibrary:state.deckLibrary!==false,deckId:state.deckId||null,deckDiscover:state.tab==="decks"&&!!state.deckDiscover,deckPreviewOrigin:state.deckPreviewOrigin||"",tournamentId:state.tournamentId||null,collectionStatsOpen:state.tab==="collection"&&!!state.collectionStatsOpen};
 }
 function replaceAppHistory(){
   const current=history.state&&typeof history.state==="object"?history.state:{};
@@ -2553,6 +2586,7 @@ function restoreAppView(view){
   const oldDraft=state.decks.find(d=>d.id===state.deckId&&d.draftCompetitive);
   if(oldDraft&&oldDraft.id!==view.deckId)state.decks=state.decks.filter(d=>d.id!==oldDraft.id);
   state.deckId=view.deckId||null;
+  state.deckDiscover=state.tab==="decks"&&state.deckLibrary&&!!view.deckDiscover;
   state.deckPreviewOrigin=view.deckPreviewOrigin==="deck-completion"?"deck-completion":"";
   state.tournamentId=state.user&&state.tournaments.some(t=>t.id===view.tournamentId)?view.tournamentId:null;
   state.tournamentStats=null;state.tournamentDraft=null;state.tournamentRoundDraft=null;
@@ -2679,8 +2713,8 @@ function bindShell(){
   if(state.tab==="decks"){
     $("#deckAccountBtn")?.addEventListener("click",()=>navigateApp(()=>{state.tab="account"}));
     $("#deckAccountBtn2")?.addEventListener("click",()=>navigateApp(()=>{state.tab="account"}));
-    $("#findCompetitiveDecks")?.addEventListener("click",()=>{state.deckDiscover=!state.deckDiscover;state.deckDiscoverError="";renderShell()});
-    $("#closeCompetitiveSearch")?.addEventListener("click",()=>{state.deckDiscover=false;renderShell()});
+    $("#findCompetitiveDecks")?.addEventListener("click",()=>navigateApp(()=>{state.deckDiscover=true;state.deckDiscoverError="";state.deckLibrary=true}));
+    $("#closeCompetitiveSearch")?.addEventListener("click",()=>navigateApp(()=>{state.deckDiscover=false;state.deckDiscoverError="";state.deckLibrary=true}));
     $("#runCompetitiveSearch")?.addEventListener("click",searchCompetitiveDecks);
     $("#competitiveDays")?.addEventListener("change",e=>{state.deckDiscoverDays=Number(e.target.value)||90});
     $("#competitiveMinPlayers")?.addEventListener("change",e=>{state.deckDiscoverMinPlayers=Number(e.target.value)||32});
