@@ -12,7 +12,7 @@ export function extractOPlayMatchups(html){
  // execution of any embedded JavaScript or trusting visible link labels.
  if(typeof html!=="string")return [];
  const flat=html.replace(/\\\"/g,'"');
- const header=/"g":(\\d+),"l":"((?:OP|ST|EB|PRB)\\d{2}-\\d{3})","m":\\[/g;
+ const header=/"g":(\d+),"l":"((?:OP|ST|EB|PRB)\d{2}-\d{3})","m":\[/g;
  const rows=new Map();let hit;
  while((hit=header.exec(flat))!==null){
    let depth=0,end=-1;
@@ -28,7 +28,7 @@ export function extractOPlayMatchups(html){
    for(const x of matches){
      const opponent=String(x?.o||"").toUpperCase();
      const g=Number(x?.g),w=Number(x?.w);
-     if(!/^(?:OP|ST|EB|PRB)\\d{2}-\\d{3}$/.test(opponent)||opponent===leader||
+     if(!/^(?:OP|ST|EB|PRB)\d{2}-\d{3}$/.test(opponent)||opponent===leader||
        !Number.isSafeInteger(g)||g<1||g>10000000||
        !Number.isSafeInteger(w)||w<0||w>g)continue;
      const key=leader+"|"+opponent,firstGames=Number(x?.gf),firstWins=Number(x?.wf);
