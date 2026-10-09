@@ -22,8 +22,6 @@ jobs:
             const i=html.indexOf(w);
             console.log('TERM',w,n,'SAMPLE',i>=0?html.slice(Math.max(0,i-350),i+550).replace(/\\s+/g,' ').slice(0,850):'-');
           }
-          const rows=[...html.matchAll(/<table\\b[^>]*>[\\s\\S]*?<\\/table>/gi)];
-          console.log('TABLES',rows.length,rows.map(x=>x[0].length));
-          const urls=[...new Set([...html.matchAll(/https?:\\/\\/[^"'\\s<>]{4,200}/g)].map(x=>x[0]).filter(x=>/meta|api|matchup|stat/i.test(x)))].slice(0,20);
-          console.log('URLS',JSON.stringify(urls));
+          console.log('TABLE_COUNT',html.split('<table').length-1);
+          console.log('MATCHUP_WORD_NEAR',html.substring(Math.max(0,html.indexOf('matchup')-400),html.indexOf('matchup')+1000).slice(0,1300));
           JS
