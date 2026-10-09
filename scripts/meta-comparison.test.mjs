@@ -44,7 +44,7 @@ test("report clearly marks independent sources and sample provenance",()=>{
  assert.match(report,/OPlayTCG/);
  assert.match(report,/Everything OPTCG/);
  assert.match(report,/n simulador|n OPlay/);
- assert.match(meta,/loadIndependent\(\)/);
+ assert.match(meta,/api\/meta-unified/);
  assert.match(meta,/Matriz W\/R/);
  assert.match(meta,/function firstSecondView\(d\)/);
  assert.match(meta,/meta-turn-track/);

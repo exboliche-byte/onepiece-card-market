@@ -1,7 +1,7 @@
 /* Meta competitivo: Limitless y estadísticas agregadas automáticas de torneos de la comunidad. */
 (function(){
 "use strict";
-const m={scope:"global",section:"tiers",days:90,format:"auto",leader:"",expanded:false,tierSource:"simulator",turnSort:"games",
+const m={scope:"global",section:"tiers",days:90,format:"auto",leader:"",expanded:false,turnSort:"games",
  global:null,community:null,loading:false,communityLoading:false,error:"",communityError:"",
  lastGlobalAttempt:"",lastCommunityAttempt:"",globalRetryAfter:0,communityRetryAfter:0,
  independent:null,independentBusy:false,independentAt:0};
@@ -15,7 +15,7 @@ const GLOBAL_META_CACHE="mialbumonepiece_meta_public_";
 function savedGlobalMeta(key){
   try{
     const entry=JSON.parse(localStorage.getItem(GLOBAL_META_CACHE+key)||"null");
-    if(entry&&Number(entry.data?.coverageLimit||0)>=100&&Date.now()-Number(entry.savedAt||0)<7*86400000&&
+    if(entry&&entry.data?.source==="Unified"&&Date.now()-Number(entry.savedAt||0)<7*86400000&&
        Array.isArray(entry.data?.leaders)&&Array.isArray(entry.data?.matchups))return entry.data;
   }catch(error){console.warn("Meta: caché local no disponible",error)}
   return null;
@@ -54,39 +54,29 @@ function statCards(d){
   return '<div class="meta-stats">'+values.map(([val,title])=>'<div class="meta-stat"><b>'+val+'</b><small>'+title+'</small></div>').join("")+'</div>';
 }
 
+
 function simulatorData(){
- const x=m.independent?.sources?.find(s=>s.id==="oplay"&&s.status==="ok");
- return x?.leaders?.length?x:null;
-}
-function grade(x,sim){
- if(x.games<(sim?200:20)||(sim&&x.players!=null&&x.players<10))return "—";
- const value=(Number(x.wins)+12)/(Number(x.games)+24);
- return value>=.555?"S":value>=.52?"A":value>=.48?"B":value>=.445?"C":"D";
+ const x=m.global;
+ return x?.sources?.simulator?.available?
+  {leaders:(x.leaders||[]).filter(l=>l.firstGames>0&&l.secondGames>0),
+   games:x.simulatorGames,measuredAt:x.sources.simulator.date}:null;
 }
 function tiers(d){
- const sim=m.scope==="global"&&m.tierSource==="simulator"?simulatorData():null;
- const rows=sim?.leaders||d.leaders;
- if(!rows.length)return '<div class="notice">No hay suficientes datos.</div>';
+ if(!d.leaders.length)return '<div class="notice">Sin datos suficientes para clasificar líderes.</div>';
  const groups={S:[],A:[],B:[],C:[],D:[],"—":[]};
- for(const x of rows)groups[grade(x,!!sim)].push(x);
- for(const g of Object.values(groups))g.sort((a,b)=>b.games-a.games);
- const chooser=m.scope==="global"?'<div class="meta-source-switch">'+
-   '<button data-meta-tiersource="simulator" class="'+(m.tierSource==="simulator"?"selected":"")+
-   '"'+(!simulatorData()?' disabled':"")+'">🎮 OPlay · '+integer(simulatorData()?.games||0)+' partidas</button>'+
-   '<button data-meta-tiersource="tournaments" class="'+(m.tierSource==="tournaments"?"selected":"")+
-   '">🏆 Limitless · '+integer(m.global?.includedEvents||0)+' torneos</button></div>':"";
- const note=sim?'Simulador: mínimo 200 partidas y 10 jugadores para tier.':'Torneos: mínimo 20 resultados por líder.';
- return chooser+'<p class="small">'+note+' Los tiers son orientativos y nunca mezclan fuentes.</p>'+
-   Object.entries(groups).filter(([,list])=>list.length).map(([k,list])=>
+ for(const x of d.leaders)(groups[x.tier]||groups["—"]).push(x);
+ for(const list of Object.values(groups))list.sort((a,b)=>b.games-a.games);
+ return '<p class="small">Clasificación única: W/R combinado de torneos y simulador, ponderado para que ninguna fuente tape a la otra. Toca un líder para analizarlo.</p>'+
+  Object.entries(groups).filter(([,list])=>list.length).map(([k,list])=>
     '<section class="meta-tier meta-tier-visual"><div class="meta-tier-grade '+(k==="—"?"unknown":k.toLowerCase())+'">'+k+'</div>'+
-    '<div class="meta-tier-items">'+list.slice(0,m.expanded?100:14).map(x=>
-     '<button class="meta-leader-card meta-leader-visual" data-meta-leader="'+esc(x.id)+'">'+
-     art(x.id)+'<b>'+esc(name(x.id))+'</b><small>'+esc(x.id)+'</small>'+
-     '<strong>'+rate(x.wins,x.losses)+'</strong>'+
-     '<span class="meta-wr-bar"><span style="width:'+Math.max(0,Math.min(100,100*x.wins/x.games)).toFixed(1)+'%"></span></span>'+
-     '<small>'+integer(x.games)+' partidas'+(sim&&x.players!=null?' · '+integer(x.players)+' jugadores':"")+'</small></button>').join("")+
+    '<div class="meta-tier-items">'+list.slice(0,m.expanded?100:24).map(x=>
+      '<button class="meta-leader-card meta-leader-visual" data-meta-leader="'+esc(x.id)+'">'+
+      art(x.id)+'<b>'+esc(name(x.id))+'</b><small>'+esc(x.id)+'</small>'+
+      '<strong>'+Number(x.rate).toLocaleString("es-ES",{maximumFractionDigits:1})+' %</strong>'+
+      '<span class="meta-wr-bar"><span style="width:'+Math.max(0,Math.min(100,Number(x.rate))).toFixed(1)+'%"></span></span>'+
+      '<small>'+integer(x.games)+' partidas · '+(x.sourcesCount===2?'2 fuentes':'1 fuente')+'</small></button>').join("")+
     '</div></section>').join("")+
-   '<button class="secondary btn" id="metaExpand">'+(m.expanded?"Mostrar menos":"Ver todos los líderes")+'</button>';
+  '<button class="secondary btn" id="metaExpand">'+(m.expanded?"Mostrar menos":"Ver todos los líderes")+'</button>';
 }
 
 const pairIndex=d=>new Map(d.matchups.map(x=>[x.leader+"|"+x.opponent,x]));
@@ -94,18 +84,18 @@ const pairIndex=d=>new Map(d.matchups.map(x=>[x.leader+"|"+x.opponent,x]));
 function coloredCell(x,a,b){
  if(a===b)return '<td class="meta-wr-diagonal">·</td>';
  if(!x||x.games<6)return '<td class="meta-no" title="Muestra insuficiente (<6)">—</td>';
- const v=100*x.wins/x.games;
+ const v=Number.isFinite(x.rate)?x.rate:100*x.wins/x.games;
  const cls=v>=65?"meta-wr-great":v>=55?"meta-wr-good":v>45?"meta-wr-even":v>35?"meta-wr-bad":"meta-wr-poor";
  return '<td class="meta-wr-cell '+cls+'" title="'+esc(name(a))+' vs '+esc(name(b))+' · '+x.wins+' victorias, '+x.losses+' derrotas">'+
-  '<b>'+rate(x.wins,x.losses)+'</b><small>'+integer(x.games)+' partidas</small></td>';
+  '<b>'+v.toLocaleString("es-ES",{maximumFractionDigits:1})+' %</b><small>'+integer(x.games)+' partidas'+(x.source==='combined'?' · 2 fuentes':'')+'</small></td>';
 }
 function matrix(d){
- const leaders=d.leaders.slice(0,m.expanded?28:12),index=pairIndex(d);
+ const leaders=d.leaders,index=pairIndex(d);
  if(!d.matchups.length)return '<div class="notice">Sin suficientes enfrentamientos para la matriz.</div>';
  const avatar=id=>'<span class="meta-matrix-avatar">'+art(id)+'</span>';
  const legend='<div class="meta-wr-legend"><span class="meta-wr-great">≥65%</span><span class="meta-wr-good">55–65%</span>'+
    '<span class="meta-wr-even">45–55%</span><span class="meta-wr-bad">35–45%</span><span class="meta-wr-poor">≤35%</span></div>';
- return '<p class="small">🏆 W/R de torneos Limitless · filas: tu líder · columnas: rival · mínimo 6 partidas por casilla.</p>'+legend+
+ return '<p class="small">Matriz única de enfrentamientos reales de las dos fuentes. Filas: tu líder · columnas: rival; desliza para explorar todos. Mínimo 6 partidas por casilla.</p>'+legend+
   '<div class="meta-scroller meta-matrix-scroll"><table class="meta-table meta-matrix-table"><thead><tr>'+
    '<th>Tu líder ↓ / Rival →</th>'+leaders.map(x=>'<th>'+avatar(x.id)+'<small>'+esc(name(x.id))+'</small></th>').join("")+
    '</tr></thead><tbody>'+leaders.map(a=>'<tr><td>'+avatar(a.id)+'<strong>'+esc(name(a.id))+'</strong><small>'+esc(a.id)+'</small></td>'+
@@ -129,8 +119,8 @@ function firstSecondView(d){
   const tiles=filtered.slice(0,m.expanded?100:18).map(x=>{
     const diff=x.firstRate-x.secondRate;
     return '<article class="meta-turn-card"><div class="meta-turn-leader">'+art(x.id)+
-      '<div><b>'+esc(name(x.id))+'</b><small>'+esc(x.id)+' · '+integer(x.games)+' partidas</small>'+
-      '<small>W/R general: '+rate(x.wins,x.losses)+'</small></div></div>'+
+      '<div><b>'+esc(name(x.id))+'</b><small>'+esc(x.id)+' · '+integer(x.simulator?.games||x.games)+' partidas de simulador</small>'+
+      '<small>W/R combinado: '+Number(x.rate).toLocaleString("es-ES",{maximumFractionDigits:1})+' %</small></div></div>'+
       '<div class="meta-turn-bars">'+
        '<div class="meta-turn-line"><span>🥇 1.º</span><div class="meta-turn-track"><i style="width:'+x.firstRate+'%"></i></div>'+
        '<b>'+x.firstRate.toFixed(1)+'%</b><small>n='+integer(x.firstGames)+'</small></div>'+
@@ -202,7 +192,8 @@ function view(){
       (community||!m.global?"":'<div class="meta-sample-note"><b>'+integer(d.includedEvents)+' torneos analizados</b> de '+
        integer(d.eligibleEvents)+' elegibles'+
        ((d.partial||d.truncated)?' · Muestra parcial':' · Cobertura completa de la selección')+
-       (d.rateLimited?' · Límite de la fuente':"")+'</div>')+
+       (d.rateLimited?' · Limitación temporal de Limitless':"")+
+       (d.sourcesAvailable===2?' · 2 fuentes combinadas':' · Falta una fuente')+'</div>')+
       '<div class="meta-tabs">'+
       nav("tiers","🏆 Tier list")+nav("matrix","▦ Matriz W/R")+nav("firstsecond","🥇 1.º / 2.º")+'</div>'+
       (m.section==="tiers"?tiers(d):m.section==="matrix"?matrix(d):firstSecondView(d))+
@@ -226,18 +217,25 @@ async function loadGlobal(force=false){
   try{
     const query=new URLSearchParams({days:String(days),format});
     if(force)query.set("refresh","1");
-    const r=await fetch("/api/meta?"+query,{headers:{accept:"application/json"},
+    const r=await fetch("/api/meta-unified?"+query,{headers:{accept:"application/json"},
       signal:AbortSignal.timeout(59000)});
     const raw=await r.text();let json;
     try{json=JSON.parse(raw)}catch{throw Error("El Meta devolvió una respuesta no válida (HTTP "+r.status+").")}
     if(!r.ok)throw Error(json.error||"No se pudo consultar Limitless (HTTP "+r.status+").");
     if(!Array.isArray(json.leaders)||!Array.isArray(json.matchups))
       throw Error("La respuesta del Meta no contiene estadísticas válidas.");
-    persistGlobalMeta(key,json);
+    const lastGood=m.global?.sourcesAvailable===2?m.global:
+      savedGlobalMeta(key)?.sourcesAvailable===2?savedGlobalMeta(key):null;
+    const shown=json.sourcesAvailable<2&&lastGood?{...lastGood,stale:true}:json;
+    if(json.sourcesAvailable===2||!lastGood)persistGlobalMeta(key,json);
     if(days===m.days&&format===m.format){
-      m.global=json;
-      m.globalRetryAfter=Date.now()+15*60000;
-      if(json.partial)m.error="";
+      m.global=shown;
+      m.globalRetryAfter=Date.now()+(json.sourcesAvailable===2?15*60000:45000);
+      m.error=json.sourcesAvailable<2?
+        (lastGood?"Mostrando el último meta combinado completo. ":
+        "El meta solo contiene los datos disponibles por ahora. ")+
+        "Limitless o OPlayTCG está temporalmente limitado.":
+        (json.sourceWarning||"");
     }
   }catch(e){
     if(days===m.days&&format===m.format){
@@ -286,15 +284,13 @@ function bind(){
   $("#metaLeaderSelect")?.addEventListener("change",e=>{m.leader=e.target.value;renderShell()});
   $("#metaTurnLeader")?.addEventListener("change",e=>{m.leader=e.target.value;m.expanded=false;renderShell()});
   $("#metaTurnSort")?.addEventListener("change",e=>{m.turnSort=e.target.value;renderShell()});
-  document.querySelectorAll("[data-meta-tiersource]").forEach(b=>b.onclick=()=>{
-    m.tierSource=b.dataset.metaTiersource;renderShell();
-  });
+
   $("#metaExpand")?.addEventListener("click",()=>{m.expanded=!m.expanded;renderShell()});
   $("#metaRefresh")?.addEventListener("click",()=>{
-  if(m.scope==="global"){void loadGlobal(true);void loadIndependent(true)}
+  if(m.scope==="global"){void loadGlobal(true)}
   else void loadCommunity(true);
 });
-  if(m.scope==="global"){void loadGlobal();void loadIndependent()}else void loadCommunity()
+  if(m.scope==="global"){void loadGlobal()}else void loadCommunity()
 }
 window.metaView=view;window.metaBind=bind;
 })();

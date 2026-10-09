@@ -48,17 +48,17 @@ test("View includes source separation, personalized dice and turn-order analysis
  state.tournaments=[{date:"2026-10-09",leaderId:"OP01-003",rounds:[{kind:"swiss",result:"W",opponentId:"OP02-001",start:"1"}]}];
  const page=module.view();
  for(const phrase of ["Todos los enfrentamientos disponibles","Mis estadísticas con este líder","Dado ganado",
-  "Dado perdido","Limitless","Comunidad","Todas las rondas","Mis últimas partidas","Mínimo 20 partidas"])
+  "Dado perdido","Meta combinado","Comunidad","Todas las rondas","Mis últimas partidas","Mínimo 20 partidas"])
   assert.ok(page.includes(phrase),phrase);
 });
 test("Expanded public coverage pages through tournaments, tracks limits and preserves standard meta",()=>{
- assert.match(meta,/coverage.*expanded/);
+ assert.match(script,/api\/meta-unified/);
  assert.match(meta,/game=OP&limit=500&page=/);
  assert.match(meta,/expanded\?140:100/);
  assert.match(meta,/eligibleEvents:eligible\.length/);
  assert.match(meta,/truncated:eligible\.length>selected\.length/);
  assert.match(meta,/rateLimited/);
- assert.match(script,/Limitless: orden de salida no disponible/);
+ assert.match(script,/OPlay · 1\.º/);
 });
 test("Production build copies the preparation module and runs its tests",()=>{
  const build=fs.readFileSync(path.join(root,"scripts/vercel-build.sh"),"utf8");

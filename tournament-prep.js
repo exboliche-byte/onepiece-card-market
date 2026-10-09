@@ -50,7 +50,7 @@ function matchRows(d,leader,personal){
  for(const [key,local] of personal.pairs)if(!m.has(key))m.set(key,{key,global:null,local});
  const rows=[...m.values()].map(x=>{
   const games=n(x.global?.games),wins=n(x.global?.wins),localGames=n(x.local.wins)+n(x.local.losses);
-  return {...x,games,percent:games?wins/games:null,localGames,localPercent:localGames?n(x.local.wins)/localGames:null};
+  return {...x,games,percent:games?(Number.isFinite(x.global?.rate)?x.global.rate/100:wins/games):null,localGames,localPercent:localGames?n(x.local.wins)/localGames:null};
  });
  rows.sort((a,b)=>st.sort==="hard"? (a.percent??2)-(b.percent??2)||b.games-a.games:
    st.sort==="easy"?(b.percent??-1)-(a.percent??-1)||b.games-a.games:
@@ -64,13 +64,13 @@ function coverage(d){
  if(st.scope==="community")return '<div class="prep-coverage">Comunidad MiAlbumOnePiece: <b>'+num(d.recordedGames)+' resultados</b> · '+num(d.eligibleTournaments)+
   ' torneos finalizados · '+num(d.contributingUsers)+' participantes. Los cruces con muestra insuficiente se ocultan por privacidad. Nunca se mezclan con Limitless.</div>';
  const incomplete=d.partial||d.truncated||d.rateLimited;
- return '<div class="prep-coverage"><b>Limitless</b> · '+num(d.games)+' partidas con líderes identificados · '+num(d.includedEvents)+' torneos incluidos de '+
+ return '<div class="prep-coverage"><b>Meta combinado · Limitless + OPlayTCG</b> · '+num(d.games)+' partidas de ambas fuentes · '+num(d.simulatorGames)+' en simulador · '+num(d.includedEvents)+' torneos incluidos de '+
   num(d.eligibleEvents)+' encontrados en el período · '+num(d.pagesScanned||1)+' páginas exploradas · Formato '+e(d.formatUsed||"—")+
-  (incomplete?'<p>⚠ <b>Muestra parcial.</b> '+(d.rateLimited?'Limitless ha limitado las peticiones. ':'')+
+  (incomplete?'<p>⚠ <b>Muestra parcial.</b> '+(d.rateLimited?'Limitless ha limitado las peticiones de torneos. ':'')+
    (d.truncated?'Hay más torneos que los procesados. ':'')+'Los porcentajes solo representan los datos incluidos.</p>':
    '<p>Se han procesado todos los torneos encontrados en esta consulta.</p>')+
    (d.formatUsed==="all"?'<p>Se han mezclado varios formatos; es preferible elegir el del torneo al que asistirás.</p>':"")+
-   '<a href="https://play.limitlesstcg.com" target="_blank" rel="noopener noreferrer">Ver fuente ↗</a></div>';
+   '<p>El W/R se calcula ponderando torneos y simulador; los emparejamientos son enfrentamientos reales observados en las fuentes.</p></div>';
 }
 function important(rows){
  const frequent=rows.filter(x=>x.games>=6).sort((a,b)=>b.games-a.games)[0];
@@ -86,13 +86,18 @@ function important(rows){
 function matchRow(r){
  const g=r.global,l=r.local;
  const nFirst=n(l.first.wins)+n(l.first.losses),nSecond=n(l.second.wins)+n(l.second.losses);
- const sourceOrder=st.scope==="global"?"Limitless: orden de salida no disponible":
+ const sourceOrder=st.scope==="global"?
+    (g?.first||g?.second?
+      "OPlay · 1.º "+(g.first?wr(g.first.wins,g.first.losses)+" (n="+num(g.first.games)+")":"—")+
+      " · 2.º "+(g.second?wr(g.second.wins,g.second.losses)+" (n="+num(g.second.games)+")":"—"):
+      "Sin datos verificables de orden de salida frente a este rival"):
    "Comunidad: 1.º "+(g?.first?wr(g.first.wins,g.first.losses)+" (n="+num(g.first.games)+")":"—")+
    " · 2.º "+(g?.second?wr(g.second.wins,g.second.losses)+" (n="+num(g.second.games)+")":"—");
  return '<article class="prep-match">'+picture(r.key,"prep-rival-image")+
  '<div class="prep-rival-name"><b>'+e(name(r.key))+'</b><small>'+e(r.key)+'</small><small>'+
  (r.games>=20?"Muestra amplia":r.games>=6?"Muestra moderada":r.games?"Muestra pequeña":"Solo mis rondas")+'</small></div>'+
- '<div class="prep-numbers"><div><small>Meta · '+num(r.games)+' partidas</small><b>'+wr(g?.wins,g?.losses)+'</b>'+
+ '<div class="prep-numbers"><div><small>Meta combinado · '+num(r.games)+' partidas</small><b>'+
+ (r.percent!==null?(r.percent*100).toLocaleString("es-ES",{maximumFractionDigits:1})+" %":"—")+'</b>'+
  (r.games?'<div class="prep-bar"><i style="width:'+Math.round(r.percent*100)+'%"></i></div>':"")+'</div>'+
  '<div><small>Personal · '+num(r.localGames)+' rondas</small><b>'+wr(l.wins,l.losses)+'</b><small>1.º '+wr(l.first.wins,l.first.losses)+' (n='+num(nFirst)+')'+
  ' · 2.º '+wr(l.second.wins,l.second.losses)+' (n='+num(nSecond)+')</small></div>'+
@@ -101,7 +106,7 @@ function matchRow(r){
 function view(){
  const leader=selected(),d=active(),personal=summarizePersonal(leader,st.days,state.tournaments,state.decks),rows=matchRows(d,leader,personal);
  const opts=leaderOptions(),leaderStat=d?.leaders?.find(x=>id(x.id)===leader),pending=fetchPending(),error=currentError();
- const filters=[["auto","Formato más reciente"],["all","Todos los formatos"],...(st.global?.formats||[]).map(x=>[x,x])];
+ const filters=[["auto","Formato predominante"],["all","Todos los formatos"],...(st.global?.formats||[]).map(x=>[x,x])];
  const eligible=rows.filter(x=>x.games>=st.minimum&&(!st.search||String(name(x.key)+" "+x.key).toLowerCase().includes(st.search.toLowerCase())));
  return '<div class="prep-root"><section class="prep-panel"><div class="prep-selected">'+picture(leader,"prep-leader-main")+
   '<div><b>'+e(name(leader))+'</b><small>'+e(leader)+'</small></div>'+
@@ -116,13 +121,13 @@ function view(){
   '</select></label><label>Formato<select class="field" id="prepFormat"'+(st.scope==="community"?" disabled":"")+'>'+
    filters.map(([k,label])=>'<option value="'+e(k)+'"'+(st.format===k?" selected":"")+'>'+e(label)+'</option>').join("")+
   '</select></label><button class="primary btn" id="prepRefresh"'+(pending?" disabled":"")+'>'+(pending?"Recopilando…":"↻ Actualizar datos")+'</button></div>'+
-  '<div class="prep-sources"><button type="button" class="'+(st.scope==="global"?"selected":"")+'" data-prep-scope="global">🌍 Limitless</button>'+
+  '<div class="prep-sources"><button type="button" class="'+(st.scope==="global"?"selected":"")+'" data-prep-scope="global">🌍 Meta combinado</button>'+
   '<button type="button" class="'+(st.scope==="community"?"selected":"")+'" data-prep-scope="community">👥 Comunidad</button></div>'+
-  '<p class="small">Los datos de comunidad, Limitless y tus torneos se muestran separados; no se mezclan sus muestras.</p></section>'+
+  '<p class="small">Meta y Preparar torneo usan el mismo metajuego combinado. Período y formato filtran los torneos; OPlay utiliza la muestra temporal publicada por su simulador. Tu historial personal se mantiene independiente.</p></section>'+
   (pending?'<div class="notice">Cargando resultados reales de torneos…</div>':"")+
   (error?'<div class="notice">⚠ '+e(error)+'</div>':"")+
   (d?'<div class="prep-stats">'+metric("Partidas públicas de este líder",leaderStat?num(leaderStat.games):"—")+
-    metric("Win rate público del líder",leaderStat?wr(leaderStat.wins,leaderStat.losses):"—")+
+    metric("W/R combinado del líder",leaderStat?num(leaderStat.rate)+" %":"—")+
     metric("Tier global",st.scope==="global"&&leaderStat?leaderStat.tier||"—":"—")+
     metric("Presencia en meta global",st.scope==="global"&&leaderStat?num(leaderStat.share)+" %":"—")+
     metric("Mis torneos en el período",num(personal.events))+
@@ -138,7 +143,7 @@ function view(){
     '<option value="'+k+'"'+(st.sort===k?" selected":"")+'>'+v+'</option>').join("")+'</select>'+
     '<select class="field" id="prepMinimum">'+[[0,"Todas las muestras"],[6,"Mínimo 6 partidas"],[20,"Mínimo 20 partidas"]].map(([k,v])=>
     '<option value="'+k+'"'+(st.minimum===k?" selected":"")+'>'+v+'</option>').join("")+'</select></div>'+
-   '<p class="small">Las muestras pequeñas son orientativas. El W/R público no indica quién salió primero en Limitless.</p>'+
+   '<p class="small">El W/R de los rivales combina ambas fuentes cuando existen cruces reales; el orden de salida procede de OPlayTCG.</p>'+
    (eligible.length?'<div class="prep-match-list">'+eligible.map(matchRow).join("")+'</div>':'<div class="notice">Sin rivales para estos filtros.</div>')+'</section>'+
   '<section class="prep-panel"><div class="prep-title"><h3>Mis últimas partidas</h3><button class="secondary btn" id="prepRecentToggle">'+(st.showRecent?"Ocultar":"Mostrar")+'</button></div>'+
   (st.showRecent?(personal.recent.length?personal.recent.slice(0,12).map(r=>
@@ -154,11 +159,11 @@ async function globalData(force=false){
  if(st.loadingGlobal||(!force&&st.keyGlobal===key))return;
  st.keyGlobal=key;st.loadingGlobal=true;st.errorGlobal="";if(state.tab==="tournaments")renderShell();
  try{
-  const params=new URLSearchParams({days:String(days),format,coverage:"expanded"});
+  const params=new URLSearchParams({days:String(days),format});
   if(force)params.set("refresh","1");
-  const r=await fetch("/api/meta?"+params,{headers:{accept:"application/json"}}),raw=await r.text();
+  const r=await fetch("/api/meta-unified?"+params,{headers:{accept:"application/json"}}),raw=await r.text();
   let d;try{d=JSON.parse(raw)}catch{throw Error("El servidor no devolvió JSON válido (HTTP "+r.status+").")}
-  if(!r.ok)throw Error(d.error||"No se pudo consultar Limitless (HTTP "+r.status+").");
+  if(!r.ok)throw Error(d.error||"No se pudo consultar el meta combinado (HTTP "+r.status+").");
   if(days===st.days&&format===st.format)st.global=d;
  }catch(err){if(days===st.days&&format===st.format){st.errorGlobal=String(err.message||err)}}
  finally{st.loadingGlobal=false;if(state.tab==="tournaments")renderShell()}

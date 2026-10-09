@@ -1,8 +1,8 @@
 name: Verify multi-source Meta and automatic decks
 on:
   push:
-    branches: [feat-meta-visual-deep-coverage-20261009, main]
-    paths: [index.html, meta.js, meta-report.js, api/meta.js, api/meta-comparison.js, scripts/**, .github/workflows/verify-metasources-autosync.yml]
+    branches: [feat-unified-meta-prep-20261009, main]
+    paths: [index.html, meta.js, meta-report.js, api/meta.js, api/meta-unified.js, api/meta-comparison.js, tournament-prep.js, scripts/**, .github/workflows/verify-metasources-autosync.yml]
   workflow_dispatch:
 permissions:
   contents: read
@@ -41,4 +41,24 @@ jobs:
           }));
           if(!response.ok||!Array.isArray(d.leaders)||!d.leaders.length)throw Error('Meta unavailable');
           if(d.eligibleEvents<=24&&d.includedEvents<=24)throw Error('Main competitive format filtered too many events');
+          JS
+
+      - name: Verify combined live leader and matchup metagame
+        run: |
+          node --input-type=module <<'JS'
+          import unified from './api/meta-unified.js';
+          const response=await unified.fetch(new Request('https://example.invalid/api/meta-unified?days=90&format=auto'));
+          const data=await response.json();
+          console.log('UNIFIED_META',JSON.stringify({status:response.status,sources:data.sourcesAvailable,
+           leaders:data.leaders?.length,matchups:data.matchups?.length,
+           matchupsFromSimulator:data.matchups?.filter(x=>x.simulator).length,
+           totalGames:data.games,tournamentGames:data.tournamentGames,simulatorGames:data.simulatorGames,
+           includedEvents:data.includedEvents,partial:data.partial}));
+          if(!response.ok||data.leaders.length<15||
+             !data.matchups.some(x=>x.simulator?.games>0))
+            throw Error('OPlay matchup data unavailable');
+          if(data.sourcesAvailable<2&&!data.partial)
+            throw Error('Provider unavailability must be marked partial');
+          if(data.sourcesAvailable===2&&!data.leaders.some(x=>x.sourcesCount===2))
+            throw Error('Missing leaders merged from both sources');
           JS

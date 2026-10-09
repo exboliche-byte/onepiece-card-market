@@ -17,7 +17,7 @@ test("The W-R matrix is a heatmap of actual tournament matchups",()=>{
  assert.match(meta,/meta-matrix-table/);
  assert.match(meta,/meta-wr-great/);
  assert.match(meta,/x\.games<6/);
- assert.match(meta,/slice\(0,m\.expanded\?28:12\)/);
+ assert.match(meta,/const leaders=d\.leaders,index=pairIndex/);
 });
 test("Turn-order bars show verified OPlay sample counts for both positions",()=>{
  const html='<html><table><tr><td>1</td><td>Sabo OP13-004</td><td>8526</td>'+
