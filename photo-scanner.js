@@ -272,6 +272,8 @@ async function recognizeAdded(region){
  const gen=generation;
  busy=true;tell("Identificando el recorte añadido…");refreshControls();
  try{
+  if(!workerReady)await workerStart();
+  if(!active||gen!==generation)return;
   const ranked=await recognize(region);
   if(!active||gen!==generation)return;
   rows.push(selectedRow(region,ranked));
@@ -347,6 +349,7 @@ async function saveCards(){
 function close(){
  generation++;active=false;busy=false;workerStop();canvas=null;regions=[];rows=[];drag=null;
  $("#photoScanPanel")?.remove();
+ document.querySelector("#photoStyles")?.remove();
 }
 function open(){
  if(active)return;
