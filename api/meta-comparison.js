@@ -29,17 +29,31 @@ export function extractOPlayHtml(html){
     const val=Number(String(cell||"").match(/(\d+(?:[,.]\d+)?)\s*%/)?.[1]?.replace(",","."));
     return Number.isFinite(val)&&val>=0&&val<=100?val:null;
   };
-  // First 'percent' after W-L is the overall rate; subsequent splits are 1st/2nd.
-  // Missing splits stay null and are not inferred.
+  // The page publishes first/second rate AND sample size in distinct table cells.
+  // Reject mismatched sample sizes: they must partition this leader's matches.
   const first=percentage(pctCells[1]),second=percentage(pctCells[2]);
+  const splitCount=cell=>{
+    const suffix=String(cell||"").match(/%\s*(?:±[^\d]*[\d.,]+\s*)?([\d.,]+)\s*$/);
+    return suffix?toInt(suffix[1]):null;
+  };
+  const a=splitCount(pctCells[1]),b=splitCount(pctCells[2]);
+  const splitValid=Number.isInteger(a)&&Number.isInteger(b)&&a+b===games&&a>0&&b>0;
+  const playerCount=Number(cells[wlIndex+1]?.replace(/[^\d]/g,""));
   seen.add(id);
   leaders.push({id,wins,losses,games,rate:Math.round(1000*score)/10,
-    firstRate:first,secondRate:second});
+    firstRate:splitValid?first:null,secondRate:splitValid?second:null,
+    firstGames:splitValid?a:null,secondGames:splitValid?b:null,
+    players:Number.isFinite(playerCount)?playerCount:null});
   if(leaders.length>=100)break;
  }
+ const header=trim(html.slice(0,Math.min(html.length,25000)));
+ const totalMatch=header.match(/([\d.,]+)\s+partidas\s+analizadas/i);
+ const observed=totalMatch?toInt(totalMatch[1]):null;
+ const dateMatch=header.match(/Actualizado\s+el\s+(\d{1,2}\s+de\s+\w+\s+de\s+\d{4})/i);
  return leaders.length?{leaders:leaders.sort((a,b)=>b.games-a.games),
-  games:Math.round(leaders.reduce((sum,l)=>sum+l.games,0)/2),
-  measuredAt:null,kind:"simulator",sample:"Partidas de simulador; estadísticas publicadas de OPlayTCG"}:null;
+  games:observed||Math.round(leaders.reduce((sum,l)=>sum+l.games,0)/2),
+  measuredAt:dateMatch?.[1]||null,kind:"simulator",
+  sample:"Partidas de simulador; estadísticas publicadas de OPlayTCG"}:null;
 }
 export function extractEverythingHtml(html){
  if(typeof html!=="string"||!html.includes("Meta"))return null;

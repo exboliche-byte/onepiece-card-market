@@ -1,5 +1,6 @@
 // Meta de torneos públicos One Piece. Limitless no proporciona quién salió primero.
 const LIMITLESS_API_URL="https://play.limitlesstcg.com/api",cache=new Map(),TTL=20*60*1000;
+const eventCache=new Map(),EVENT_TTL=60*60*1000;
 const bounded=(v,a,b)=>Math.min(b,Math.max(a,Number(v)||a));
 const cardId=c=>{
   const s=String(c?.set||"").trim().toUpperCase().replace(/-$/,""),n=String(c?.number||"").trim();
@@ -17,9 +18,14 @@ async function get(path){
   }finally{clearTimeout(timer)}
 }
 async function eventData(e){
+  const key=String(e.id),cached=eventCache.get(key);
+  if(cached&&Date.now()-cached.at<EVENT_TTL)return cached.value;
   const path="/tournaments/"+encodeURIComponent(e.id);
   const [standings,pairings]=await Promise.all([get(path+"/standings"),get(path+"/pairings")]);
-  return {standings,pairings};
+  const value={standings,pairings};
+  eventCache.set(key,{at:Date.now(),value});
+  if(eventCache.size>250)eventCache.delete(eventCache.keys().next().value);
+  return value;
 }
 function aggregate(entries){
   const leaders=new Map(),matchups=new Map();let games=0;
@@ -64,7 +70,7 @@ export default {async fetch(request){
     const now=Date.now();
     const earliest=now-days*86400000;
     // Collect more event pages for the prep report; standard Meta stays lightweight.
-    const events=[],maxPages=expanded?5:1;
+    const events=[],maxPages=expanded?5:3;
     let pagesScanned=0,listingPartial=false;
     for(let page=1;page<=maxPages;page++){
       let batch;
@@ -78,14 +84,25 @@ export default {async fetch(request){
       .filter(x=>x?.id&&Number(x.players)>=16&&Number.isFinite(Date.parse(x.date))&&Date.parse(x.date)>=earliest&&Date.parse(x.date)<=now+86400000)
       .sort((a,b)=>Date.parse(b.date)-Date.parse(a.date));
     const formats=[...new Set(tournaments.map(t=>String(t.format||"")).filter(Boolean))];
-    const chosen=format==="all"?"all":format==="auto"?String(tournaments[0]?.format||""):format;
-    const eligible=tournaments.filter(x=>chosen==="all"||String(x.format||"")===chosen);
-    const cap=expanded?80:24;
+    // API events often omit format; choosing the first nonempty label picked
+    // rare EXTRA events and excluded nearly the entire competitive field.
+    const byFormat=new Map();
+    for(const t of tournaments){
+      const key=String(t.format||"");
+      byFormat.set(key,(byFormat.get(key)||0)+1);
+    }
+    const dominant=[...byFormat].sort((a,b)=>b[1]-a[1])[0]?.[0]??"";
+    const chosen=format==="all"?"all":format==="auto"?(dominant||"unknown"):format;
+    const eligible=tournaments.filter(x=>chosen==="all"||
+      String(x.format||"")=== (chosen==="unknown"?"":chosen));
+    // A 24-event limit hid most of the 90-day field. Scan broadly but stop
+    // safely when the upstream API rate-limits or the function approaches its deadline.
+    const cap=expanded?140:100;
     const selected=eligible.slice(0,cap);
     const collected=[];let consulted=0,partial=listingPartial,rateLimited=false;
-    const deadline=Date.now()+(expanded?35000:22000);
-    for(let i=0;i<selected.length;i+=4){
-      const batch=await Promise.allSettled(selected.slice(i,i+4).map(eventData));
+    const deadline=Date.now()+(expanded?48000:42000);
+    for(let i=0;i<selected.length;i+=5){
+      const batch=await Promise.allSettled(selected.slice(i,i+5).map(eventData));
       for(const item of batch){
         consulted++;
         if(item.status==="fulfilled")collected.push(item.value);
@@ -97,6 +114,7 @@ export default {async fetch(request){
       days,formatUsed:chosen||"unknown",formats,
       eligibleEvents:eligible.length,scannedEvents:consulted,includedEvents:collected.length,
       coverageLimit:cap,pagesScanned,listingPartial,
+       coverageComplete:!partial&&!listingPartial&&eligible.length<=selected.length&&consulted===selected.length,
       truncated:eligible.length>selected.length||consulted<selected.length||listingPartial,
       partial,rateLimited,
       firstSecondAvailable:false,...aggregate(collected)};
