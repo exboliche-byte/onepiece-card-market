@@ -1919,33 +1919,26 @@ async function replaceCollectionFromCSV(imported){
   if(!collectionRequireLogin())return false;
   const userId=state.user.id;
   collectionBulkBusy=true;
-  const wanted=new Map([...imported.entries()].filter(([,q])=>Number(q)>0).map(([id,q])=>[id,Math.min(99,Math.round(Number(q)))]));
-  const previousIds=Object.keys(state.owned);
+  const wanted=Object.fromEntries([...imported.entries()].filter(([,q])=>Number(q)>0)
+    .map(([id,q])=>[id,Math.min(99,Math.round(Number(q)))]));
   try{
     await Promise.all([...collectionWrites.values()]);
     if(state.user?.id!==userId)throw Error("Has cambiado de cuenta durante la importación");
-    const rows=[...wanted].map(([card_id,quantity])=>({user_id:userId,card_id,quantity,updated_at:new Date().toISOString()}));
-    // Write new quantities first; do not delete old inventory if the upload fails.
-    for(let i=0;i<rows.length;i+=100){
-      const up=await state.sb.from("collection_items").upsert(rows.slice(i,i+100),{onConflict:"user_id,card_id"}).select("card_id,quantity");
-      if(up.error)throw up.error;
-      if((up.data||[]).length!==rows.slice(i,i+100).length)throw Error("El servidor no confirmó todas las filas del CSV");
-    }
-    const removed=previousIds.filter(id=>!wanted.has(id));
-    for(let i=0;i<removed.length;i+=100){
-      const del=await state.sb.from("collection_items").delete().eq("user_id",userId).in("card_id",removed.slice(i,i+100));
-      if(del.error)throw del.error;
-    }
-    const loaded=await loadCollectionFromCloud(userId);
-    if(!loaded)throw Error("No se pudo verificar la colección importada");
-    if(Object.keys(state.owned).length!==wanted.size||[...wanted].some(([id,q])=>qty(id)!==q))
-      throw Error("La colección en Supabase no coincide con el CSV; revisa los cambios antes de repetir");
+    // A single Supabase transaction validates all print IDs and replaces the whole collection.
+    // A rejected RPC changes zero rows.
+    const saved=await state.sb.rpc("collection_replace_atomic",{p_cards:wanted});
+    if(saved.error)throw saved.error;
+    if(state.user?.id!==userId)return false;
+    if(!await loadCollectionFromCloud(userId))throw Error("Importación completada, pero no se pudo comprobar la colección");
+    if(Object.keys(state.owned).length!==Object.keys(wanted).length||
+      Object.entries(wanted).some(([id,q])=>qty(id)!==q))
+      throw Error("La colección leída no coincide con el CSV. Revisa antes de reintentar.");
     return true;
-  }catch(e){
-    console.warn("Importación en Supabase fallida",e);
+  }catch(error){
+    console.warn("Falló la importación transaccional",error);
     if(state.user?.id===userId){
-      await loadCollectionFromCloud(userId); // show only what's actually on the server
-      notify("Importación incompleta en Supabase. Revisa tu colección antes de reintentar.");
+      await loadCollectionFromCloud(userId);
+      notify("No se completó la importación. Comprueba tu colección.");
     }
     return false;
   }finally{
@@ -1953,6 +1946,7 @@ async function replaceCollectionFromCSV(imported){
     if(state.user?.id===userId)renderShell();
   }
 }
+
 
 function deckCardTotal(d){return Object.values(d?.cards||{}).reduce((s,n)=>s+Number(n||0),0)}
 function addDeckCardToCollection(id){
@@ -2868,23 +2862,66 @@ function writeCollection(id,nextValue){
   return write;
 }
 function syncOne(id,n){return writeCollection(id,n)}
-async function syncDeck(d){
-  if(d?.draftCompetitive)return false;
-  if(!state.sb||!state.user||!d)return false;
-  try{
-    d.owner_id=state.user.id;d.updatedAt=d.updatedAt||new Date().toISOString();
-    const meta=await state.sb.from("decks").upsert({id:d.id,user_id:state.user.id,name:d.name,leader_card_id:d.leader||null,description:d.description||null,colors:d.colors||[],updated_at:d.updatedAt},{onConflict:"id"});
-    if(meta.error)throw meta.error;
-    const del=await state.sb.from("deck_cards").delete().eq("deck_id",d.id);if(del.error)throw del.error;
-    const rows=Object.entries(d.cards||{}).map(([card_id,quantity])=>({deck_id:d.id,card_id,quantity:Number(quantity)}));
-    if(rows.length){const ins=await state.sb.from("deck_cards").insert(rows);if(ins.error)throw ins.error}
+const deckSyncWrites=new Map();
+const deckSyncErrors=new Map();
+function deckSyncStatusView(){
+  if(!state.user)return "";
+  const error=deckSyncErrors.size?[...deckSyncErrors.values()][0]:"";
+  return '<p id="deckCloudStatus" class="small deck-cloud-status" role="status" aria-live="polite">'+
+    esc(error?"⚠ "+error:deckSyncWrites.size?"Guardando mazos en Supabase…":"✓ Mazos sincronizados")+'</p>';
+}
+function updateDeckSyncStatus(){
+  const status=document.getElementById("deckCloudStatus");if(!status)return;
+  const error=deckSyncErrors.size?[...deckSyncErrors.values()][0]:"";
+  status.textContent=error?"⚠ "+error:deckSyncWrites.size?"Guardando mazos en Supabase…":"✓ Mazos sincronizados";
+}
+function syncDeck(d){
+  if(d?.draftCompetitive||!state.sb||!state.user||!d)return Promise.resolve(false);
+  const userId=state.user.id,id=d.id,client=state.sb;
+  const snapshot={
+    p_deck_id:id,p_name:d.name,p_leader:d.leader||"",p_description:d.description||"",
+    p_colors:d.colors||[],p_cards:{...(d.cards||{})},
+    p_updated_at:d.updatedAt||new Date().toISOString()
+  };
+  const prior=deckSyncWrites.get(id)||Promise.resolve();
+  const operation=prior.catch(()=>{}).then(async()=>{
+    if(state.user?.id!==userId)return false;
+    const response=await client.rpc("deck_save_atomic",snapshot);
+    if(response.error)throw response.error;
+    deckSyncErrors.delete(id);
     return true;
-  }catch(e){console.warn("deck sync",e);return false}
+  }).catch(error=>{
+    if(state.user?.id===userId){
+      deckSyncErrors.set(id,"Mazo sin sincronizar: "+String(error?.message||error));
+      notify("No se pudo guardar en Supabase. Se conserva el mazo local.");
+    }
+    console.warn("Guardado atómico de mazo",error);
+    return false;
+  }).finally(()=>{
+    if(deckSyncWrites.get(id)===operation)deckSyncWrites.delete(id);
+    updateDeckSyncStatus();
+  });
+  deckSyncWrites.set(id,operation);
+  updateDeckSyncStatus();
+  return operation;
 }
 async function syncDeckDelete(id){
-  if(!state.sb||!state.user)return;
-  try{const r=await state.sb.from("decks").delete().eq("id",id).eq("user_id",state.user.id);if(r.error)throw r.error}catch(e){console.warn("deck delete",e)}
+  if(!state.sb||!state.user)return false;
+  const userId=state.user.id,client=state.sb;
+  try{
+    await (deckSyncWrites.get(id)||Promise.resolve());
+    if(state.user?.id!==userId)return false;
+    const result=await client.rpc("deck_delete_atomic",{p_deck_id:id});
+    if(result.error)throw result.error;
+    deckSyncErrors.delete(id);updateDeckSyncStatus();
+    return true;
+  }catch(error){
+    console.warn("No se pudo borrar el mazo",error);
+    if(state.user?.id===userId)notify("No se ha borrado el mazo de Supabase.");
+    return false;
+  }
 }
+
 // Server state is authoritative for untouched cards; pending local edits always win.
 // In particular a deleted card must NEVER return from an older remote/legacy snapshot.
 let collectionLoadId=0;
