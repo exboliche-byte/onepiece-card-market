@@ -54,7 +54,11 @@ jobs:
            matchupsFromSimulator:data.matchups?.filter(x=>x.simulator).length,
            totalGames:data.games,tournamentGames:data.tournamentGames,simulatorGames:data.simulatorGames,
            includedEvents:data.includedEvents,partial:data.partial}));
-          if(!response.ok||data.sourcesAvailable!==2||data.leaders.length<15||
+          if(!response.ok||data.leaders.length<15||
              !data.matchups.some(x=>x.simulator?.games>0))
-            throw Error('Expected combined leader and OPlay matchup data');
+            throw Error('OPlay matchup data unavailable');
+          if(data.sourcesAvailable<2&&!data.partial)
+            throw Error('Provider unavailability must be marked partial');
+          if(data.sourcesAvailable===2&&!data.leaders.some(x=>x.sourcesCount===2))
+            throw Error('Missing leaders merged from both sources');
           JS
