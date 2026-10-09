@@ -87,20 +87,30 @@ function tiers(d){
 }
 
 const pairIndex=d=>new Map(d.matchups.map(x=>[x.leader+"|"+x.opponent,x]));
-function coloredCell(x){
-  if(!x||x.games<6)return '<td class="meta-no" title="Muestra insuficiente">—</td>';
-  const v=100*x.wins/x.games;
-  return '<td class="'+(v>=55?"meta-win":v<=45?"meta-loss":"meta-mid")+'" title="'+integer(x.games)+' partidas">'+rate(x.wins,x.losses)+'<small>n='+integer(x.games)+'</small></td>';
+
+function coloredCell(x,a,b){
+ if(a===b)return '<td class="meta-wr-diagonal">·</td>';
+ if(!x||x.games<6)return '<td class="meta-no" title="Muestra insuficiente (<6)">—</td>';
+ const v=100*x.wins/x.games;
+ const cls=v>=65?"meta-wr-great":v>=55?"meta-wr-good":v>45?"meta-wr-even":v>35?"meta-wr-bad":"meta-wr-poor";
+ return '<td class="meta-wr-cell '+cls+'" title="'+esc(name(a))+' vs '+esc(name(b))+' · '+x.wins+' victorias, '+x.losses+' derrotas">'+
+  '<b>'+rate(x.wins,x.losses)+'</b><small>'+integer(x.games)+' partidas</small></td>';
 }
 function matrix(d){
-  const leaders=d.leaders.slice(0,m.expanded?26:12),index=pairIndex(d);
-  if(!d.matchups.length)return '<div class="notice">No hay enfrentamientos públicos con muestra suficiente.</div>';
-  return '<p class="small">Filas: tu líder. Columnas: rival. Verde: favorable. Rojo: desfavorable. Amarillo: equilibrado. —: menos de 6 resultados.</p>'+
-    '<div class="meta-scroller"><table class="meta-table"><thead><tr><th>Tu líder / Rival</th>'+
-    leaders.map(x=>'<th>'+esc(name(x.id))+'<small>'+esc(x.id)+'</small></th>').join("")+'</tr></thead><tbody>'+
-    leaders.map(a=>'<tr><td>'+esc(name(a.id))+'<small>'+esc(a.id)+'</small></td>'+leaders.map(b=>coloredCell(index.get(a.id+"|"+b.id))).join("")+'</tr>').join("")+
-    '</tbody></table></div><button class="secondary btn" id="metaExpand" style="margin-top:10px">'+(m.expanded?"Mostrar principales":"Más líderes en la matriz")+'</button>';
+ const leaders=d.leaders.slice(0,m.expanded?28:12),index=pairIndex(d);
+ if(!d.matchups.length)return '<div class="notice">Sin suficientes enfrentamientos para la matriz.</div>';
+ const avatar=id=>'<span class="meta-matrix-avatar">'+art(id)+'</span>';
+ const legend='<div class="meta-wr-legend"><span class="meta-wr-great">≥65%</span><span class="meta-wr-good">55–65%</span>'+
+   '<span class="meta-wr-even">45–55%</span><span class="meta-wr-bad">35–45%</span><span class="meta-wr-poor">≤35%</span></div>';
+ return '<p class="small">🏆 W/R de torneos Limitless · filas: tu líder · columnas: rival · mínimo 6 partidas por casilla.</p>'+legend+
+  '<div class="meta-scroller meta-matrix-scroll"><table class="meta-table meta-matrix-table"><thead><tr>'+
+   '<th>Tu líder ↓ / Rival →</th>'+leaders.map(x=>'<th>'+avatar(x.id)+'<small>'+esc(name(x.id))+'</small></th>').join("")+
+   '</tr></thead><tbody>'+leaders.map(a=>'<tr><td>'+avatar(a.id)+'<strong>'+esc(name(a.id))+'</strong><small>'+esc(a.id)+'</small></td>'+
+    leaders.map(b=>coloredCell(index.get(a.id+"|"+b.id),a.id,b.id)).join("")+'</tr>').join("")+
+   '</tbody></table></div><button class="secondary btn" id="metaExpand" style="margin-top:12px">'+
+   (m.expanded?"Mostrar 12 líderes":"Ampliar a "+Math.min(28,d.leaders.length)+" líderes")+'</button>';
 }
+
 function matchupTable(d){
   const selected=d.leaders.some(x=>x.id===m.leader)?m.leader:d.leaders[0]?.id||"";
   if(!selected)return '<div class="notice">No hay partidas suficientes para comparar líderes.</div>';
