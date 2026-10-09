@@ -9,6 +9,7 @@
 <link rel="apple-touch-icon" href="/icon-192.png">
 <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
 <link rel="stylesheet" href="/deck-lab.css">
+<link rel="stylesheet" href="/deck-physical.css">
 <link rel="stylesheet" href="/search-clear.css">
 <title>MiAlbumOnePiece</title>
 <style>
@@ -1750,12 +1751,13 @@ function deckLibraryView(){
       
       '<div class="section center"><h2>Inicia sesión para gestionar tus mazos</h2><p class="muted">La búsqueda puede consultarse sin cuenta; para importar o guardar necesitas iniciar sesión.</p><button class="primary btn" id="deckAccountBtn2">Entrar o crear cuenta</button></div></div>';
   }
-  const savedDecks=state.decks.filter(d=>!d?.draftCompetitive);const tiles=savedDecks.map(d=>{const l=card(d.leader),v=deckValidate(d);return '<div class="setcard decktile"><button type="button" class="deck-tile-open" style="width:100%;background:transparent;border:0;color:inherit;text-align:left;cursor:pointer" data-open-deck="'+esc(d.id)+'">'+(l?cardImg(l,"deckleader"):'<div class="deckleader fallback" style="display:grid">Sin líder</div>')+'<div class="decktilebody"><b>'+esc(d.name)+'</b>'+(d.description?'<div class="small" style="white-space:pre-wrap;overflow-wrap:anywhere;margin:5px 0 7px">'+esc(d.description)+'</div>':'')+'<div class="small">'+v.total+'/50 cartas · '+deckUniqueCount(d)+' diferentes · '+(d.leader?"1 líder":"sin líder")+'</div><div class="small">'+(v.valid?"✓ Legal":"⚠ No legal")+' · Valor '+money(deckTotalValue(d))+' · te faltan '+money(deckMissingCost(d))+'</div></button></div>'}).join("");
+  const savedDecks=state.decks.filter(d=>!d?.draftCompetitive);const tiles=savedDecks.map(d=>{const l=card(d.leader),v=deckValidate(d);return '<div class="setcard decktile"><button type="button" class="deck-tile-open" style="width:100%;background:transparent;border:0;color:inherit;text-align:left;cursor:pointer" data-open-deck="'+esc(d.id)+'">'+(l?cardImg(l,"deckleader"):'<div class="deckleader fallback" style="display:grid">Sin líder</div>')+'<div class="decktilebody"><b>'+esc(d.name)+'</b>'+(d.description?'<div class="small" style="white-space:pre-wrap;overflow-wrap:anywhere;margin:5px 0 7px">'+esc(d.description)+'</div>':'')+'<div class="small">'+v.total+'/50 cartas · '+deckUniqueCount(d)+' diferentes · '+(d.leader?"1 líder":"sin líder")+'</div><div class="small">'+(v.valid?"✓ Legal":"⚠ No legal")+' · Valor '+money(deckTotalValue(d))+' · te faltan '+money(deckMissingCost(d))+'</div>'+(window.DeckPhysical?.statusMark?.(d)||'')+'</button></div>'}).join("");
   return '<div class="wrap"><div class="hero"><div><h1>Mazos</h1><p>Tus mazos sincronizados con '+esc(state.user.email||"tu cuenta")+'.</p></div><button class="secondary btn" id="importDeckBtn">Importar lista</button></div>'+
     '<div class="deck-actions"><button class="deck-action" id="newDeck"><b>＋ Crear</b><span>Construye un mazo desde cero eligiendo líder y cartas.</span></button><button class="deck-action" id="findCompetitiveDecks"><b>🏆 Buscar</b><span>Busca mazos por líder o por carta.</span></button><button class="deck-action" id="openDeckCompletion" type="button" aria-label="Abrir Descubrir mazos"><b>🃏 Descubrir</b><span>Encuentra mazos con tus cartas.</span></button></div>'+
     deckSyncStatusView()+
     '<div class="sectionhead deck-library-heading"><h2>Mis mazos</h2><div class="deck-library-heading-actions">'+
-    (savedDecks.length?'<button type="button" class="secondary btn" id="compareLibraryDecks">⇄ Comparar</button>':'')+
+    '<button type="button" class="secondary btn" data-physical-open="">📍 Copias</button>'+ 
+     (savedDecks.length?'<button type="button" class="secondary btn" id="compareLibraryDecks">⇄ Comparar</button>':'')+
     '<span class="small">'+savedDecks.length+' guardado(s)</span></div></div>'+
     (tiles?'<div class="decklibrary">'+tiles+'</div>':'<div class="section center"><h2>Aún no tienes mazos</h2><p class="muted">Puedes crear uno desde cero o importar una lista competitiva.</p></div>')+'</div>';
 }
@@ -1780,13 +1782,14 @@ function decksView(){
       '<button class="secondary btn" id="shareDeck">📸 Compartir mazo (JPG)</button></div>'+
       '<div class="deck-menu-group">'+proxyButton+'</div>'+
       '<div class="deck-menu-group">'+cardmarketButton+'</div>'+
-      '<div class="deck-menu-group"><button class="secondary btn" id="editDeckMeta">Editar nombre y descripción</button>'+
+      '<div class="deck-menu-group"><button class="secondary btn" type="button" data-physical-open="'+esc(d.id)+'">📍 Gestionar copias</button>'+ 
+       '<button class="secondary btn" id="editDeckMeta">Editar nombre y descripción</button>'+
       '<button class="danger btn" id="deleteDeck">Eliminar mazo</button></div>';
   const hero='<div class="deck-compact-hero">'+
     '<div class="deck-compact-title"><button class="linkbtn" id="'+(draft?'backCompetitiveResults':'backDecks')+'">← '+(state.deckPreviewOrigin==="deck-completion"?'Volver a mazos que puedo completar':draft?'Volver a resultados':state.deckPreviewOrigin==="card-search"?'Volver a búsqueda por carta':'Mis mazos')+'</button><h1>'+esc(d.name)+'</h1></div>'+
     '<details class="deck-action-menu" id="deckActionsMenu"><summary class="secondary btn" aria-label="Mostrar acciones del mazo">⋯ Acciones</summary><div class="deck-action-menu-panel">'+deckActions+'</div></details></div>'+
     (draft?'<div class="deck-draft-save"><button class="primary btn" id="saveCompetitiveDraft">Guardar en mis mazos</button></div>':'');
-  const deckStats='<details class="deck-stats-toggle"><summary>'+
+  const deckStats=(draft?'':(window.DeckPhysical?.statusMark?.(d)||''))+'<details class="deck-stats-toggle"><summary>'+
     '<span class="deck-stats-badge">'+v.total+'/50 cartas</span>'+
     '<span class="deck-stats-badge '+(v.valid?'valid':'invalid')+'">'+(v.valid?'✓ Mazo válido':'⚠ Mazo no válido')+'</span>'+
     '<span class="deck-stats-expand">Precio y detalles</span></summary>'+
@@ -2093,6 +2096,7 @@ async function clearAllDecks(){
     if(check.data?.length)throw Error("Aún quedan mazos en Supabase.");
     if(state.user?.id!==userId)return;
     state.decks=[];state.deckId=null;state.deckLibrary=true;state.deckChoosingLeader=false;
+    void window.DeckPhysical?.clearDeleted?.();
     saveLocal();renderShell();
     notify("Todos tus mazos han sido eliminados de Supabase.");
   }catch(error){
@@ -2952,6 +2956,7 @@ function navigateApp(mutator){
   window.scrollTo({top:0,behavior:"auto"});
 }
 function bindShell(){
+  window.DeckPhysical?.bind?.();
   $("#deckDiscoveryComplete")?.addEventListener("click",()=>window.OnePieceTools?.setDeckMode?.("complete"));
   $("#deckDiscoveryMine")?.addEventListener("click",()=>window.OnePieceTools?.setDeckMode?.("mine"));
   $("#deckCompletionBack")?.addEventListener("click",()=>navigateApp(()=>{
@@ -3153,6 +3158,7 @@ function bindShell(){
       if(!removed){if(button){button.disabled=false;button.textContent="Eliminar mazo"}return}
       if(state.user?.id!==userId)return;
       state.decks=state.decks.filter(x=>x.id!==id);
+      void window.DeckPhysical?.forgetDeleted?.(id);
       state.deckId=null;state.deckLibrary=true;state.deckDiscover=false;state.deckPreviewOrigin="";
       saveLocal();replaceAppHistory();renderShell();notify("Mazo eliminado correctamente");
     });
@@ -4500,6 +4506,7 @@ window.addEventListener("popstate",e=>{
 });
 }boot();
 </script>
+<script src="/deck-physical.js"></script>
 <script src="/pwa.js"></script>
 <script src="/deck-lab.js"></script>
 <script src="/modal-accessibility.js"></script>
