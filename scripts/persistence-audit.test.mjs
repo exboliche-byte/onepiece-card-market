@@ -33,7 +33,7 @@ test("cloud refresh excludes deletion tombstones",()=>{
 });
 test("general-purpose proxies remains a separate navigation entry",()=>{
  assert.match(html,/\["proxies","Proxies"\]/);
- assert.match(html,/\["CREAR",\["proxies"\]\]/);
+ assert.match(html,/\["HERRAMIENTAS",\["proxies","scanner"\]\]/);
  assert.match(html,/state\.tab==="proxies"/);
 });
 test("scanner undo restores confirmed exact-print quantity",()=>{
