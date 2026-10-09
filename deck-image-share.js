@@ -333,14 +333,24 @@ async function makeJpg(deck,entries,onProgress,publicUrl){
     try{drawCard(ctx,entries[i],artworks[i],i)}
     finally{artworks[i]?.close?.()}
   }
-  drawDeckQRCode(ctx,publicUrl);
   ctx.textAlign="left";ctx.fillStyle="#ffffff";
-  ctx.font="800 31px system-ui,sans-serif";
-  ctx.fillText("ESCANEA EL QR PARA VER EL MAZO",MARGIN,canvas.height-133);
-  ctx.font="600 21px system-ui,sans-serif";
-  ctx.fillText("La lista completa está disponible en MiAlbumOnePiece",MARGIN,canvas.height-94);
-  ctx.font="600 18px system-ui,sans-serif";
-  ctx.fillText(clipText(ctx,publicUrl,WIDTH-590),MARGIN,canvas.height-56);
+  if(publicUrl){
+    drawDeckQRCode(ctx,publicUrl);
+    ctx.font="800 31px system-ui,sans-serif";
+    ctx.fillText("ESCANEA EL QR PARA VER EL MAZO",MARGIN,canvas.height-133);
+    ctx.font="600 21px system-ui,sans-serif";
+    ctx.fillText("La lista completa está disponible en MiAlbumOnePiece",MARGIN,canvas.height-94);
+    ctx.font="600 18px system-ui,sans-serif";
+    ctx.fillText(clipText(ctx,publicUrl,WIDTH-590),MARGIN,canvas.height-56);
+  }else{
+    // A preview has no public page: never create a misleading QR or upload the draft.
+    ctx.font="800 31px system-ui,sans-serif";
+    ctx.fillText("MAZO SIN GUARDAR · VISTA PREVIA",MARGIN,canvas.height-133);
+    ctx.font="600 23px system-ui,sans-serif";
+    ctx.fillText("Comparte esta imagen sin publicar ni guardar la lista",MARGIN,canvas.height-91);
+    ctx.font="600 18px system-ui,sans-serif";
+    ctx.fillText("MiAlbumOnePiece",MARGIN,canvas.height-54);
+  }
   const blob=await new Promise((resolve,reject)=>canvas.toBlob(b=>b?resolve(b):reject(Error("No se pudo convertir el mazo a JPG.")),"image/jpeg",.9));
   return {file:new File([blob],"mazo-"+cleanFilename(deck.name)+".jpg",{type:"image/jpeg"}),missing};
 }
@@ -354,18 +364,18 @@ function closePreview(){
   previewModal?.remove();previewModal=null;
   if(previewUrl){URL.revokeObjectURL(previewUrl);previewUrl=null}
 }
-function showPreview(deck){
+function showPreview(deck,{hasPublicLink=true}={}){
   closePreview();
   const dialog=document.createElement("div");
   dialog.className="modalback deck-share-modal";
   dialog.innerHTML='<div class="deck-share-dialog" role="dialog" aria-modal="true" aria-label="Compartir mazo en JPG">'+
     '<div class="sectionhead"><h2 style="margin:0">Compartir mazo (JPG)</h2><button class="close" data-jpg-close aria-label="Cerrar">×</button></div>'+
-    '<p class="small">Imagen del mazo con el líder, las versiones exactas y las cantidades, lista para WhatsApp.</p>'+
+    '<p class="small">Imagen del mazo con el líder, las versiones exactas y las cantidades, lista para WhatsApp.'+(hasPublicLink?' Incluye un QR con su enlace público.':' No necesitas guardar ni publicar este mazo.')+'</p>'+
     '<p class="deck-share-status" id="jpgShareStatus" aria-live="polite">Preparando imágenes…</p>'+
     '<img class="deck-share-preview" id="jpgSharePreview" alt="Vista previa del mazo en formato JPG" hidden>'+
     '<div class="deck-share-buttons"><button id="shareDeckJpgFile" class="primary btn" disabled>📤 Compartir JPG</button>'+
     '<button id="downloadDeckJpgFile" class="secondary btn" disabled>⬇ Guardar JPG</button>'+
-    '<button id="copyDeckPublicLink" class="secondary btn" disabled>🔗 Copiar enlace al mazo</button></div></div>';
+    (hasPublicLink?'<button id="copyDeckPublicLink" class="secondary btn" disabled>🔗 Copiar enlace al mazo</button>':'')+'</div></div>';
   document.body.appendChild(dialog);
   previewModal=dialog;
   dialog.querySelector("[data-jpg-close]").onclick=()=>closePreview();
@@ -376,20 +386,26 @@ function showPreview(deck){
 }
 async function open(deck){
   if(busy)return;
+  // Snapshot what the user is seeing: the image must not change if they edit while loading.
+  const current={...deck,cards:{...(deck?.cards||{})},colors:[...(deck?.colors||[])]};
+  const draft=!!current.draftCompetitive;
   let entries;
-  try{entries=entriesForDeck(deck)}
+  try{entries=entriesForDeck(current)}
   catch(e){notify(e.message);return}
-  const ui=showPreview(deck);
+  const ui=showPreview(current,{hasPublicLink:!draft});
   busy=true;
   try{
-    ui.status.textContent="Preparando el enlace público del mazo…";
-    if(typeof window.preparePublicDeckShare!=="function")throw Error("Compartir mazos todavía no está disponible.");
-    const publicUrl=await window.preparePublicDeckShare(deck);
-    if(!publicUrl)throw Error("No se ha creado el enlace público.");
-    const signature=JSON.stringify([deck.name,deck.description,deck.leader,Object.entries(deck.cards||{}).sort(),publicUrl]);
+    ui.status.textContent=draft?"Generando JPG sin guardar el mazo…":"Preparando el enlace público del mazo…";
+    let publicUrl=null;
+    if(!draft){
+      if(typeof window.preparePublicDeckShare!=="function")throw Error("Compartir mazos todavía no está disponible.");
+      publicUrl=await window.preparePublicDeckShare(current);
+      if(!publicUrl)throw Error("No se ha creado el enlace público.");
+    }
+    const signature=JSON.stringify([current.name,current.description,current.leader,Object.entries(current.cards||{}).sort(),publicUrl]);
     let result=cache.get(signature);
     if(!result){
-      result=await makeJpg(deck,entries,(done,total)=>{
+      result=await makeJpg(current,entries,(done,total)=>{
         if(previewModal===ui.dialog)ui.status.textContent="Preparando cartas "+done+"/"+total+"…";
       },publicUrl);
       cache.set(signature,result);
@@ -405,7 +421,7 @@ async function open(deck){
       :"Imagen JPG lista · "+entries.length+" impresiones · "+(file.size/1024/1024).toFixed(1)+" MB.";
     ui.share.disabled=false;ui.download.disabled=false;
     const copyLink=ui.dialog.querySelector("#copyDeckPublicLink");
-    if(copyLink){
+    if(copyLink&&publicUrl){
       copyLink.disabled=false;
       copyLink.onclick=async()=>{
         try{await navigator.clipboard.writeText(publicUrl);ui.status.textContent="Enlace del mazo copiado."}
@@ -419,7 +435,7 @@ async function open(deck){
         alert("Este navegador no permite compartir JPG directamente. Hemos guardado el archivo: envíalo desde WhatsApp como foto o documento.");
         return;
       }
-      try{await navigator.share({files:[file],title:deck.name})}
+      try{await navigator.share({files:[file],title:current.name})}
       catch(e){
         if(e?.name==="AbortError")return;
         if(e?.name==="NotAllowedError"){ui.status.textContent="Pulsa «Compartir JPG» otra vez; la imagen ya está lista.";return}
