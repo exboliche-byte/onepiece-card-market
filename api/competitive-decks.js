@@ -1,3 +1,4 @@
+import {getLegalityRules,deckPlayable} from "./standard-legality.js";
 const LIMITLESS_API="https://play.limitlesstcg.com/api";
 const GAME="OP";
 const INDEX_LIMIT=500;
@@ -101,14 +102,14 @@ function qualityLabel(placing,players){
   if(players&&placing/players<=0.1)return "Top 10%";
   return "Buen resultado";
 }
-function toResult(event,row,leader){
+function toResult(event,row,leader,rules){
   const decklist=row?.decklist;
   if(!decklist||typeof decklist!=="object")return null;
   const leaderId=cardIdOf(decklist.leader);
   if(leader!=="all"&&leaderId!==leader)return null;
   const cards=deckCards(decklist);
   const mainCount=Object.values(cards).reduce((s,n)=>s+Number(n||0),0);
-  if(mainCount<1)return null;
+  if(mainCount!==50||!deckPlayable(leaderId,cards,rules))return null;
   const placing=Math.max(1,int(row.placing)||9999);
   const players=Math.max(0,int(event.players));
   const rec=row.record||{};
@@ -161,7 +162,7 @@ export default {
       const minPlayers=clamp(int(url.searchParams.get("minPlayers"))||32,4,512);
       const limit=clamp(int(url.searchParams.get("limit"))||20,1,leader==="all"?120:30);
       const cutoff=Date.now()-days*86400000;
-      const index=await tournamentIndex();
+      const [index,rules]=await Promise.all([tournamentIndex(),getLegalityRules()]);
       const events=index
         .filter(t=>t&&t.id)
         .filter(t=>int(t.players)>=minPlayers)
@@ -190,7 +191,7 @@ export default {
         for(const entry of settled){
           scanned++;
           for(const row of entry.rows){
-            const result=toResult(entry.event,row,leader);
+            const result=toResult(entry.event,row,leader,rules);
             if(result)found.push(result);
           }
         }

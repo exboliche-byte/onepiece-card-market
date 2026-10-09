@@ -1,3 +1,4 @@
+import {getLegalityRules,sanitizeMeta} from "./standard-legality.js";
 // Independent, clearly separated metagame datasets; never pool simulator and tournament samples.
 const TTL=60*60*1000, memory=new Map();
 const trim=x=>String(x||"").replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi," ")
@@ -123,9 +124,11 @@ export default {async fetch(request){
  const cacheKey="independent";
  const cached=memory.get(cacheKey);
  if(!refresh&&cached&&Date.now()-cached.at<TTL)return json(cached.value);
+ const rules=await getLegalityRules();
  const results=await Promise.all(SOURCES.map(async source=>{
   try{
-   const data=source.extract(await getHtml(source.url));
+   const raw=source.extract(await getHtml(source.url));
+   const data=source.id==="oplay"&&raw?sanitizeMeta(raw,rules):raw;
    if(!data)throw Error("No se encontró una tabla verificable");
    return {id:source.id,name:source.name,url:source.url,status:"ok",fetchedAt:new Date().toISOString(),...data};
   }catch(error){

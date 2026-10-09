@@ -3,6 +3,7 @@
 // sample-size pooling: simulator volume must not drown out tournament outcomes.
 import tournamentApi from "./meta.js";
 import externalApi from "./meta-comparison.js";
+import {getLegalityRules,sanitizeMeta} from "./standard-legality.js";
 const cache=new Map(),TTL=15*60*1000;
 const num=x=>Number.isFinite(Number(x))?Math.max(0,Number(x)):0;
 const round=x=>Math.round(x*10)/10;
@@ -119,7 +120,8 @@ export default {async fetch(request){
  const q=new URL(request.url).searchParams,days=String(q.get("days")||90),format=String(q.get("format")||"auto");
  const key=days+":"+format+":"+(q.get("coverage")==="expanded"?"expanded":"standard");
  const previous=cache.get(key);
- if(q.get("refresh")!=="1"&&previous&&Date.now()-previous.at<TTL)return respond(previous.value);
+ const rules=await getLegalityRules();
+ if(q.get("refresh")!=="1"&&previous&&Date.now()-previous.at<TTL)return respond(sanitizeMeta(previous.value,rules));
  const query=new URLSearchParams({days,format,coverage:q.get("coverage")==="expanded"?"expanded":"standard"});
  if(q.get("refresh")==="1")query.set("refresh","1");
  const [tour,independent]=await Promise.allSettled([
@@ -130,9 +132,10 @@ export default {async fetch(request){
   if(result.status!=="fulfilled"||!result.value.ok)return null;
   try{return await result.value.json()}catch{return null}
  };
- let t=await data(tour);
+ let t=sanitizeMeta(await data(tour),rules);
  const e=await data(independent);
- const sim=e?.sources?.find(s=>s.id==="oplay"&&s.status==="ok"&&Array.isArray(s.leaders)&&s.leaders.length)||null;
+ const source=e?.sources?.find(s=>s.id==="oplay"&&s.status==="ok"&&Array.isArray(s.leaders)&&s.leaders.length)||null;
+ const sim=source?sanitizeMeta(source,rules):null;
  let tournamentFallback=false;
  if(!t?.leaders?.length){
   // Public original endpoint can be CDN-cached even when Limitless is
@@ -146,16 +149,16 @@ export default {async fetch(request){
     const response=await fetch(fallbackUrl,{headers:{accept:"application/json"},signal:ctrl.signal});
     if(response.ok){
      const older=await response.json();
-     if(older?.leaders?.length){t=older;tournamentFallback=true}
+     if(older?.leaders?.length){t=sanitizeMeta(older,rules);tournamentFallback=true}
     }
    }finally{clearTimeout(timer)}
   }catch{/* no fabricated tournament results */}
  }
  if(!Array.isArray(t?.leaders)&&!sim){
-  if(previous)return respond({...previous.value,stale:true,partial:true});
+  if(previous)return respond({...sanitizeMeta(previous.value,rules),stale:true,partial:true});
   return respond({error:"Las fuentes del Meta no están disponibles."},502);
  }
- const v=combineMetas(t,sim);
+ const v=sanitizeMeta(combineMetas(t,sim),rules);
  v.partial=v.partial||v.sourcesAvailable<2;
  v.sources.tournaments.cachedFallback=tournamentFallback;
  v.sourceWarning=v.sourcesAvailable<2?
@@ -163,6 +166,6 @@ export default {async fetch(request){
   tournamentFallback?"Limitless: usando la última muestra almacenada por el servidor.":
   "";
  if(t?.leaders?.length&&sim?.leaders?.length)cache.set(key,{at:Date.now(),value:v});
- else if(previous)return respond({...previous.value,stale:true,partial:true});
+ else if(previous)return respond({...sanitizeMeta(previous.value,rules),stale:true,partial:true});
  return respond(v);
 }};

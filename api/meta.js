@@ -1,3 +1,4 @@
+import {getLegalityRules,cardPlayable,deckPlayable} from "./standard-legality.js";
 // Meta de torneos públicos One Piece. Limitless no proporciona quién salió primero.
 const LIMITLESS_API_URL="https://play.limitlesstcg.com/api",cache=new Map(),TTL=20*60*1000;
 const eventCache=new Map(),EVENT_TTL=60*60*1000;
@@ -27,7 +28,7 @@ async function eventData(e){
   if(eventCache.size>250)eventCache.delete(eventCache.keys().next().value);
   return value;
 }
-function aggregate(entries){
+function aggregate(entries,rules){
   const leaders=new Map(),matchups=new Map();let games=0;
   function push(map,key,win){
     if(!map.has(key))map.set(key,{wins:0,losses:0,games:0});
@@ -37,7 +38,19 @@ function aggregate(entries){
     const roster=new Map();
     for(const row of entry.standings){
       const id=cardId(row?.decklist?.leader);
-      if(id&&row.player!=null)roster.set(String(row.player),id);
+      if(!id||row.player==null||!cardPlayable(id,rules))continue;
+      const list=row?.decklist;
+      if(list&&["character","event","stage"].some(group=>Array.isArray(list[group]))){
+        const cards={};
+        for(const group of ["character","event","stage"]){
+          for(const c of Array.isArray(list[group])?list[group]:[]){
+            const cardNumber=cardId(c);
+            if(cardNumber)cards[cardNumber]=(cards[cardNumber]||0)+Number(c.count||1);
+          }
+        }
+        if(!deckPlayable(id,cards,rules))continue;
+      }
+      roster.set(String(row.player),id);
     }
     for(const match of entry.pairings){
       const a=String(match?.player1??""),b=String(match?.player2??""),winner=String(match?.winner??"");
@@ -68,6 +81,7 @@ export default {async fetch(request){
   if(previous&&Date.now()-previous.at<TTL&&q.get("refresh")!=="1")return respond(previous.value);
   try{
     const now=Date.now();
+    const rules=await getLegalityRules();
     const earliest=now-days*86400000;
     // Collect more event pages for the prep report; standard Meta stays lightweight.
     const events=[],maxPages=expanded?5:3;
@@ -117,7 +131,7 @@ export default {async fetch(request){
        coverageComplete:!partial&&!listingPartial&&eligible.length<=selected.length&&consulted===selected.length,
       truncated:eligible.length>selected.length||consulted<selected.length||listingPartial,
       partial,rateLimited,
-      firstSecondAvailable:false,...aggregate(collected)};
+      firstSecondAvailable:false,...aggregate(collected,rules)};
     cache.set(key,{at:Date.now(),value});
     if(cache.size>20)cache.delete(cache.keys().next().value);
     return respond(value);
