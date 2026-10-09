@@ -1900,7 +1900,8 @@ function deckGroupedTile(g){
   return '<article class="card">'+(q?'<span class="tag">×'+q+' total</span>':'<span class="tag missing">Falta</span>')+
     '<button class="linkbtn" data-detail="'+esc(c.id)+'" style="display:block;width:100%;padding:0">'+cardImg(c,"cardimg")+'</button>'+
     '<div class="cardbody"><button class="linkbtn deck-card-open" data-detail="'+esc(c.id)+'"><div class="name">'+esc(c.name)+'</div><div class="small">'+esc(c.id)+' · '+g.versions.length+' versión(es)</div><div class="chips">'+g.sets.slice(0,3).map(x=>'<span class="chip">'+esc(x)+'</span>').join("")+'</div></button>'+
-    '<div class="row"><span class="small">'+(ps.min===null?"Precio —":ps.max!==ps.min?"Desde "+money(ps.min):money(ps.min))+'</span><span class="small">'+(isLeader?"Líder "+inDeck:"Mazo "+inDeck)+'</span></div>'+controls+'</div></article>';
+    '<div class="row"><span class="small">'+(ps.min===null?"Precio —":ps.max!==ps.min?"Desde "+money(ps.min):money(ps.min))+'</span><span class="small">'+(isLeader?"Líder "+inDeck:"Mazo "+inDeck)+'</span></div>'+controls+
+    (state.user?'<button type="button" class="secondary btn" data-want="'+esc(c.id)+'" data-want-count="1" style="width:100%;margin-top:7px">💛 Añadir a wants</button>':"")+'</div></article>';
 }
 async function renderDeckResults(){
   const host=$("#deckResults");if(!host)return;
