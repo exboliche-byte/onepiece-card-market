@@ -251,11 +251,13 @@ function plan(deck){
    .sort((a,b)=>{
     const aCovers=a.available>=missingCount,bCovers=b.available>=missingCount;
     if(aCovers!==bCovers)return aCovers?-1:1;
-    // Con una sola caja suficiente, evitar desmontar otra que siga completa.
+    // Si ninguna caja basta, coger primero las que más aportan:
+    // así no se fragmenta un playset entre tres cajas cuando bastan dos.
+    if(!aCovers&&a.available!==b.available)return b.available-a.available;
+    // A igualdad de eficiencia, evitar desmontar un mazo que siga completo.
     if(a.intact!==b.intact)return a.intact?1:-1;
-    // Si no hay ninguna suficiente, coger primero la que más aporta.
-    // Si ambas bastan, vaciar el grupo de copias de una caja si se puede.
-    return (aCovers?a.available-b.available:b.available-a.available)||
+    // Si ambas bastan, preferir la que tenga menos sobrantes del grupo.
+    return (aCovers?a.available-b.available:0)||
      a.deck.name.localeCompare(b.deck.name,"es");
    });
   for(const {deck:donor} of donors){
