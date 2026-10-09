@@ -137,12 +137,11 @@ function view(){
    (ws.error?'<div class="notice">No se pudieron cargar las listas: '+h(ws.error)+
     ' <button class="secondary btn" id="retryWants" type="button">Reintentar</button></div>':"")+
    (ws.loading&&!ws.loaded?'<div class="notice">Cargando wants desde tu cuenta…</div>':"")+
-   (l?'<div class="wants-back"><button class="secondary btn" id="wantsBackToLists" type="button">← Todas mis listas</button></div>'+
-    '<section class="wants-panel"><div class="wants-heading"><h3>'+h(l.name)+'</h3>':
+   (l?'<div class="wants-back"><button class="secondary btn" id="wantsBackToLists" type="button">← Todas mis listas</button></div>':
     '<section class="wants-panel"><div class="wants-heading"><h3>Elige una lista</h3>'+
     '<button class="primary btn" id="newWantList" type="button">+ Nueva lista</button></div>'+
-    (lists||'<p class="small">Crea tu primera lista para guardar cartas.</p>')+'</section>')+
-   (l?'<section class="wants-panel wants-list-details"><div class="wants-heading"><h3>Gestionar lista</h3>'+
+    (ws.lists.length?lists:'<p class="small">Crea tu primera lista para guardar cartas.</p>')+'</section>')+
+   (l?'<section class="wants-panel wants-list-details"><div class="wants-heading"><h3>'+h(l.name)+'</h3>'+
    '<div class="wants-list-actions"><button class="secondary btn" id="renameWantList" type="button">Renombrar</button>'+
    '<button class="danger btn" id="deleteWantList" type="button">Eliminar lista</button></div></div>'+
    '<div class="wants-market-action"><button type="button" class="primary btn" id="wantsSendCardmarket">🛒 Llevar lista a Cardmarket Wants</button></div>'+
