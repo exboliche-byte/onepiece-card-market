@@ -153,7 +153,7 @@ async function loadGlobal(force=false){
   }finally{m.loading=false;if(state.tab==="meta")renderShell()}
 }
 async function loadIndependent(force=false){
- if(m.independentBusy||(!force&&m.independent&&Date.now()-m.independentAt<45*60000))return;
+ if(m.independentBusy||(!force&&m.independentAt&&Date.now()-m.independentAt<(m.independent?45*60000:45000)))return;
  m.independentBusy=true;
  try{
   const r=await fetch("/api/meta-comparison"+(force?"?refresh=1":""),{signal:AbortSignal.timeout(26000)});
