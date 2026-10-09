@@ -25,7 +25,7 @@ test("deck completion back button follows history with safe same-site fallback",
  const section=html.split("function deckCompletionView(){")[1].split("function renderShell(){")[0];
  assert.match(section,/id="deckCompletionBack"/);
  assert.doesNotMatch(section,/Volver a la web|href="\/" /);
- assert.match(html,/history\.back\(\);return/);
+ assert.match(html,/\$\("#deckCompletionBack"\)\?\.addEventListener\("click",\(\)=>navigateApp/);
  assert.match(html,/state\.tab="decks";state\.deckLibrary=true/);
 });
 test("Meta retries a temporary error and recovers without a page reload",async()=>{
