@@ -64,7 +64,7 @@ export default {async fetch(request){
     const now=Date.now();
     const earliest=now-days*86400000;
     // Collect more event pages for the prep report; standard Meta stays lightweight.
-    const events=[],maxPages=expanded?5:1;
+    const events=[],maxPages=expanded?5:3;
     let pagesScanned=0,listingPartial=false;
     for(let page=1;page<=maxPages;page++){
       let batch;
@@ -78,14 +78,17 @@ export default {async fetch(request){
       .filter(x=>x?.id&&Number(x.players)>=16&&Number.isFinite(Date.parse(x.date))&&Date.parse(x.date)>=earliest&&Date.parse(x.date)<=now+86400000)
       .sort((a,b)=>Date.parse(b.date)-Date.parse(a.date));
     const formats=[...new Set(tournaments.map(t=>String(t.format||"")).filter(Boolean))];
-    const chosen=format==="all"?"all":format==="auto"?String(tournaments[0]?.format||""):format;
+    const chosen=format==="all"?"all":format==="auto"?
+      String(tournaments.find(t=>t.format)?.format||"all"):format;
     const eligible=tournaments.filter(x=>chosen==="all"||String(x.format||"")===chosen);
-    const cap=expanded?80:24;
+    // A 24-event limit hid most of the 90-day field. Scan broadly but stop
+    // safely when the upstream API rate-limits or the function approaches its deadline.
+    const cap=expanded?140:100;
     const selected=eligible.slice(0,cap);
     const collected=[];let consulted=0,partial=listingPartial,rateLimited=false;
-    const deadline=Date.now()+(expanded?35000:22000);
-    for(let i=0;i<selected.length;i+=4){
-      const batch=await Promise.allSettled(selected.slice(i,i+4).map(eventData));
+    const deadline=Date.now()+(expanded?48000:42000);
+    for(let i=0;i<selected.length;i+=5){
+      const batch=await Promise.allSettled(selected.slice(i,i+5).map(eventData));
       for(const item of batch){
         consulted++;
         if(item.status==="fulfilled")collected.push(item.value);
@@ -97,6 +100,7 @@ export default {async fetch(request){
       days,formatUsed:chosen||"unknown",formats,
       eligibleEvents:eligible.length,scannedEvents:consulted,includedEvents:collected.length,
       coverageLimit:cap,pagesScanned,listingPartial,
+       coverageComplete:!partial&&!listingPartial&&eligible.length<=selected.length&&consulted===selected.length,
       truncated:eligible.length>selected.length||consulted<selected.length||listingPartial,
       partial,rateLimited,
       firstSecondAvailable:false,...aggregate(collected)};
