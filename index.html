@@ -130,7 +130,7 @@
 .app{padding-left:0;padding-bottom:82px}
 .nav.mobile-nav{display:grid;grid-template-columns:repeat(5,minmax(0,1fr))}
 .mobile-nav>button{min-width:0}
-.mobile-nav>button span{font-size:10px}
+.mobile-nav>button span{font-size:11px}
 .mobile-more{position:absolute;bottom:calc(100% + 9px);right:9px;display:grid;gap:4px;padding:8px;width:min(230px,calc(100vw - 18px));border:1px solid var(--line);border-radius:13px;background:#151c29;box-shadow:0 10px 28px #000b}
 .mobile-more[hidden]{display:none}
 .mobile-more button{display:flex;align-items:center;gap:11px;justify-content:flex-start;width:100%;padding:11px;border:0;border-radius:9px;background:transparent;color:var(--text);text-align:left;font-weight:650}
@@ -139,6 +139,14 @@
 .mobile-more button span{font-size:13px}
 }
 
+/* Audit refinements: Proxies stays a dedicated tool; mobile navigation remains compact. */
+.side-group{display:grid;gap:4px}
+.side-group+.side-group{border-top:1px solid var(--line);padding-top:8px}
+.side-group-title{padding:4px 11px;color:var(--muted);font-size:10px;letter-spacing:.07em;font-weight:850}
+.app.sidebar-collapsed .side-group-title{display:none}
+.deck-cloud-status{min-height:23px;margin:8px 0;font-size:12px}
+button:focus-visible,a:focus-visible,summary:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}
 </style>
 </head>
 <body>
@@ -184,7 +192,7 @@ function cardImg(c,cls="cardimg"){
   const cdn=imageCdnUrl(c),official=officialImageUrl(c),fallback=fallbackImageUrl(c);
   const loading=cls.includes("detail")||cls.includes("deckleader")?"eager":"lazy";
   const priority=cls.includes("detail")?' fetchpriority="high"':cls.includes("competitive-leader-img")?' fetchpriority="auto"':"";
-  return '<img class="'+cls+'" loading="'+loading+'" decoding="sync"'+priority+' src="'+esc(cdn)+'" alt="'+esc(c.name||c.id)+'" data-image-official="'+esc(official)+'" data-image-fallback="'+esc(fallback)+'" onerror="if(this.dataset.imageStep!==\'1\'){this.dataset.imageStep=\'1\';this.src=this.dataset.imageOfficial}else if(this.dataset.imageStep!==\'2\'){this.dataset.imageStep=\'2\';this.src=this.dataset.imageFallback}else{this.style.visibility=\'hidden\'}">';
+  return '<img class="'+cls+'" loading="'+loading+'" decoding="async"'+priority+' src="'+esc(cdn)+'" alt="'+esc(c.name||c.id)+'" data-image-official="'+esc(official)+'" data-image-fallback="'+esc(fallback)+'" onerror="if(this.dataset.imageStep!==\'1\'){this.dataset.imageStep=\'1\';this.src=this.dataset.imageOfficial}else if(this.dataset.imageStep!==\'2\'){this.dataset.imageStep=\'2\';this.src=this.dataset.imageFallback}else{this.style.visibility=\'hidden\'}">';
 }
 function deckOwnedImg(c,have,required){
   const total=Math.max(1,Number(required)||1),owned=Math.max(0,Math.min(total,Number(have)||0));
@@ -789,7 +797,9 @@ async function loadMarketPrices({refresh=false}={}){
       const d=await fetchJson(MARKET_DATA_URL,30000);
       if(!d?.cards||d?.schemaVersion===undefined)throw Error("Invalid Cardmarket dataset");
       mergePriceDataset(d);
-      localStorage.setItem("mialbumonepiece_prices",JSON.stringify({version:PRICE_CACHE_VERSION,prices:state.prices,meta:state.marketMeta,updatedAt:state.priceDate}));
+      // QuotaExceededError must never make a successfully downloaded price feed fail.
+      try{localStorage.setItem("mialbumonepiece_prices",JSON.stringify({version:PRICE_CACHE_VERSION,prices:state.prices,meta:state.marketMeta,updatedAt:state.priceDate}))}
+      catch(storageError){console.warn("Caché local de precios llena",storageError)}
       return d;
     }catch(error){
       try{
@@ -2247,7 +2257,18 @@ function nav(){
   const items=[["catalog","Catálogo"],["collection","Colección"],["album","Expansiones"],["decks","Mazos"],["tournaments","Torneos"],["meta","Meta"],["trades","Intercambios"],["proxies","Proxies"],["account","Cuenta"]];
   const tabButton=([id,label],side)=>'<button type="button" class="'+(state.tab===id?"active":"")+'" data-tab="'+id+'" aria-label="'+label+'"'+(state.tab===id?' aria-current="page"':'')+'>'+navIcon(id)+'<span'+(side?' class="side-label"':'')+'>'+label+'</span></button>';
   const scanButton='<button type="button" data-scan-open aria-label="Abrir escáner de cartas">'+navIcon("scanner")+'<span class="side-label">Escáner</span></button>';
-  const side='<aside class="desktop-side" aria-label="Menú principal"><div class="side-head"><span class="side-brand">ONE PIECE</span><button type="button" id="sidebarToggle" class="side-toggle" aria-label="Plegar o desplegar menú" aria-expanded="'+(!sidebarCollapsed)+'">'+navIcon("collapse")+'</button></div><nav class="side-items" aria-label="Secciones">'+items.slice(0,-1).map(item=>tabButton(item,true)).join("")+scanButton+tabButton(items[items.length-1],true)+'</nav></aside>';
+  const sideGroups=[
+    ["EXPLORAR",["catalog","album"]],
+    ["MI COLECCIÓN",["collection","scanner"]],
+    ["JUGAR",["decks","tournaments","meta"]],
+    ["COMUNIDAD",["trades"]],
+    ["CREAR",["proxies"]],
+    ["CUENTA",["account"]]
+  ];
+  const side='<aside class="desktop-side" aria-label="Menú principal"><div class="side-head"><span class="side-brand">ONE PIECE</span><button type="button" id="sidebarToggle" class="side-toggle" aria-label="Plegar o desplegar menú" aria-expanded="'+(!sidebarCollapsed)+'">'+navIcon("collapse")+'</button></div><nav class="side-items" aria-label="Secciones">'+
+    sideGroups.map(([heading,ids])=>'<div class="side-group"><div class="side-group-title">'+heading+'</div>'+
+      ids.map(id=>id==="scanner"?scanButton:tabButton(items.find(item=>item[0]===id),true)).join("")+'</div>').join("")+
+    '</nav></aside>';
   // En móvil, Torneos ocupa el acceso directo que antes tenía Expansiones.
   // El menú lateral de ordenador conserva su orden original.
   const mobileMain=["catalog","collection","tournaments","decks"];
@@ -3708,7 +3729,11 @@ async function previewImport(text){
     const sum=[...imported.values()].reduce((a,x)=>a+x,0);
     const logicalCount=new Set([...imported.keys()].map(baseId)).size;
     const createdCount=Object.keys(created).length;
-    const msg="Filas: "+(rows.length-1)+
+    const oldOwned=state.owned||{};
+    const additions=[...imported].filter(([id,q])=>q>0&&!oldOwned[id]).length;
+    const updates=[...imported].filter(([id,q])=>q>0&&oldOwned[id]&&Number(oldOwned[id])!==q).length;
+    const removals=Object.keys(oldOwned).filter(id=>Number(oldOwned[id])>0&&!(imported.get(id)>0)).length;
+    const msg="Cambios respecto a tu colección: "+additions+" versiones añadidas, "+updates+" cantidades modificadas y "+removals+" versiones eliminadas.\\n"+"Filas: "+(rows.length-1)+
       " · versiones: "+imported.size+
       " · cartas: "+logicalCount+
       " · "+sum+" copias"+
