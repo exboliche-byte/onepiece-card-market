@@ -1930,7 +1930,7 @@ async function clearCollection(){
   try{
     await Promise.all([...collectionWrites.values()]);
     if(state.user?.id!==userId)return;
-    const deleted=await state.sb.from("collection_items").delete().eq("user_id",userId);
+    const deleted=await state.sb.rpc("collection_clear_atomic");
     if(deleted.error)throw deleted.error;
     const checked=await state.sb.from("collection_items").select("card_id").eq("user_id",userId).limit(1);
     if(checked.error)throw checked.error;
@@ -2875,19 +2875,13 @@ function writeCollection(id,nextValue){
     const old=qty(id);
     if(n===old)return true;
     try{
-      if(n===0){
-        const deleted=await state.sb.from("collection_items").delete().eq("user_id",userId).eq("card_id",id);
-        if(deleted.error)throw deleted.error;
-        const verify=await state.sb.from("collection_items").select("card_id").eq("user_id",userId).eq("card_id",id);
-        if(verify.error)throw verify.error;
-        if(verify.data?.length)throw Error("La carta sigue guardada en la nube");
-      }else{
-        const saved=await state.sb.from("collection_items").upsert({
-          user_id:userId,card_id:id,quantity:n,updated_at:new Date().toISOString()
-        },{onConflict:"user_id,card_id"}).select("card_id,quantity");
-        if(saved.error)throw saved.error;
-        if(!saved.data?.some(c=>c.card_id===id&&Number(c.quantity)===n))throw Error("Supabase no confirmó la cantidad");
-      }
+      // Server checks the previous exact-print quantity and changes it atomically.
+      // A stale browser cannot overwrite another device's newer copy count.
+      const result=await state.sb.rpc("collection_write_atomic",{
+        p_id:id,p_expected:old,p_next:n
+      });
+      if(result.error)throw result.error;
+      if(Number(result.data)!==n)throw Error("La cantidad confirmada no coincide");
       if(state.user?.id!==userId)return false;
       if(n===0)delete state.owned[id];else state.owned[id]=n;
       // Notify the open scanner only after an exact-print write is confirmed.
@@ -2900,7 +2894,16 @@ function writeCollection(id,nextValue){
       return true;
     }catch(e){
       console.warn("Error al guardar la colección",id,e);
-      if(state.user?.id===userId)notify("No se pudo guardar en Supabase. Tu colección no se ha modificado.");
+      if(state.user?.id===userId){
+        if(String(e?.code||"")==="40001"||/otro dispositivo|conflicto/i.test(String(e?.message||""))){
+          await loadCollectionFromCloud(userId);
+          window.dispatchEvent(new CustomEvent("mialbum:collection-updated",{
+            detail:{userId,id,quantity:qty(id)}
+          }));
+          renderShell();
+          notify("Otra sesión cambió esta carta. Colección actualizada; repite la acción si quieres.");
+        }else notify("No se pudo guardar en Supabase. Tu colección no se ha modificado.");
+      }
       return false;
     }
   }).finally(()=>{if(collectionWrites.get(id)===write)collectionWrites.delete(id)});
