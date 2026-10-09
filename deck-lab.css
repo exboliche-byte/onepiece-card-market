@@ -16,8 +16,6 @@
 .deck-lab-diff>span{min-width:30px;text-align:right;font-weight:800}.deck-lab-diff .lab-up{color:var(--ok)}.deck-lab-diff .lab-down{color:var(--danger)}
 @media(min-width:900px){.deck-lab-overlay{align-items:center}.deck-lab-dialog{max-height:87dvh}}
 @media(max-width:420px){.deck-lab-dialog{padding:10px}.deck-lab-controls .btn{font-size:11px;padding:9px 5px}.deck-lab-metrics b{font-size:17px}}
-/* Visible only in Catálogo; never float over a personal collection. */
-body:not([data-current-tab="catalog"]) #scanLaunch{display:none!important}
 
 /* Hand lab: compact card actions, combo selectors and responsive comparison. */
 .deck-lab-combo{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:8px 0}

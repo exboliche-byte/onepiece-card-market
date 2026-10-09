@@ -101,8 +101,6 @@ function setAutoAdding(value){
 }
 const style=document.createElement("style");style.id="scanStyles";
 style.textContent=[
-"#scanLaunch{display:none;position:fixed;right:14px;bottom:80px;z-index:25;background:#ffd447;color:#171717;font-weight:850;padding:13px 15px;border:0;border-radius:30px;box-shadow:0 4px 15px #0008;cursor:pointer}",
-"@media(max-width:899px){body[data-current-tab=catalog] #scanLaunch{display:block}}",
 "#scanPanel{position:fixed;inset:0;z-index:9999;background:#080b11;color:#f6f6f6;font-family:system-ui,sans-serif;height:100vh;height:100dvh;overflow:hidden}",
 "#scanPanel *{box-sizing:border-box}#scanPanel .scanLayout{position:relative;width:100%;height:100%;margin:0;padding:0;overflow:hidden}",
 "#scanPanel .scanTop{position:absolute;top:calc(env(safe-area-inset-top,0px) + 8px);left:10px;right:10px;z-index:5;display:flex;align-items:center;justify-content:space-between;gap:10px;background:#080b11b8;border-radius:12px;padding:6px 8px}#scanPanel h2{font-size:17px;line-height:1.15;margin:0}",
@@ -911,17 +909,5 @@ window.addEventListener("mialbum:collection-updated",event=>{
   refreshScannerCopies(detail.id);
 });
 window.openOnePieceScanner=open;
-function init(){
-  if(document.querySelector("#scanLaunch"))return;
-  const btn=document.createElement("button");
-  btn.id="scanLaunch";
-  btn.type="button";
-  btn.textContent="📷 Escanear cartas";
-  btn.setAttribute("aria-label","Escanear cartas");
-  btn.onclick=open;
-  document.body.appendChild(btn);
-}
-if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",init,{once:true});
-else init();
 
 })();

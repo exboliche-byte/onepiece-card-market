@@ -66,7 +66,12 @@ test("PWA artifacts are present, safe and bundled",()=>{
  assert.match(build,/icon-512\.png/);
  assert.match(build,/deck-lab-pwa\.test\.mjs/);
 });
-test("Scanner floating launcher never appears in collection",()=>{
- const css=read("deck-lab.css");
- assert.match(css,/body:not\(\[data-current-tab="catalog"\]\) #scanLaunch\{display:none!important\}/);
+test("Yellow floating scanner is absent; catalog and Tools still offer the scanner",()=>{
+ const scanner=read("scanner.js"),css=read("deck-lab.css");
+ assert.doesNotMatch(scanner,/scanLaunch|📷 Escanear cartas/);
+ assert.doesNotMatch(css,/scanLaunch/);
+ assert.match(html,/class="secondary btn catalog-search-scan" data-scan-open/);
+ assert.match(html,/\["HERRAMIENTAS",\["proxies","scanner"\]\]/);
+ assert.match(html,/window\.openOnePieceScanner\?\.\(\)/);
+ assert.match(scanner,/window\.openOnePieceScanner=open/);
 });
