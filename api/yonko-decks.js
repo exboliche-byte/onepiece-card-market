@@ -152,8 +152,8 @@ export default {
  async fetch(request){
   const u=new URL(request.url),leader=code(u.searchParams.get("leader")||"all"),card=code(u.searchParams.get("card"));
   const format=u.searchParams.get("format")==="jp"?"jp":"en";
-  const days=clamp(u.searchParams.get("days"),30,365,90),page=clamp(u.searchParams.get("page"),1,15,1);
-  const limit=clamp(u.searchParams.get("limit"),1,120,40);
+  const days=clamp(u.searchParams.get("days"),30,365,90),page=clamp(u.searchParams.get("page"),1,60,1);
+  const limit=clamp(u.searchParams.get("limit"),1,200,120);
   if(leader!=="ALL"&&!/^(?:(?:OP|ST|EB|PRB)\d{2}|P)-\d{3}$/.test(leader)||
      card&&!/^(?:(?:OP|ST|EB|PRB)\d{2}|P)-\d{3}$/.test(card))
    return json({error:"Código de líder o carta inválido",results:[]},400);
