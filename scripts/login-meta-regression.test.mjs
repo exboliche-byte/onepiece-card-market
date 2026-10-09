@@ -6,7 +6,7 @@ const read=path=>fs.readFileSync(new URL("../"+path,import.meta.url),"utf8");
 const html=read("index.html");
 const meta=read("meta.js");
 
-test("login does not overwrite or re-save decks from an old browser",()=>{
+test("login automatically synchronizes only changed or new decks",()=>{
  const section=html.split("async function syncCloudInternal(userId){")[1].split("let supabaseInitPromise")[0];
  assert.ok(section,"Cloud reconciliation must be present");
  assert.doesNotMatch(section,/await syncDeck\(/,"Reconciliation must be read-only");
@@ -56,4 +56,16 @@ test("Meta retries a temporary error and recovers without a page reload",async()
  assert.match(sandbox.window.metaView(),/Partidas analizadas/);
  assert.match(sandbox.window.metaView(),/30/);
  assert.ok(storage.size>=1,"Successful response is cached for intermittent outages");
+});
+
+test("competitive previews receive real UUIDs on save and auto-recover old IDs",()=>{
+ const save=html.split("async function saveCompetitiveDraft(){")[1].split("function deckLibraryView(){")[0];
+ assert.match(save,/d\.id=crypto\.randomUUID\(\)/);
+ assert.match(save,/await syncDeck\(d\)/);
+ const normalize=html.split("function ensureSavedDeckUuid(deck){")[1].split("function scheduleAutomaticDeckRetry")[0];
+ assert.match(normalize,/savedDeckUuidPattern\.test/);
+ assert.match(normalize,/saveLocal\(\)/);
+ const sync=html.split("function syncDeck(d,{automatic=false}={}){")[1].split("async function syncDeckDelete")[0];
+ assert.match(sync,/ensureSavedDeckUuid\(d\)/);
+ assert.match(sync,/scheduleAutomaticDeckRetry\(\)/);
 });
