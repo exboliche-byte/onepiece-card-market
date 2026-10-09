@@ -37,6 +37,12 @@ test("Yonko event parser returns a correctly attributed list with its source URL
  assert.equal(result[0].format,"en");
  assert.equal(result[0].players,0);
 });
+test("All-leaders searches scan events instead of accidentally filtering every event",()=>{
+ const all=funcs.parseIndex(index,"en");
+ assert.equal(funcs.pickEvents(all,"ALL",0).chosen.length,1);
+ assert.equal(funcs.pickEvents(all,"OP17-079",0).chosen.length,1);
+ assert.equal(funcs.pickEvents(all,"OP15-058",0).chosen.length,0);
+});
 test("Invalid or malformed event HTML is ignored, never fakes records",()=>{
  const ev=funcs.parseIndex(index,"jp")[0];
  assert.equal(funcs.parseEvent("<h1>Nothing</h1>",ev).length,0);
