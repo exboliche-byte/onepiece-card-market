@@ -125,10 +125,15 @@ function recognizeFrame(region,rotation=0){
 }
 async function recognize(region){
  const normal=await recognizeFrame(region);
- // Additional pass when the card was photographed upside down.
- if(normal[0]&&normal[0].score<=53)return normal;
+ if(normal[0]&&normal[0].score<=58&&normal[0].art<=82)return normal;
  const reversed=await recognizeFrame(region,Math.PI);
- return reversed[0]&&reversed[0].score+5<(normal[0]?.score??999)?reversed:normal;
+ let best=reversed[0]&&reversed[0].score+4<(normal[0]?.score??999)?reversed:normal;
+ if((best[0]?.score??999)>78){
+  const tighter={...region,w:region.w*.91,h:region.h*.91};
+  const retry=await recognizeFrame(tighter);
+  if(retry[0]&&retry[0].score+3<(best[0]?.score??999))best=retry;
+ }
+ return best;
 }
 function baseSuggestions(ranked){
  const found=new Set(),options=[];
@@ -202,29 +207,36 @@ function optionText(row){
   return '<option value="'+esc(x.code)+'"'+(selected===x.code?' selected':'')+'>'+esc(x.code+' · '+(c?.name||"")+(Number.isFinite(x.score)?' · sugerencia visual':''))+'</option>';
  }).join("");
 }
+async function readCode(region){
+ if(!photoOcrLoading){
+  photoOcrLoading=import("/scanner-ocr.js?v=ocr5").then(async module=>{
+   const engine=module.createEngine(()=>{});
+   await engine.init();
+   if(!active){void engine.destroy();throw Error("Escáner cerrado")}
+   photoOcr=engine;return engine;
+  }).catch(error=>{photoOcrLoading=null;throw error});
+ }
+ const engine=await photoOcrLoading;
+ const result=await engine.recognize(makeCrop(region,canvas,800,1120),3);
+ return result.codes.find(id=>group(id).length)||null;
+}
+function chooseCode(row,code){
+ if(!row||!code||!group(code).length)return false;
+ row.selectedCode=code;row.printId=baseCard(code)?.id||"";
+ if(!row.candidates.some(c=>c.code===code))row.candidates.unshift({code,score:null});
+ row.confident=true;
+ return true;
+}
 async function readCodeForRow(index){
  const row=rows[index],gen=generation;
  if(!row||busy||!active)return;
- busy=true;tell("Leyendo el número de la carta "+(index+1)+"…");refreshControls();
+ busy=true;tell("Leyendo el código de la carta "+(index+1)+"…");refreshControls();
  try{
-  if(!photoOcrLoading){
-   photoOcrLoading=import("/scanner-ocr.js?v=ocr5").then(async module=>{
-    const engine=module.createEngine(()=>{});
-    await engine.init();
-    if(!active){void engine.destroy();throw Error("Escáner cerrado")}
-    photoOcr=engine;return engine;
-   }).catch(error=>{photoOcrLoading=null;throw error});
-  }
-  const engine=await photoOcrLoading;
+  const code=await readCode(row.region);
   if(!active||generation!==gen)return;
-  const result=await engine.recognize(makeCrop(row.region,canvas,800,1120),3);
-  if(!active||generation!==gen)return;
-  const code=result.codes.find(id=>group(id).length);
-  if(!code){tell("No se ha podido leer el código. Prueba con un recorte más nítido o búscalo manualmente.",true);return}
-  row.selectedCode=code;row.printId=baseCard(code)?.id||"";
-  if(!row.candidates.some(c=>c.code===code))row.candidates.unshift({code,score:null});
-  row.confident=false;
-  tell("Código detectado: "+code+". Comprueba la ilustración y la impresión.");
+  if(!code){tell("No se ha podido leer el código. Busca manualmente o haz una foto más nítida.",true);return}
+  chooseCode(row,code);
+  tell("Código leído: "+code+". Comprueba la impresión exacta.");
  }catch(error){
   if(active&&generation===gen)tell("OCR no disponible: "+String(error?.message||error),true);
  }finally{if(active&&generation===gen){busy=false;rowList();refreshControls()}}
@@ -344,8 +356,17 @@ async function analyzeRegions(layout=0){
    let ranked=[];
    if(visualReady)try{ranked=await recognize(regions[i])}catch(error){console.warn("Lectura de recorte",error)}
    if(!active||gen!==generation)return;
-   rows.push(selectedRow(regions[i],ranked));
-   rowList();
+   const row=selectedRow(regions[i],ranked);
+   rows.push(row);rowList();
+   if(!row.confident&&regions.length<=8){
+    tell("Carta "+(i+1)+": intentando leer su código…");
+    try{
+     const code=await readCode(regions[i]);
+     if(!active||gen!==generation)return;
+     if(code)chooseCode(row,code);
+     rowList();
+    }catch(error){console.warn("OCR opcional foto",error)}
+   }
    // Give the mobile browser an opportunity to paint progress between cards.
    if(i%2===1)await new Promise(resolve=>setTimeout(resolve,0));
   }
