@@ -1401,7 +1401,9 @@ async function searchCompetitiveDecks(){
   }
 }
 function competitiveDraftName(result){
-  return (result.leaderName||result.leaderId)+" · "+(result.quality||result.placing+".º")+" · "+result.tournament;
+  // Tournament titles can be arbitrarily long; Supabase deck names are limited to 120.
+  return ((result.leaderName||result.leaderId)+" · "+
+    (result.quality||result.placing+".º")+" · "+(result.tournament||"Torneo")).slice(0,120);
 }
 function openCompetitiveDeckPreview(index,origin="decks"){
   const result=state.deckDiscoverResults[Number(index)];if(!result)return;
@@ -1437,11 +1439,15 @@ function discardCompetitiveDraft(){
   replaceAppHistory();renderShell();
   window.scrollTo({top:origin==="deck-completion"?state.deckPreviewScrollY:0,behavior:"auto"});
 }
-function saveCompetitiveDraft(){
+async function saveCompetitiveDraft(){
   const d=state.decks.find(x=>x.id===state.deckId&&x.draftCompetitive);if(!d)return;
   if(!state.user){navigateApp(()=>{state.tab="account"});notify("Inicia sesión para guardar este mazo");return}
   d.draftCompetitive=false;d.draftDirty=false;d.owner_id=state.user.id;d.updatedAt=new Date().toISOString();
-  saveLocal();syncDeck(d);renderShell();notify("Mazo guardado en Mis mazos");
+  saveLocal();renderShell();
+  const saved=await syncDeck(d);
+  renderShell();
+  notify(saved?"Mazo guardado en Mis mazos y en Supabase":
+    "Mazo conservado localmente. Comprueba la sincronización en Mis mazos.");
 }
 function deckLibraryView(){
   if(!state.user){
