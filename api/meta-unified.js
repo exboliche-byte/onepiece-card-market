@@ -51,14 +51,37 @@ export function combineMetas(tournaments,simulator){
    .filter(x=>leaders.has(id(x.leader))&&leaders.has(id(x.opponent)))
    .map(x=>({...x,leader:id(x.leader),opponent:id(x.opponent),
      wins:num(x.wins),losses:num(x.losses),games:num(x.games),source:"tournaments"}));
- // Matchups are observed pairings, not estimates inferred from overall WR.
- // Merge simulator pairings only if the source actually provides them.
+ // Merge only actually observed per-leader pairings, not rates inferred from
+ // global leader strength. Both sources retain their raw sample sizes.
+ const pairingIndex=new Map(matchups.map(row=>[row.leader+"|"+row.opponent,row]));
+ for(const row of matchups){
+  row.tournament={wins:row.wins,losses:row.losses,games:row.games};
+  row.simulator=null;
+ }
  for(const x of Array.isArray(simulator?.matchups)?simulator.matchups:[]){
   const a=id(x.leader),b=id(x.opponent),g=num(x.games);
-  if(!leaders.has(a)||!leaders.has(b)||!g)continue;
-  const prev=matchups.find(row=>row.leader===a&&row.opponent===b);
-  if(prev){prev.wins+=num(x.wins);prev.losses+=num(x.losses);prev.games+=g;prev.source="combined"}
-  else matchups.push({leader:a,opponent:b,wins:num(x.wins),losses:num(x.losses),games:g,source:"simulator"});
+  if(!leaders.has(a)||!leaders.has(b)||!g||a===b)continue;
+  const key=a+"|"+b,source={wins:num(x.wins),losses:num(x.losses),games:g};
+  const prev=pairingIndex.get(key);
+  if(prev){
+   prev.simulator=source;
+   prev.wins+=source.wins;prev.losses+=source.losses;prev.games+=g;
+   prev.source="combined";
+   if(x.first)prev.first=x.first;
+   if(x.second)prev.second=x.second;
+  }else{
+   const item={leader:a,opponent:b,...source,rate:round(100*source.wins/g),
+     tournament:null,simulator:source,source:"simulator",
+     first:x.first||null,second:x.second||null};
+   matchups.push(item);pairingIndex.set(key,item);
+  }
+ }
+ for(const row of matchups){
+  const a=row.tournament,b=row.simulator;
+  if(a&&b){
+   const tw=0.6*Math.min(1,a.games/30);
+   row.rate=round(100*(tw*a.wins/a.games+(1-tw)*b.wins/b.games));
+  }else row.rate=round(100*row.wins/row.games);
  }
  return {
   source:"Unified",updatedAt:new Date().toISOString(),days:tournaments?.days||90,
@@ -70,7 +93,7 @@ export function combineMetas(tournaments,simulator){
   coverageLimit:num(tournaments?.coverageLimit),sourcesAvailable:Number(tourLeaders.length>0)+Number(simLeaders.length>0),
   leaders:result,matchups,firstSecondAvailable:simLeaders.some(x=>num(x.firstGames)>0),
   methodology:"W/R global: 60% torneos y 40% simulador para líderes con muestra de al menos 100 resultados de torneos; la ponderación de torneos aumenta gradualmente si hay menos. No se inventan enfrentamientos ni órdenes de salida.",
-  matchupSource:simulator?.matchups?.length?"Torneos y simulador":"Torneos (el simulador no publica cruces desglosados en esta fuente)",
+  matchupSource:simulator?.matchups?.length?"Limitless + OPlayTCG (cruces reales)":"Limitless (sin cruces de OPlayTCG)",
   sources:{tournaments:{available:tourLeaders.length>0,events:num(tournaments?.includedEvents),games:num(tournaments?.games),
     date:tournaments?.updatedAt||null,partial:!!tournaments?.partial},
    simulator:{available:simLeaders.length>0,games:num(simulator?.games),date:simulator?.measuredAt||null,
