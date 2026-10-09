@@ -5,7 +5,8 @@ const escText=x=>String(x??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">
 const n=x=>Number(x||0).toLocaleString("es-ES");
 const pct=(w,l)=>w+l?(100*w/(w+l)).toFixed(1)+" %":"—";
 const leaderName=id=>{
- const x=window.state?.cards?.find(c=>c.id===id)||window.state?.cards?.find(c=>c.id?.split("_")[0]===id);
+ const cards=(typeof state==="object"&&Array.isArray(state.cards))?state.cards:[];
+ const x=cards.find(c=>c.id===id)||cards.find(c=>c.id?.split("_")[0]===id);
  return escText(x?.name||id);
 };
 const href=(url,label)=>'<a target="_blank" rel="noopener noreferrer" href="'+escText(url)+'">'+escText(label)+' ↗</a>';
