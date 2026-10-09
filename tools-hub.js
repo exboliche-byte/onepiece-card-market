@@ -2,7 +2,7 @@
 "use strict";
 /* This module never changes collection quantities or deck records. */
 const h={tab:"trade",tradeSection:"prepare",searchLimit:36,owner:null,trade:[[],[]],q:"",list:[],meta:{},loaded:false,busy:false,error:"",
-  sort:"missing",maxMissing:"12",maxCost:"",cloudReady:false,cloudLoading:false,cloudError:"",cloudConflict:false,
+  sort:"missing",mode:"complete",maxMissing:"12",maxCost:"",cloudReady:false,cloudLoading:false,cloudError:"",cloudConflict:false,
   revision:null,pending:false,localRevision:null,hasCache:false,serial:0,saveTimer:null,writing:false,lastCloudAt:0};
 const key=id=>"mialbumonepiece_tools_"+id;
 const text=s=>esc(s);
@@ -283,18 +283,32 @@ function missing(r,prices){
   }
   return {owned,absent,cost,unknown,total:owned+absent};
 }
+function deckFit(r,m){
+  const total=Math.max(1,m.total),leader=printed(r.leaderId);
+  const preferred=new Set((state.decks||[]).filter(d=>!d.draftCompetitive).map(d=>printed(d.leader)));
+  const familiar=preferred.has(leader);
+  const players=Math.max(0,Number(r.players)||0),placing=Math.max(0,Number(r.placing)||0);
+  const resultQuality=players&&placing?Math.max(0,1-(placing-1)/players):0.35;
+  const costScore=m.unknown?0:1/(1+m.cost/40);
+  const score=100*(0.72*m.owned/total+0.14*Number(familiar)+0.08*resultQuality+0.06*costScore);
+  return {score,reason:familiar?"Ya utilizas este líder":m.owned>=m.total?"Lo tienes completo":
+    "Aprovecha "+Math.round(100*m.owned/total)+"% de tus cartas"};
+}
 function decksView(){
+  const personalized=h.mode==="mine";
   let body="";
   if(h.loaded&&state.collectionReady){
     const prices=cheapest();
     const maximum=h.maxMissing===""?Infinity:Number(h.maxMissing);
     const ceiling=h.maxCost===""?Infinity:Number(h.maxCost);
-    let rows=h.list.map((r,i)=>({r,i,m:missing(r,prices)}));
+    let rows=h.list.map((r,i)=>{const m=missing(r,prices);return {r,i,m,fit:deckFit(r,m)}});
     rows=rows.filter(x=>x.m.absent<=maximum&&(h.maxCost===""||(!x.m.unknown&&x.m.cost<=ceiling)));
-    rows.sort((a,b)=>h.sort==="cost"?
+    rows.sort((a,b)=>h.sort==="fit"?b.fit.score-a.fit.score||a.m.absent-b.m.absent:
+      h.sort==="cost"?
       Number(!!a.m.unknown)-Number(!!b.m.unknown)||a.m.cost-b.m.cost||a.m.absent-b.m.absent:
       a.m.absent-b.m.absent||Number(!!a.m.unknown)-Number(!!b.m.unknown)||a.m.cost-b.m.cost);
     body='<div class="tools-filters"><label class="control-label">Ordenar por<select class="field" id="toolsSort">'+
+      (personalized?'<option value="fit"'+(h.sort==="fit"?" selected":"")+'>Más recomendable para mí</option>':'')+
       '<option value="missing"'+(h.sort==="missing"?" selected":"")+'>Menos cartas faltantes</option>'+
       '<option value="cost"'+(h.sort==="cost"?" selected":"")+'>Menor presupuesto</option></select></label>'+
       '<label class="control-label">Máximo faltantes<select class="field" id="toolsMaxMissing">'+
@@ -304,17 +318,18 @@ function decksView(){
       '<div class="small">'+rows.length+' mazos visibles de '+h.list.length+' listas · '+Number(h.meta.scannedEvents||0)+' torneos consultados'+
       (h.meta.rateLimited?' · Resultados parciales':"")+'</div>';
     if(!rows.length)body+='<div class="notice">Ninguna lista cumple los filtros. Prueba ampliándolos.</div>';
-    else body+='<div class="tools-deckgrid">'+rows.slice(0,48).map(({r,i,m})=>{
+    else body+='<div class="tools-deckgrid">'+rows.slice(0,48).map(({r,i,m,fit})=>{
       const c=resolveDeckImportCard(r.leaderId);
       return '<div class="tools-item">'+(c?cardImg(c,"thumb"):"")+'<div class="grow"><b>'+text(r.leaderName||r.leaderId)+'</b>'+
-        '<div class="small">'+text(r.quality||"")+' · '+text(r.tournament||"")+'</div>'+
+        '<div class="small">'+text(r.quality||"")+' · '+text(r.tournament||"")+'</div>'+ 
+         (personalized?'<div class="small tools-good"><b>'+Math.round(fit.score)+' / 100 · '+text(fit.reason)+'</b></div>':'')+
         '<div class="tools-numbers"><b>'+m.absent+' faltantes</b><b>'+(m.unknown?"Desde ":"")+money(m.cost)+'</b></div>'+
         '<div class="small">'+m.owned+'/'+m.total+' copias disponibles'+(m.unknown?' · '+m.unknown+' sin precio':'')+'</div>'+
         '<button class="primary btn" data-tools-preview="'+i+'">Ver lista y faltantes</button></div></div>';
     }).join("")+'</div>';
   }
-  return '<div class="section"><h2>Mazos que casi puedes construir</h2>'+
-    '<p class="small">Analizamos listas públicas competitivas de distintos líderes y las comparamos con las cartas que tienes, contando conjuntamente sus impresiones equivalentes para jugar.</p>'+
+  return '<div class="section"><h2>'+(personalized?'Recomendados para ti':'Mazos que casi puedes construir')+'</h2>'+
+    '<p class="small">'+(personalized?'Ordenamos listas competitivas según el porcentaje de cartas que ya tienes, líderes de tus mazos, resultado del torneo y coste conocido de las faltantes. La puntuación es afinidad, no tasa de victorias.':'Analizamos listas públicas competitivas de distintos líderes y las comparamos con las cartas que tienes, contando conjuntamente sus impresiones equivalentes para jugar.')+'</p>'+
     (!state.user?'<div class="notice">Inicia sesión para calcular las cartas que te faltan.</div>':
       !state.collectionReady?'<div class="notice">Cargando tu colección desde Supabase…</div>':"")+
     '<button class="primary btn" id="toolsLoadDecks" '+(h.busy||!state.collectionReady||!state.user?"disabled":"")+'>'+
@@ -435,6 +450,13 @@ document.addEventListener?.("visibilitychange",()=>{
   }
 });
 window.OnePieceTools={tradePage,tradeItems,decksView,loadCloud,flushCloud,
+ getDeckMode:()=>h.mode,
+ setDeckMode:mode=>{
+   if(!["complete","mine"].includes(mode)||h.mode===mode)return;
+   h.mode=mode;h.sort=mode==="mine"?"fit":"missing";h.maxMissing=mode==="mine"?"":"12";
+   renderShell();
+   if(mode==="mine"&&!h.loaded&&!h.busy&&state.user&&state.collectionReady)void loadDecks();
+ },
  bindTrade:()=>{h.tab="trade";bind();
   document.querySelector("#tradeModePrepare")?.addEventListener("click",()=>{if(h.tradeSection!=="prepare"){h.tradeSection="prepare";renderShell()}});
   document.querySelector("#tradeModeOffers")?.addEventListener("click",()=>{if(h.tradeSection!=="offers"){h.tradeSection="offers";renderShell()}});

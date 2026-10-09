@@ -1,0 +1,20 @@
+.deck-lab-overlay{position:fixed;inset:0;z-index:120;display:flex;align-items:flex-end;justify-content:center;background:#05060aca;padding:10px}
+.deck-lab-dialog{width:min(790px,100%);max-height:94dvh;overflow-y:auto;overscroll-behavior:contain;background:var(--panel);border:1px solid var(--line);border-radius:17px;padding:15px;color:var(--text)}
+.deck-lab-top{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.deck-lab-dialog h2{font-size:22px;margin:9px 0}.deck-lab-dialog h3{font-size:15px;margin:12px 0 8px}
+.deck-lab-controls{display:flex;align-items:end;gap:7px;flex-wrap:wrap;margin:13px 0}.deck-lab-controls label{flex:1 1 120px;min-width:120px;font-size:12px}
+.deck-lab-controls .btn{flex:1 1 120px;min-height:42px}.deck-lab-hand{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:7px;margin:12px 0}
+.deck-lab-card{min-width:0}.deck-lab-card img{width:100%;height:auto;aspect-ratio:.716;object-fit:cover}.deck-lab-card span{display:block;font-size:10px;text-align:center;overflow-wrap:anywhere}
+.deck-lab-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:12px 0}
+.deck-lab-metrics>div{background:var(--panel2);border:1px solid var(--line);border-radius:11px;padding:10px;min-width:0}
+.deck-lab-metrics b{display:block;font-size:21px;color:var(--accent)}.deck-lab-metrics small{display:block;color:var(--muted);font-size:11px;line-height:1.4}
+.deck-lab-odds label,.deck-lab-dialog>label{font-size:12px;color:var(--muted);display:block;margin-bottom:7px}
+.deck-lab-versus{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0}.deck-lab-versus>div{padding:11px;background:var(--panel2);border:1px solid var(--line);border-radius:11px;min-width:0}
+.deck-lab-versus h3{overflow-wrap:anywhere}.deck-lab-versus span,.deck-lab-versus small{display:block;font-size:11px;color:var(--muted)}.deck-lab-versus b{display:block;margin-top:8px}
+.deck-lab-diff{display:flex;align-items:center;gap:9px;padding:7px 0;border-bottom:1px solid var(--line)}
+.deck-lab-diff .thumb{width:39px;height:54px;flex:none}.deck-lab-diff small{display:block;color:var(--muted);font-size:11px}
+.deck-lab-diff>span{min-width:30px;text-align:right;font-weight:800}.deck-lab-diff .lab-up{color:var(--ok)}.deck-lab-diff .lab-down{color:var(--danger)}
+@media(min-width:900px){.deck-lab-overlay{align-items:center}.deck-lab-dialog{max-height:87dvh}}
+@media(max-width:420px){.deck-lab-dialog{padding:10px}.deck-lab-controls .btn{font-size:11px;padding:9px 5px}.deck-lab-metrics b{font-size:17px}}
+/* Visible only in Catálogo; never float over a personal collection. */
+body:not([data-current-tab="catalog"]) #scanLaunch{display:none!important}

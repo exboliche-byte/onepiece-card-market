@@ -6,6 +6,9 @@
 <meta name="theme-color" content="#080a10">
 <meta name="description" content="MiAlbumOnePiece — álbum, colección y constructor de mazos de One Piece Card Game.">
 <link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/icon-192.png">
+<link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+<link rel="stylesheet" href="/deck-lab.css">
 <title>MiAlbumOnePiece</title>
 <style>
 :root{--bg:#080a10;--panel:#101521;--panel2:#171d2b;--line:#2b3548;--text:#f7f9fc;--muted:#98a4b8;--accent:#ffd447;--ok:#71e0b3;--danger:#ff7282;--blue:#74b8ff}
@@ -129,10 +132,10 @@
 .deck-library-heading-actions{display:flex;align-items:center;gap:8px}
 .deck-compare-pending{min-height:34px;padding:5px 9px;font-size:12px;opacity:.65;cursor:default}
 .deck-feature-spaces{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:8px 0 13px}
-.deck-feature-space{min-width:0;min-height:54px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:8px;background:var(--panel2);border:1px dashed var(--line);opacity:.7;cursor:default}
+.deck-feature-space{min-width:0;min-height:54px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:8px;background:var(--panel2);border:1px solid var(--line);cursor:pointer}
 .deck-feature-space strong{font-size:13px}
 .deck-discover-page .competitive-panel{margin:0;padding:0;border:0;background:transparent;box-shadow:none}
-.app-install-placeholder .btn{width:100%;max-width:320px;opacity:.65;cursor:default}
+.app-install-placeholder .btn{width:100%;max-width:320px}
 @media(max-width:520px){.collection-view-tabs .btn{font-size:11px}.deck-compare-pending{font-size:11px}.deck-library-heading .small{font-size:10px}}
 /* Navegación responsive: lateral plegable en ordenador, 5 accesos en móvil. */
 .desktop-side{display:none}
@@ -1547,7 +1550,6 @@ function deckLibraryView(){
     '<div class="deck-actions"><button class="deck-action" id="newDeck"><b>＋ Crear</b><span>Construye un mazo desde cero eligiendo líder y cartas.</span></button><button class="deck-action" id="findCompetitiveDecks"><b>🏆 Buscar</b><span>Busca listas con buenos resultados por líder e impórtalas directamente.</span></button><button class="deck-action" id="openDeckCompletion" type="button" aria-label="Abrir Descubrir mazos"><b>🃏 Descubrir</b><span>Encuentra mazos con tus cartas.</span></button></div>'+
     deckSyncStatusView()+
     '<div class="sectionhead deck-library-heading"><h2>Mis mazos</h2><div class="deck-library-heading-actions">'+
-    '<button class="secondary btn deck-compare-pending" type="button" disabled>⇄ Comparar <small>Próximamente</small></button>'+
     '<span class="small">'+savedDecks.length+' guardado(s)</span></div></div>'+
     (tiles?'<div class="decklibrary">'+tiles+'</div>':'<div class="section center"><h2>Aún no tienes mazos</h2><p class="muted">Puedes crear uno desde cero o importar una lista competitiva.</p></div>')+'</div>';
 }
@@ -1587,9 +1589,9 @@ function decksView(){
   const draftNotice=draft?'<div class="notice competitive-draft-note"><b>Vista previa — todavía no está guardado.</b> Puedes cambiar líder, cartas y cantidades con el creador de abajo. Pulsa “Guardar en mis mazos” solo cuando quieras conservarlo.'+(draftSource.unresolved?'<br>'+Number(draftSource.unresolved)+' copia(s) de la lista original no se pudieron resolver en el catálogo actual.':'')+'</div>':"";
   const deckMeta=draft?'': '<div class="section" id="deckMetaEditor" hidden><h2>Editar mazo</h2><label class="filter-label" for="editDeckName">Nombre</label><input class="field" id="editDeckName" maxlength="120" value="'+esc(d.name)+'"><label class="filter-label" for="editDeckDescription" style="display:block;margin-top:12px">Descripción</label><textarea class="field" id="editDeckDescription" rows="4" maxlength="2000" placeholder="Descripción del mazo...">'+esc(d.description||"")+'</textarea><div class="inline-actions" style="margin-top:12px"><button class="primary btn" id="saveDeckMeta">Guardar cambios</button><button class="secondary btn" id="cancelDeckMeta">Cancelar</button></div></div>';
   const deckDescription=d.description?'<div class="section" style="white-space:pre-wrap;overflow-wrap:anywhere">'+esc(d.description)+'</div>':'';
-  const plannedDeckFeatures='<nav class="deck-feature-spaces" aria-label="Próximas funciones de mazo">'+
-    '<button class="secondary btn deck-feature-space" type="button" disabled><strong>♧ Simular</strong><small>Próximamente</small></button>'+
-    '<button class="secondary btn deck-feature-space" type="button" disabled><strong>⇄ Comparar</strong><small>Próximamente</small></button></nav>';
+  const plannedDeckFeatures='<nav class="deck-feature-spaces" aria-label="Herramientas de mazo">'+
+    '<button class="secondary btn deck-feature-space" id="deckSimulate" type="button"><strong>♧ Simular mano</strong><small>Manos y probabilidades</small></button>'+
+    '<button class="secondary btn deck-feature-space" id="deckCompare" type="button"><strong>⇄ Comparar mazos</strong><small>Diferencias entre listas</small></button></nav>';
   return '<div class="wrap">'+hero+plannedDeckFeatures+deckSyncStatusView()+deckMeta+deckDescription+draftNotice+
     '<div class="section">'+(l?'<div class="deck-leader-row">'+cardImg(preferredOwnedDeckPrinting(l),"thumb")+'<div class="grow"><b>Líder · '+esc(l.name)+'</b><div class="small">'+esc(preferredOwnedDeckPrinting(l).id)+' · '+(priceOf(l)!==null?money(priceOf(l)):"Precio —")+' · '+(deckOwnedCopies(l)?"en colección":"te falta")+'</div></div><button class="secondary btn" id="changeLeader">Cambiar</button><button class="danger btn" id="removeLeader">Quitar</button></div>':'<div class="notice"><b>1. Elige el líder.</b> Hasta que no selecciones uno, aquí solo aparecen líderes.</div>')+'</div>'+
     deckStats+
@@ -2287,7 +2289,7 @@ function accountView(){
     '<button class="danger btn" id="deleteAccount" type="button">Eliminar mi cuenta</button>';
   return header+
     accountPanel("profile","Mi cuenta",account)+
-    accountPanel("app","Aplicación",'<div class="app-install-placeholder"><p class="small">La instalación como aplicación se habilitará en una próxima actualización.</p><button class="secondary btn" type="button" disabled>Instalar aplicación · Próximamente</button></div>')+
+    accountPanel("app","Aplicación",'<div class="app-install-placeholder"><p class="small">Instala MiAlbumOnePiece desde tu navegador para abrirla como una aplicación. Con conexión podrás consultar el catálogo y sincronizar tus datos; sin conexión, algunas funciones no estarán disponibles.</p><button id="installAppBtn" class="primary btn" type="button">Instalar aplicación</button><p class="small" id="installAppStatus">Usa el menú de tu navegador para añadir la aplicación a la pantalla de inicio.</p></div>')+
     accountPanel("backups","Datos y copias de seguridad",backups)+
     accountPanel("security","Seguridad",security)+
     accountPanel("danger","Eliminar cuenta",danger,"account-destructive")+
@@ -2393,6 +2395,16 @@ function navIcon(id){
 }
 let sidebarCollapsed=false;
 try{sidebarCollapsed=localStorage.getItem("mialbumonepiece_sidebar_collapsed")==="1"}catch{}
+document.addEventListener("pointerdown",e=>{
+  const menu=document.getElementById("mobileMorePanel"),toggle=document.getElementById("mobileMoreToggle");
+  if(!menu||menu.hidden||menu.contains(e.target)||toggle?.contains(e.target))return;
+  menu.hidden=true;toggle?.setAttribute("aria-expanded","false");
+},true);
+document.addEventListener("keydown",e=>{
+  if(e.key!=="Escape")return;
+  const menu=document.getElementById("mobileMorePanel"),toggle=document.getElementById("mobileMoreToggle");
+  if(menu&&!menu.hidden){menu.hidden=true;toggle?.setAttribute("aria-expanded","false");toggle?.focus()}
+});
 function nav(){
   const items=[["catalog","Catálogo"],["collection","Colección"],["wants","Wants"],["album","Expansiones"],["decks","Mazos"],["tournaments","Torneos"],["meta","Meta"],["trades","Intercambios"],["proxies","Proxies"],["account","Cuenta"]];
   const tabButton=([id,label],side)=>'<button type="button" class="'+((state.tab===id||(id==="decks"&&state.tab==="deck-completion"))?"active":"")+'" data-tab="'+id+'" aria-label="'+label+'"'+((state.tab===id||(id==="decks"&&state.tab==="deck-completion"))?' aria-current="page"':'')+'>'+navIcon(id)+'<span'+(side?' class="side-label"':'')+'>'+label+'</span></button>';
@@ -2422,10 +2434,11 @@ function nav(){
   return side+mobile;
 }
 function deckCompletionView(){
-  return '<div class="wrap"><div class="hero"><div><h1>Descubrir mazos</h1><p>Encuentra mazos que puedas completar con tus cartas.</p></div><button class="secondary btn" type="button" id="deckCompletionBack">← Volver</button></div>'+
+  const mode=window.OnePieceTools?.getDeckMode?.()||"complete",mine=mode==="mine";
+  return '<div class="wrap"><div class="hero"><div><h1>Descubrir mazos</h1><p>Encuentra listas competitivas según tus cartas y preferencias.</p></div><button class="secondary btn" type="button" id="deckCompletionBack">← Volver</button></div>'+
     '<nav class="discovery-view-tabs" aria-label="Opciones de descubrimiento">'+
-    '<button class="secondary btn active" type="button" disabled aria-current="page">Puedo completar</button>'+
-    '<button class="secondary btn" type="button" disabled>Para mí <small>Próximamente</small></button></nav>'+
+    '<button class="secondary btn '+(!mine?'active':'')+'" id="deckDiscoveryComplete" type="button" '+(!mine?'aria-current="page"':'')+'>Puedo completar</button>'+
+    '<button class="secondary btn '+(mine?'active':'')+'" id="deckDiscoveryMine" type="button" '+(mine?'aria-current="page"':'')+'>Para mí</button></nav>'+
     (window.OnePieceTools?.decksView?.()||'<div class="section">Cargando mazos…</div>')+'</div>';
 }
 function renderShell(){
@@ -2615,6 +2628,8 @@ function navigateApp(mutator){
   window.scrollTo({top:0,behavior:"auto"});
 }
 function bindShell(){
+  $("#deckDiscoveryComplete")?.addEventListener("click",()=>window.OnePieceTools?.setDeckMode?.("complete"));
+  $("#deckDiscoveryMine")?.addEventListener("click",()=>window.OnePieceTools?.setDeckMode?.("mine"));
   $("#deckCompletionBack")?.addEventListener("click",()=>navigateApp(()=>{
     state.tab="decks";state.deckLibrary=true;state.deckId=null;state.deckPreviewOrigin="";state.deckDiscover=false;
   }));
@@ -2771,6 +2786,8 @@ function bindShell(){
     $("#changeLeader")?.addEventListener("click",beginLeaderChange);
     $("#removeLeader")?.addEventListener("click",removeLeader);
     $("#shareDeck")?.addEventListener("click",()=>shareDeck());
+    $("#deckSimulate")?.addEventListener("click",()=>window.OnePieceDeckLab?.simulate?.());
+    $("#deckCompare")?.addEventListener("click",()=>window.OnePieceDeckLab?.compare?.());
     bindSearch("#deckSearch",v=>{state.deckQuery=v;state.deckPage=1;renderDeckResults()});
     const map={deckSet:"set",deckCat:"category",deckColor:"color",deckRarity:"rarity",deckType:"type",deckAttribute:"attribute",deckOwnership:"ownership",deckSort:"sort",deckDir:"dir"};
     Object.entries(map).forEach(([id,k])=>$("#"+id)?.addEventListener("change",async()=>{state.deckFilters[k]=$("#"+id).value;state.deckPage=1;await renderDeckResults()}));
@@ -2811,6 +2828,7 @@ function bindShell(){
   }
 }
 function bindAccount(){
+  window.MiAlbumPWA?.bind?.();
   document.querySelectorAll("[data-account-panel]").forEach(panel=>panel.addEventListener("toggle",()=>{
     if(panel.open)openAccountPanels.add(panel.dataset.accountPanel);
     else openAccountPanels.delete(panel.dataset.accountPanel);
@@ -4078,6 +4096,8 @@ window.addEventListener("popstate",e=>{
 });
 }boot();
 </script>
+<script src="/pwa.js"></script>
+<script src="/deck-lab.js"></script>
 <script src="/modal-accessibility.js"></script>
 <script src="/image-visibility.js"></script>
 <script src="/scanner.js"></script>

@@ -65,5 +65,10 @@
       "path": "/api/price-history-cron",
       "schedule": "0 4 * * *"
     }
-  ]
+  ],
+  "git": {
+    "deploymentEnabled": {
+      "feature/deck-tools-pwa-20261009": false
+    }
+  }
 }
