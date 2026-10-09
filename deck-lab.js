@@ -76,7 +76,8 @@ function parsePasted(raw,d){
 function thumb(id){const c=card(id);return c?cardImg(c,"thumb"):'<div class="thumb">?</div>'}
 function title(id){return card(id)?.name||id||"Sin líder"}
 function comboChance(total,quantities,draws){
- if(!quantities.length)return 0;
+ total=n(total);draws=Math.min(n(draws),total);
+ if(!quantities.length||!total||!draws)return 0;
  let value=0;
  for(let mask=0;mask<(1<<quantities.length);mask++){
   let excluded=0,bits=0;
