@@ -1706,7 +1706,7 @@ function decksView(){
       '<div class="deck-menu-group"><button class="secondary btn" id="editDeckMeta">Editar nombre y descripción</button>'+
       '<button class="danger btn" id="deleteDeck">Eliminar mazo</button></div>';
   const hero='<div class="deck-compact-hero">'+
-    '<div class="deck-compact-title"><button class="linkbtn" id="'+(draft?'backCompetitiveResults':'backDecks')+'">← '+(state.deckPreviewOrigin==="deck-completion"?'Volver a mazos que puedo completar':draft?'Volver a resultados':'Mis mazos')+'</button><h1>'+esc(d.name)+'</h1></div>'+
+    '<div class="deck-compact-title"><button class="linkbtn" id="'+(draft?'backCompetitiveResults':'backDecks')+'">← '+(state.deckPreviewOrigin==="deck-completion"?'Volver a mazos que puedo completar':draft?'Volver a resultados':state.deckPreviewOrigin==="card-search"?'Volver a búsqueda por carta':'Mis mazos')+'</button><h1>'+esc(d.name)+'</h1></div>'+
     '<details class="deck-action-menu" id="deckActionsMenu"><summary class="secondary btn" aria-label="Mostrar acciones del mazo">⋯ Acciones</summary><div class="deck-action-menu-panel">'+deckActions+'</div></details></div>'+
     (draft?'<div class="deck-draft-save"><button class="primary btn" id="saveCompetitiveDraft">Guardar en mis mazos</button></div>':'');
   const deckStats='<details class="deck-stats-toggle"><summary>'+
@@ -2754,7 +2754,7 @@ function restoreReloadView(saved){
   state.deckPage=Math.max(1,Number(saved.deckPage)||1);
   state.deckChoosingLeader=!!saved.deckChoosingLeader;
   state.deckDiscover=!!saved.deckDiscover;
-  state.deckPreviewOrigin=saved.deckPreviewOrigin==="deck-completion"?"deck-completion":"";
+  state.deckPreviewOrigin=saved.deckPreviewOrigin==="deck-completion"?"deck-completion":saved.deckPreviewOrigin==="card-search"?"card-search":"";
   state.proxyQuery=typeof saved.proxyQuery==="string"?saved.proxyQuery:"";
   if(saved.proxySelection&&typeof saved.proxySelection==="object"&&!Array.isArray(saved.proxySelection)){
     state.proxySelection=Object.fromEntries(Object.entries(saved.proxySelection)
@@ -2792,7 +2792,7 @@ function restoreAppView(view){
   if(oldDraft&&oldDraft.id!==view.deckId)state.decks=state.decks.filter(d=>d.id!==oldDraft.id);
   state.deckId=view.deckId||null;
   state.deckDiscover=state.tab==="decks"&&state.deckLibrary&&!!view.deckDiscover;
-  state.deckPreviewOrigin=view.deckPreviewOrigin==="deck-completion"?"deck-completion":"";
+  state.deckPreviewOrigin=view.deckPreviewOrigin==="deck-completion"?"deck-completion":view.deckPreviewOrigin==="card-search"?"card-search":"";
   state.tournamentId=state.user&&state.tournaments.some(t=>t.id===view.tournamentId)?view.tournamentId:null;
   state.tournamentStats=null;state.tournamentDraft=null;state.tournamentRoundDraft=null;
   renderShell();
@@ -2923,6 +2923,25 @@ function bindShell(){
     $("#openDeckCompletion")?.addEventListener("click",()=>navigateApp(()=>{state.tab="deck-completion";state.deckLibrary=true;state.deckId=null;state.deckPreviewOrigin="";state.deckDiscover=false}));
     $("#findCompetitiveDecks")?.addEventListener("click",()=>navigateApp(()=>{state.deckDiscover=true;state.deckDiscoverError="";state.deckLibrary=true}));
     $("#closeCompetitiveSearch")?.addEventListener("click",()=>navigateApp(()=>{state.deckDiscover=false;state.deckDiscoverError="";state.deckLibrary=true}));
+    document.querySelectorAll("[data-competitive-mode]").forEach(b=>b.onclick=()=>{
+      const mode=b.dataset.competitiveMode;
+      if(mode!==state.deckDiscoverMode){
+        state.deckDiscoverMode=mode;state.deckDiscoverResults=[];state.deckDiscoverMeta=null;
+        state.deckDiscoverError="";state.deckDiscoverLoading=false;renderShell();
+      }
+    });
+    const competitiveCardSearch=$("#competitiveCardSearch");
+    competitiveCardSearch?.addEventListener("input",()=>{
+      state.deckDiscoverCardQuery=competitiveCardSearch.value;
+      state.deckDiscoverCard="";state.deckDiscoverResults=[];state.deckDiscoverMeta=null;state.deckDiscoverError="";
+      const grid=$("#competitiveCardGrid");if(grid)grid.innerHTML=competitiveCardGridHtml();
+      bindCompetitiveCardButtons();
+    });
+    bindCompetitiveCardButtons();
+    document.querySelectorAll("[data-open-card-deck]").forEach(b=>b.onclick=()=>navigateApp(()=>{
+      state.deckPreviewOrigin="card-search";state.deckId=b.dataset.openCardDeck;
+      state.deckLibrary=false;state.deckChoosingLeader=false;state.deckDiscover=false;
+    }));
     $("#runCompetitiveSearch")?.addEventListener("click",searchCompetitiveDecks);
     $("#competitiveDays")?.addEventListener("change",e=>{state.deckDiscoverDays=Number(e.target.value)||90});
     $("#competitiveMinPlayers")?.addEventListener("change",e=>{state.deckDiscoverMinPlayers=Number(e.target.value)||32});
@@ -2944,9 +2963,11 @@ function bindShell(){
     document.querySelectorAll("[data-open-deck]").forEach(b=>b.onclick=()=>navigateApp(()=>{state.deckPreviewOrigin="";state.deckId=b.dataset.openDeck;state.deckLibrary=false;state.deckChoosingLeader=false;state.deckDiscover=false}));
     $("#backDecks")?.addEventListener("click",()=>{
       const fromCompletion=state.deckPreviewOrigin==="deck-completion";
+      const fromCardSearch=state.deckPreviewOrigin==="card-search";
       navigateApp(()=>{
         state.tab=fromCompletion?"deck-completion":"decks";
-        state.deckLibrary=true;state.deckId=null;state.deckChoosingLeader=false;state.deckPreviewOrigin="";
+        state.deckLibrary=true;state.deckId=null;state.deckChoosingLeader=false;
+        state.deckDiscover=fromCardSearch;state.deckPreviewOrigin="";
       });
       if(fromCompletion)window.scrollTo({top:state.deckPreviewScrollY||0,behavior:"auto"});
     });
