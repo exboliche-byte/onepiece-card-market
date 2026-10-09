@@ -119,8 +119,8 @@ function firstSecondView(d){
   const tiles=filtered.slice(0,m.expanded?100:18).map(x=>{
     const diff=x.firstRate-x.secondRate;
     return '<article class="meta-turn-card"><div class="meta-turn-leader">'+art(x.id)+
-      '<div><b>'+esc(name(x.id))+'</b><small>'+esc(x.id)+' · '+integer(x.games)+' partidas</small>'+
-      '<small>W/R general: '+rate(x.wins,x.losses)+'</small></div></div>'+
+      '<div><b>'+esc(name(x.id))+'</b><small>'+esc(x.id)+' · '+integer(x.simulator?.games||x.games)+' partidas de simulador</small>'+
+      '<small>W/R combinado: '+Number(x.rate).toLocaleString("es-ES",{maximumFractionDigits:1})+' %</small></div></div>'+
       '<div class="meta-turn-bars">'+
        '<div class="meta-turn-line"><span>🥇 1.º</span><div class="meta-turn-track"><i style="width:'+x.firstRate+'%"></i></div>'+
        '<b>'+x.firstRate.toFixed(1)+'%</b><small>n='+integer(x.firstGames)+'</small></div>'+
