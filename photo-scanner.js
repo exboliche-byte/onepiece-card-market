@@ -5,7 +5,7 @@ const $=q=>document.querySelector("#photoScanPanel "+q);
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&#39;","'":"&#39;"}[c]));
 const base=id=>String(baseId(id||"")).toUpperCase();
 const MAX_FILE=22*1024*1024, MAX_CARDS=40;
-let canvas=null,regions=[],rows=[],worker=null,workerReady=false,matcher=null,active=false,busy=false,generation=0,drag=null;
+let canvas=null,regions=[],rows=[],worker=null,workerReady=false,matcher=null,active=false,busy=false,generation=0,drag=null,historyActive=false;
 const cardCode=c=>base(c?.id);
 function baseCard(id){const code=base(id);return state.cards.find(c=>c.id===code)||state.cards.find(c=>cardCode(c)===code)||null}
 function group(code){return state.cards.filter(c=>cardCode(c)===code)}
@@ -346,10 +346,13 @@ async function saveCards(){
  if(failed)tell("Guardadas "+saved+" cartas; "+failed+" impresiones no pudieron guardarse. Conservadas para reintentar.",true);
  else tell("Guardadas "+saved+" cartas. Ningún recorte pendiente.");
 }
-function close(){
- generation++;active=false;busy=false;workerStop();canvas=null;regions=[];rows=[];drag=null;
+function close({fromHistory=false}={}){
+ if(!active)return;
+ if(historyActive&&!fromHistory){history.back();return}
+ historyActive=false;generation++;active=false;busy=false;workerStop();canvas=null;regions=[];rows=[];drag=null;
  $("#photoScanPanel")?.remove();
  document.querySelector("#photoStyles")?.remove();
+ window.dispatchEvent(new Event("onepiece:photo-closed"));
 }
 function open(){
  if(active)return;
@@ -371,6 +374,8 @@ function open(){
  '<footer><button id="photoSave" type="button" disabled>Guardar 0 cartas en mi colección</button>'+
  '<span>Las fotos se procesan en este dispositivo. Nada se guarda sin confirmación.</span></footer></div>';
  document.body.appendChild(el);
+ try{history.pushState({...history.state,onepiecePhoto:true},"",location.href);historyActive=true}
+ catch(e){historyActive=false}
  const style=document.createElement("style");style.id="photoStyles";
  style.textContent="#photoScanPanel{position:fixed;inset:0;z-index:10020;background:#070b11;color:#f5f6fb;overflow-y:auto;font:14px system-ui,sans-serif}"+
  "#photoScanPanel *{box-sizing:border-box}#photoScanPanel .photo-shell{max-width:880px;margin:auto;padding:12px 12px 100px}"+
@@ -388,7 +393,7 @@ function open(){
  "#photoScanPanel footer{position:sticky;bottom:0;background:#0b121ff5;padding:12px;margin-top:12px;display:grid;gap:7px;border-top:1px solid #526075}#photoScanPanel footer button{background:#ffd447;color:#171717;font-size:17px}#photoScanPanel footer span{font-size:11px;color:#bfcadc;text-align:center}"+
  "@media(max-width:500px){#photoScanPanel .photo-card-row>img{width:70px;height:100px}#photoScanPanel .photo-row-bottom button{font-size:11px;padding:8px}}";
  document.head.appendChild(style);
- $("#photoClose").onclick=close;
+ $("#photoClose").onclick=()=>close();
  $("#photoUpload").onclick=()=>$("#photoFile").click();
  $("#photoCapture").onclick=()=>$("#photoCameraFile").click();
  $("#photoFile").onchange=e=>{void processFile(e.target.files?.[0]);e.target.value=""};
