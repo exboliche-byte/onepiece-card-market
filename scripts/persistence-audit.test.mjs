@@ -18,7 +18,7 @@ test("collection CSV import is a single all-or-nothing RPC",()=>{
  assert.match(sql,/DELETE FROM public\.collection_items WHERE user_id=uid/);
 });
 test("deck saves serialize writes and use transaction",()=>{
- const section=html.split("function syncDeck(d){")[1].split("async function syncDeckDelete")[0];
+ const section=html.split("function syncDeck(d,{automatic=false}={}){")[1].split("async function syncDeckDelete")[0];
  assert.match(section,/deckSyncWrites\.get\(id\)/);
  assert.match(section,/deck_save_atomic/);
  assert.doesNotMatch(section,/\.from\("deck_cards"\)\.delete/);

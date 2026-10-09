@@ -1,0 +1,28 @@
+name: Verify multi-source Meta and automatic decks
+on:
+  push:
+    branches: [fix-autosync-multisource-meta-20261009, main]
+    paths: [index.html, meta.js, meta-report.js, api/meta-comparison.js, scripts/**, .github/workflows/verify-metasources-autosync.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: "22"}
+      - name: Run regression suite and validate deployment output
+        run: sh scripts/vercel-build.sh
+      - name: Verify live OPlay public data can be parsed
+        run: |
+          node --input-type=module <<'JS'
+          import handler from './api/meta-comparison.js';
+          const r=await handler.fetch(new Request('https://example.invalid/api/meta-comparison'));
+          const d=await r.json();
+          console.log('INDEPENDENT_META',JSON.stringify(d.sources.map(s=>({name:s.name,status:s.status,leaders:s.leaders?.length,error:s.error,top:s.leaders?.[0]}))));
+          if(!d.sources.some(s=>s.id==='oplay'&&s.status==='ok'&&s.leaders.length>=5))
+            throw Error('OPlay source not verified: parser/SSR structure changed');
+          JS
