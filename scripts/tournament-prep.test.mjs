@@ -48,7 +48,7 @@ test("View includes source separation, personalized dice and turn-order analysis
  state.tournaments=[{date:"2026-10-09",leaderId:"OP01-003",rounds:[{kind:"swiss",result:"W",opponentId:"OP02-001",start:"1"}]}];
  const page=module.view();
  for(const phrase of ["Todos los enfrentamientos disponibles","Mis estadísticas con este líder","Dado ganado",
-  "Dado perdido","Limitless","Comunidad","Todas las rondas","Mis últimas partidas","Mínimo 20 partidas"])
+  "Dado perdido","Meta combinado","Comunidad","Todas las rondas","Mis últimas partidas","Mínimo 20 partidas"])
   assert.ok(page.includes(phrase),phrase);
 });
 test("Expanded public coverage pages through tournaments, tracks limits and preserves standard meta",()=>{
