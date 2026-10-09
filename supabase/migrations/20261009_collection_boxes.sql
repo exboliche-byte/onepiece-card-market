@@ -49,7 +49,7 @@ create policy box_cards_insert_owned on public.user_collection_box_cards
    user_id=(select auth.uid())
    and exists (
      select 1 from public.collection_items owned
-     where owned.user_id=user_id and owned.card_id=card_id and owned.quantity>0
+     where owned.user_id=(select auth.uid()) and owned.card_id=public.user_collection_box_cards.card_id and owned.quantity>0
    )
  );
 drop policy if exists box_cards_delete_own on public.user_collection_box_cards;
