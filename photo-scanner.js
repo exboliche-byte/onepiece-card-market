@@ -184,6 +184,33 @@ function optionText(row){
   return '<option value="'+esc(x.code)+'"'+(selected===x.code?' selected':'')+'>'+esc(x.code+' · '+(c?.name||"")+(Number.isFinite(x.score)?' · sugerencia visual':''))+'</option>';
  }).join("");
 }
+async function readCodeForRow(index){
+ const row=rows[index],gen=generation;
+ if(!row||busy||!active)return;
+ busy=true;tell("Leyendo el número de la carta "+(index+1)+"…");refreshControls();
+ try{
+  if(!photoOcrLoading){
+   photoOcrLoading=import("/scanner-ocr.js?v=ocr5").then(async module=>{
+    const engine=module.createEngine(()=>{});
+    await engine.init();
+    if(!active){void engine.destroy();throw Error("Escáner cerrado")}
+    photoOcr=engine;return engine;
+   }).catch(error=>{photoOcrLoading=null;throw error});
+  }
+  const engine=await photoOcrLoading;
+  if(!active||generation!==gen)return;
+  const result=await engine.recognize(makeCrop(row.region,canvas,800,1120),3);
+  if(!active||generation!==gen)return;
+  const code=result.codes.find(id=>group(id).length);
+  if(!code){tell("No se ha podido leer el código. Prueba con un recorte más nítido o búscalo manualmente.",true);return}
+  row.selectedCode=code;row.printId=baseCard(code)?.id||"";
+  if(!row.candidates.some(c=>c.code===code))row.candidates.unshift({code,score:null});
+  row.confident=false;
+  tell("Código detectado: "+code+". Comprueba la ilustración y la impresión.");
+ }catch(error){
+  if(active&&generation===gen)tell("OCR no disponible: "+String(error?.message||error),true);
+ }finally{if(active&&generation===gen){busy=false;rowList();refreshControls()}}
+}
 function rowList(){
  const host=$("#photoCards");if(!host)return;
  const total=rows.filter(r=>!r.omitted&&r.printId).reduce((t,r)=>t+r.count,0);
@@ -195,6 +222,7 @@ function rowList(){
    '<img src="'+r.thumb+'" alt="Recorte de carta '+(i+1)+'">'+
    '<div class="photo-card-fields"><b>Carta '+(i+1)+'</b><small>'+(r.confident?'Coincidencia probable: confirma la edición':'Revisar identificación')+'</small>'+
    '<label>Identificación<select data-photo-code>'+optionText(r)+'</select></label>'+
+   '<button type="button" data-photo-ocr>🔎 Leer código de la carta (OCR)</button>'+ 
    '<label>Buscar otra carta<input data-photo-search type="search" placeholder="Código o nombre de carta" autocomplete="off"></label>'+
    '<div data-photo-suggestions class="photo-suggestions"></div>'+
    '<label>Impresión exacta<select data-photo-print'+(!r.selectedCode?' disabled':'')+'><option value="">Selecciona impresión</option>'+
@@ -221,6 +249,7 @@ function rowList(){
   el.querySelector("[data-photo-remove]").onclick=()=>{
    rows.splice(i,1);regions.splice(i,1);drawPreview();rowList()
   };
+  el.querySelector("[data-photo-ocr]").onclick=()=>void readCodeForRow(i);
   const search=el.querySelector("[data-photo-search]"),suggestions=el.querySelector("[data-photo-suggestions]");
   search.oninput=()=>{
    const q=search.value.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().trim();
@@ -333,7 +362,7 @@ function close({fromHistory=false}={}){
  // Close synchronously: don't leave an unresponsive overlay waiting for popstate.
  const navigateBack=!fromHistory&&historyActive&&history.state?.onepiecePhoto===true;
  historyActive=false;generation++;active=false;busy=false;
- stopDetection();workerStop();canvas=null;regions=[];rows=[];drag=null;
+ stopDetection();workerStop();if(photoOcr){void photoOcr.destroy();photoOcr=null}photoOcrLoading=null;canvas=null;regions=[];rows=[];drag=null;
  $("#photoScanPanel")?.remove();
  document.querySelector("#photoStyles")?.remove();
  window.dispatchEvent(new Event("onepiece:photo-closed"));
