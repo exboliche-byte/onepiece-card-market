@@ -388406,7 +388406,8 @@
       "Fish-Man Island"
     ],
     "image": "https://limitlesstcg.nyc3.cdn.digitaloceanspaces.com/one-piece/EB03/EB03-052_p1_EN.webp",
-    "catalogSource": "Limitless exact English print verified by image filename"
+    "catalogSource": "Limitless exact English print verified by image filename",
+    "syncCarryForward": true
   },
   {
     "id": "OP02-013_p4",
@@ -388466,7 +388467,8 @@
       "Whitebeard Pirates"
     ],
     "image": "https://limitlesstcg.nyc3.cdn.digitaloceanspaces.com/one-piece/OP02/OP02-013_p4_EN.webp",
-    "catalogSource": "Limitless exact English print verified by image filename"
+    "catalogSource": "Limitless exact English print verified by image filename",
+    "syncCarryForward": true
   },
   {
     "id": "OP04-083_p4",
@@ -388529,7 +388531,8 @@
       "Revolutionary Army"
     ],
     "image": "https://limitlesstcg.nyc3.cdn.digitaloceanspaces.com/one-piece/OP04/OP04-083_p4_EN.webp",
-    "catalogSource": "Limitless exact English print verified by image filename"
+    "catalogSource": "Limitless exact English print verified by image filename",
+    "syncCarryForward": true
   },
   {
     "id": "OP06-118_p3",
@@ -388589,7 +388592,8 @@
       "Straw Hat Crew"
     ],
     "image": "https://limitlesstcg.nyc3.cdn.digitaloceanspaces.com/one-piece/OP06/OP06-118_p3_EN.webp",
-    "catalogSource": "Limitless exact English print verified by image filename"
+    "catalogSource": "Limitless exact English print verified by image filename",
+    "syncCarryForward": true
   },
   {
     "id": "OP03-026_p1",
@@ -388683,7 +388687,8 @@
       "Arlong Pirates"
     ],
     "image": "https://limitlesstcg.nyc3.cdn.digitaloceanspaces.com/one-piece/OP03/OP03-026_p1_EN.webp",
-    "catalogSource": "Limitless exact English print verified by image filename"
+    "catalogSource": "Limitless exact English print verified by image filename",
+    "syncCarryForward": true
   },
   {
     "id": "OP12-049_p1",
@@ -388758,7 +388763,8 @@
       "Cross Guild"
     ],
     "image": "https://limitlesstcg.nyc3.cdn.digitaloceanspaces.com/one-piece/OP12/OP12-049_p1_EN.webp",
-    "catalogSource": "Limitless exact English print verified by image filename"
+    "catalogSource": "Limitless exact English print verified by image filename",
+    "syncCarryForward": true
   },
   {
     "id": "OP16-095_p1",
@@ -388806,7 +388812,8 @@
       "Straw Hat Crew"
     ],
     "image": "https://limitlesstcg.nyc3.cdn.digitaloceanspaces.com/one-piece/OP16/OP16-095_p1_EN.webp",
-    "catalogSource": "Limitless exact English print verified by image filename"
+    "catalogSource": "Limitless exact English print verified by image filename",
+    "syncCarryForward": true
   },
   {
     "id": "ST06-002_p1",
@@ -388890,6 +388897,7 @@
       "Navy"
     ],
     "image": "https://limitlesstcg.nyc3.cdn.digitaloceanspaces.com/one-piece/ST06/ST06-002_p1_EN.webp",
-    "catalogSource": "Limitless exact English print verified by image filename"
+    "catalogSource": "Limitless exact English print verified by image filename",
+    "syncCarryForward": true
   }
 ]
