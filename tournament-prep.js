@@ -9,6 +9,15 @@ const n=v=>Number(v||0);
 const num=v=>n(v).toLocaleString("es-ES");
 const wr=(w,l)=>n(w)+n(l)?(100*n(w)/(n(w)+n(l))).toLocaleString("es-ES",{maximumFractionDigits:1})+" %":"—";
 const blank=()=>({wins:0,losses:0,first:{wins:0,losses:0},second:{wins:0,losses:0},diceW:{wins:0,losses:0},diceL:{wins:0,losses:0}});
+function countPersonalTournaments(tournaments,days,now=Date.now()){
+ const all=Array.isArray(tournaments)?tournaments.filter(t=>t&&typeof t==="object"):[];
+ const since=now-days*86400000,until=now+86400000;
+ const inPeriod=all.filter(t=>{
+  const stamp=Date.parse(String(t.date||"").slice(0,10)+"T23:59:59");
+  return Number.isFinite(stamp)&&stamp>=since&&stamp<=until;
+ });
+ return {total:all.length,inPeriod:inPeriod.length};
+}
 function summarizePersonal(leader,days,tournaments,decks,now=Date.now()){
  const total=blank(),pairs=new Map(),recent=[];let events=0;
  for(const t of tournaments||[]){
@@ -104,7 +113,8 @@ function matchRow(r){
  '<div class="prep-order"><small>'+e(sourceOrder)+'</small></div></div></article>';
 }
 function view(){
- const leader=selected(),d=active(),personal=summarizePersonal(leader,st.days,state.tournaments,state.decks),rows=matchRows(d,leader,personal);
+ const leader=selected(),d=active(),personal=summarizePersonal(leader,st.days,state.tournaments,state.decks),
+   history=countPersonalTournaments(state.tournaments,st.days),rows=matchRows(d,leader,personal);
  const opts=leaderOptions(),leaderStat=d?.leaders?.find(x=>id(x.id)===leader),pending=fetchPending(),error=currentError();
  const filters=[["auto","Formato predominante"],["all","Todos los formatos"],...(st.global?.formats||[]).map(x=>[x,x])];
  const eligible=rows.filter(x=>x.games>=st.minimum&&(!st.search||String(name(x.key)+" "+x.key).toLowerCase().includes(st.search.toLowerCase())));
@@ -126,12 +136,16 @@ function view(){
   '<p class="small">Meta y Preparar torneo usan el mismo metajuego combinado. Período y formato filtran los torneos; OPlay utiliza la muestra temporal publicada por su simulador. Tu historial personal se mantiene independiente.</p></section>'+
   (pending?'<div class="notice">Cargando resultados reales de torneos…</div>':"")+
   (error?'<div class="notice">⚠ '+e(error)+'</div>':"")+
+  '<div class="prep-stats">'+
+    metric("Mis torneos registrados (total)",num(history.total))+
+    metric("Mis torneos en el período (todos los líderes)",num(history.inPeriod))+
+    metric("Con este líder en el período",num(personal.events))+
+    metric("Mi W/R con este líder",wr(personal.total.wins,personal.total.losses))+'</div>'+
   (d?'<div class="prep-stats">'+metric("Partidas públicas de este líder",leaderStat?num(leaderStat.games):"—")+
     metric("W/R combinado del líder",leaderStat?num(leaderStat.rate)+" %":"—")+
     metric("Tier global",st.scope==="global"&&leaderStat?leaderStat.tier||"—":"—")+
     metric("Presencia en meta global",st.scope==="global"&&leaderStat?num(leaderStat.share)+" %":"—")+
-    metric("Mis torneos en el período",num(personal.events))+
-    metric("Mi win rate",wr(personal.total.wins,personal.total.losses))+'</div>'+coverage(d)+important(rows):
+    '</div>'+coverage(d)+important(rows):
     '<div class="notice">'+(pending?"Analizando…":"Todavía no hay datos disponibles de la fuente elegida.")+'</div>')+
   '<section class="prep-panel"><h3>Mis estadísticas con este líder</h3>'+
    '<p class="small">Todos mis resultados registrados para el período, sin BYEs ni no-shows. Los valores de dado y orden solo cuentan si los indiqué.</p>'+
@@ -199,5 +213,5 @@ function bind(){
 const style=document.createElement("style");
 style.textContent=".prep-root{max-width:1320px;margin:auto;display:grid;gap:14px;padding-bottom:75px}.prep-panel{border:1px solid var(--line);background:var(--panel);border-radius:14px;padding:14px;min-width:0}.prep-panel h3{margin:0 0 10px}.prep-selected{display:flex;gap:12px;align-items:center}.prep-selected>div{flex:1}.prep-selected b,.prep-selected small{display:block}.prep-selected small{color:var(--muted)}.prep-leader-main{width:65px;height:91px;object-fit:cover;flex:none;border-radius:7px}.prep-config{display:flex;flex-wrap:wrap;gap:10px;align-items:end;margin:13px 0}.prep-config label{display:grid;gap:5px;flex:1;min-width:130px;font-size:12px;color:var(--muted)}.prep-sources{display:flex;flex-wrap:wrap;gap:8px}.prep-sources button{border:1px solid var(--line);background:var(--panel2);border-radius:9px;padding:9px 14px;color:var(--text);font-weight:800;cursor:pointer}.prep-sources .selected{color:var(--accent);border-color:var(--accent)}.prep-picker{margin-top:12px}.prep-leaders{display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:8px;max-height:420px;overflow:auto;margin-top:10px}.prep-leader{background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:9px;padding:5px;text-align:left;cursor:pointer}.prep-leader[hidden]{display:none}.prep-leader.active{border-color:var(--accent)}.prep-leader-thumb{width:100%;aspect-ratio:.716;object-fit:cover}.prep-leader b,.prep-leader small{display:block;font-size:10px;overflow-wrap:anywhere}.prep-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}.prep-metric,.prep-record,.prep-tip{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:11px;min-width:0}.prep-metric b{font-size:clamp(18px,2.7vw,26px);display:block}.prep-metric small,.prep-record small,.prep-tip small{font-size:11px;color:var(--muted)}.prep-coverage{border:1px solid var(--line);border-radius:11px;padding:12px;font-size:12px;color:var(--muted);line-height:1.6}.prep-coverage a{color:var(--accent)}.prep-coverage p{margin:5px 0}.prep-tips{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}.prep-tip{background:var(--panel2)}.prep-tip small,.prep-tip b,.prep-tip span{display:block}.prep-tip-art{width:39px;height:54px;object-fit:cover;float:left;margin-right:7px;border-radius:4px}.prep-tip b{font-size:12px}.prep-tip span{font-size:11px}.prep-personal{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:9px}.prep-record{background:var(--panel2)}.prep-record b,.prep-record strong,.prep-record small{display:block}.prep-record strong{font-size:21px;margin:6px 0}.prep-filter{display:grid;grid-template-columns:2fr 1fr 1fr;gap:8px;margin:9px 0}.prep-match-list{display:grid;gap:8px;max-height:850px;overflow:auto}.prep-match{display:flex;gap:10px;align-items:center;padding:9px;border:1px solid var(--line);background:var(--panel2);border-radius:12px;min-width:0}.prep-rival-image{width:45px;height:63px;flex:none;object-fit:cover;border-radius:4px}.prep-rival-name{flex:1;min-width:120px}.prep-rival-name b,.prep-rival-name small{display:block}.prep-rival-name b{font-size:13px}.prep-rival-name small{font-size:10px;color:var(--muted)}.prep-numbers{display:grid;grid-template-columns:95px 130px 150px;gap:9px;align-items:center}.prep-numbers small{display:block;font-size:10px;color:var(--muted)}.prep-numbers b{font-size:17px}.prep-bar{height:4px;background:var(--line);border-radius:8px;overflow:hidden}.prep-bar i{display:block;background:var(--accent);height:100%}.prep-title{display:flex;align-items:center;justify-content:space-between}.prep-recent{display:flex;gap:10px;border-bottom:1px solid var(--line);padding:9px 0}.prep-recent b{min-width:75px}.prep-recent small{display:block;font-size:11px;color:var(--muted)}@media(max-width:820px){.prep-match{flex-wrap:wrap}.prep-numbers{grid-template-columns:1fr 1fr;width:100%}.prep-order{grid-column:span 2}.prep-tips{grid-template-columns:1fr 1fr}}@media(max-width:520px){.prep-stats{grid-template-columns:1fr 1fr}.prep-filter{grid-template-columns:1fr}.prep-selected{flex-wrap:wrap}.prep-tips{grid-template-columns:1fr}.prep-config label{min-width:110px}}";
 document.head.appendChild(style);
-window.TournamentPrep={view,bind,summarizePersonal};
+window.TournamentPrep={view,bind,summarizePersonal,countPersonalTournaments};
 })();

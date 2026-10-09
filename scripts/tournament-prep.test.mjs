@@ -65,3 +65,34 @@ test("Production build copies the preparation module and runs its tests",()=>{
  assert.match(build,/scripts\/tournament-prep\.test\.mjs/);
  assert.match(build,/tournament-prep\.js wants\.js collection-boxes\.js public\//);
 });
+
+
+test("global personal tournament count is independent of selected leader and counts unfinished records",()=>{
+ const {module,state}=build();
+ const now=Date.parse("2026-10-09T22:00:00+02:00");
+ state.tournaments=[
+  {id:"t1",date:"2026-10-09",leaderId:"OP01-003",rounds:[{kind:"swiss",result:"W",opponentId:"OP02-001"}]},
+  {id:"t2",date:"2026-10-08",leaderId:"OP02-001",rounds:[{kind:"swiss",result:"L",opponentId:"OP01-003"}]},
+  {id:"t3",date:"2026-10-07",leaderId:"OP03-001",rounds:[],finished:false},
+  {id:"t4",date:"2025-01-01",leaderId:"OP01-003",rounds:[]}
+ ];
+ const c=module.countPersonalTournaments(state.tournaments,90,now);
+ assert.equal(c.total,4);
+ assert.equal(c.inPeriod,3);
+ assert.equal(module.summarizePersonal("OP01-003",90,state.tournaments,[],now).events,1);
+ const html=module.view();
+ assert.match(html,/Mis torneos registrados \(total\)/);
+ assert.match(html,/Mis torneos en el período \(todos los líderes\)/);
+ assert.match(html,/Con este líder en el período/);
+ assert.match(html,/Mis estadísticas con este líder/);
+ assert.match(html,/>4<\/b>/);
+ assert.match(html,/>3<\/b>/);
+});
+test("statistics for all tournaments are accessible from inside any individual tournament",()=>{
+ const code=fs.readFileSync(path.join(root,"tournaments.js"),"utf8");
+ assert.match(code,/id="tourneyStatsAll">📊 Todas mis estadísticas/);
+ assert.match(code,/id="tourneyStatsOpen">📊 Estadísticas generales/);
+ assert.match(code,/state\.tournamentStats="all";rerender\(\)/);
+ assert.match(code,/Solo este torneo: /);
+ assert.match(code,/function tournamentStatsView\(only\)\{\s*const all=only\?\[only\]:state\.tournaments\|\|\[\]/);
+});
