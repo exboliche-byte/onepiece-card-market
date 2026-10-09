@@ -30,15 +30,9 @@ function dhash(pixels,w,h,region,dx=0,dy=0,zoom=1){
  }
  return result;
 }
-function match(pixels,w,h,hints=[],limit=8,photo=false){
+function match(pixels,w,h,hints=[],limit=8){
  if(!refs.length)return [];
- // Photos of multiple cards have variable crop margins. Compare more art windows,
- // but retain the faster original four-view matcher for the live camera.
- const views=photo?
-   [[0,0,1],[-.025,-.02,1.05],[.025,.02,1.05],[0,0,.94],
-    [0,0,1.12],[0,0,.85],[-.055,0,1],[.055,0,1],
-    [0,-.055,1],[0,.055,1],[-.035,-.035,.91],[.035,.035,.91]]:
-   [[0,0,1],[-.025,-.02,1.05],[.025,.02,1.05],[0,0,.94]];
+ const views=[[0,0,1],[-.025,-.02,1.05],[.025,.02,1.05],[0,0,.94]];
  const art=views.map(([dx,dy,z])=>dhash(pixels,w,h,[.05,.10,.95,.72],dx,dy,z));
  const full=dhash(pixels,w,h,[.06,.06,.94,.94]);
  const known=new Set(hints.map(x=>String(x||"").toUpperCase()));
@@ -49,8 +43,8 @@ function match(pixels,w,h,hints=[],limit=8,photo=false){
   const df=distance(full,reference.full);
   const base=reference.id.replace(/_(?:p|r|c)\d+$/i,"").toUpperCase();
   const codeBonus=known.has(base)?-26:0;
-  if(da>(photo?150:120)&&!codeBonus)continue;
-  scored.push({id:reference.id,score:Math.round(da*(photo?.87:.78)+df*(photo?.13:.22)+codeBonus),art:da,whole:df});
+  if(da>120&&!codeBonus)continue;
+  scored.push({id:reference.id,score:Math.round(da*.78+df*.22+codeBonus),art:da,whole:df});
  }
  scored.sort((a,b)=>a.score-b.score);
  return scored.slice(0,Math.max(1,Math.min(40,Number(limit)||8)));
@@ -77,7 +71,7 @@ if(typeof self!=="undefined")self.onmessage=({data})=>{
  try{
   const pixels=new Uint8ClampedArray(data.pixels);
   if(pixels.length!==W*H*4)throw Error("Fotograma inválido");
-  const ranked=match(pixels,W,H,data.hints||[],data.limit||8,!!data.photo);
+  const ranked=match(pixels,W,H,data.hints||[],data.limit||8);
   self.postMessage({type:"result",ranked,frames:data.frames});
  }catch(error){self.postMessage({type:"frame-error",message:String(error?.message||error)})}
  finally{busy=false}
