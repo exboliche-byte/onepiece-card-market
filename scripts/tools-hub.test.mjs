@@ -190,7 +190,8 @@ test("Mutual acceptance, exact-print transfer and private policies are present",
 });
 test("Recommendations and matchup coach are placed in Mazos and Torneos",()=>{
  assert.match(html,/id="openDeckCompletion"/);
- assert.match(html,/href="\/deck-completion" target="_blank" rel="noopener noreferrer"/);
+ assert.match(html,/id="openDeckCompletion" type="button"/);
+ assert.doesNotMatch(html,/href="\\/deck-completion" target="_blank"/);
  assert.doesNotMatch(html,/state\.deckToolsOpen/);
  assert.match(html,/state\.tab==="deck-completion"\?deckCompletionView\(\)/);
  assert.match(html,/if\(location\.pathname==="\/deck-completion"\)state\.tab="deck-completion"/);
