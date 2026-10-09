@@ -1,7 +1,7 @@
 name: Verify multi-source Meta and automatic decks
 on:
   push:
-    branches: [fix-autosync-multisource-meta-20261009, main]
+    branches: [feat-meta-visual-deep-coverage-20261009, main]
     paths: [index.html, meta.js, meta-report.js, api/meta-comparison.js, scripts/**, .github/workflows/verify-metasources-autosync.yml]
   workflow_dispatch:
 permissions:
@@ -25,4 +25,19 @@ jobs:
           console.log('INDEPENDENT_META',JSON.stringify(d.sources.map(s=>({name:s.name,status:s.status,leaders:s.leaders?.length,error:s.error,top:s.leaders?.[0]}))));
           if(!d.sources.some(s=>s.id==='oplay'&&s.status==='ok'&&s.leaders.length>=5))
             throw Error('OPlay source not verified: parser/SSR structure changed');
+          JS
+
+      - name: Verify real Limitless tournament coverage
+        run: |
+          node --input-type=module <<'JS'
+          import handler from './api/meta.js';
+          const start=Date.now();
+          const response=await handler.fetch(new Request('https://example.invalid/api/meta?days=90&format=auto'));
+          const d=await response.json();
+          console.log('META_COVERAGE',JSON.stringify({
+            status:response.status,eligible:d.eligibleEvents,scanned:d.scannedEvents,
+            included:d.includedEvents,partial:d.partial,rateLimited:d.rateLimited,
+            pages:d.pagesScanned,cap:d.coverageLimit,games:d.games,elapsedSeconds:(Date.now()-start)/1000
+          }));
+          if(!response.ok||!Array.isArray(d.leaders)||!d.leaders.length)throw Error('Meta unavailable');
           JS
