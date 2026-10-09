@@ -868,7 +868,17 @@ async function open(){
   $("#scanCandidates").onclick=()=>showVisualChoices();
   $("#scanRetry").onclick=()=>{if(running)void startRecognition()};
   $("#scanManual").onclick=manual;
-  $("#scanPhoto").onclick=()=>window.OnePiecePhotoScanner?.open();
+  $("#scanPhoto").onclick=()=>{
+    const previousLock=locked;
+    window.OnePiecePhotoScanner?.open();
+    if(!document.querySelector("#photoScanPanel"))return;
+    cancelAnimationFrame(scanTimer);locked=true;
+    window.addEventListener("onepiece:photo-closed",()=>{
+      if(!running)return;
+      locked=previousLock;
+      if(!locked)plan();
+    },{once:true});
+  };
   $("#scanUndo").onclick=()=>void undoLastSavedScan();
   $("#scanTorch").onclick=toggleTorch;
   $("#scanFlip").onclick=switchCamera;
@@ -911,6 +921,11 @@ function close({fromHistory=false}={}){
 }
 // Captura el Atrás antes de que la navegación del álbum cambie de vista.
 window.addEventListener("popstate",event=>{
+  if(document.querySelector("#photoScanPanel")){
+    event.stopImmediatePropagation();
+    window.OnePiecePhotoScanner?.close({fromHistory:true});
+    return;
+  }
   if(!scannerHistoryActive||!panel())return;
   event.stopImmediatePropagation();
   close({fromHistory:true});
