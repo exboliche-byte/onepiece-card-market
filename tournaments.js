@@ -451,7 +451,7 @@
   function view(){
     if(!state.user)return '<div class="tourney-wrap"><div class="tourney-header"><h1>🏆 Mis torneos</h1></div><div class="tourney-panel"><h2>Inicia sesión</h2><p>Necesitas una cuenta para registrar tus torneos.</p><button class="primary btn" id="tourneyLogin">Ir a mi cuenta</button></div></div>';
     if(state.tournamentDraft)return editingForm();
-    if(state.tournamentCoachOpen)return '<div class="tourney-wrap"><div class="tourney-header"><h1>🎯 Preparar torneo</h1><button class="secondary btn" id="tourneyCoachBack">← Mis torneos</button></div>'+(window.OnePieceTools?.coachView?.()||"")+"</div>";
+    if(state.tournamentCoachOpen)return '<div class="tourney-wrap"><div class="tourney-header"><h1>🎯 Preparar torneo</h1><button class="secondary btn" id="tourneyCoachBack">← Mis torneos</button></div>'+(window.TournamentPrep?.view?.()||"")+"</div>";
     const t=getTournament();
     if(state.tournamentStats)return tournamentStatsView(state.tournamentStats==="all"?null:t);
     return t?detailsView(t)+(state.tournamentDeckOpen?deckModal(t):""):tournamentList();
@@ -609,7 +609,7 @@
     on("#tourneyStatsOpen","click",()=>{state.tournamentStats="all";rerender()});
     on("#tourneyCoachOpen","click",()=>{state.tournamentCoachOpen=true;rerender()});
     on("#tourneyCoachBack","click",()=>{state.tournamentCoachOpen=false;rerender()});
-    if(state.tournamentCoachOpen){window.OnePieceTools?.bindCoach?.();return;}
+    if(state.tournamentCoachOpen){window.TournamentPrep?.bind?.();return;}
     on("#tourneyStatsBack","click",()=>{state.tournamentStats=null;rerender()});
     on("#tourneyNew","click",()=>{state.tournamentDraft={title:"",date:new Date(Date.now()-new Date().getTimezoneOffset()*60000).toISOString().slice(0,10),type:"Local Store",set:(state.packs||[]).map(p=>String(p.code||"").toUpperCase().match(/^OP-?(\d{2,3})(?:-EB-?\d{2})?$/)?.[1]).filter(Boolean).sort((a,b)=>Number(b)-Number(a)).map(n=>"OP-"+n)[0]||"",deckId:"",leaderId:"",alt:false,search:""};rerender()});
     document.querySelectorAll("[data-tourney-open]").forEach(b=>b.onclick=()=>navigateApp(()=>{state.tournamentId=b.dataset.tourneyOpen}));

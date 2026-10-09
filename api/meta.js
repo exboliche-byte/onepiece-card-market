@@ -57,17 +57,33 @@ const respond=(data,status=200)=>new Response(JSON.stringify(data),{status,heade
 export default {async fetch(request){
   const q=new URL(request.url).searchParams;
   const days=Math.round(bounded(q.get("days")||90,14,365)),format=String(q.get("format")||"auto").slice(0,60);
-  const key=days+":"+format,previous=cache.get(key);
+  const expanded=q.get("coverage")==="expanded";
+  const key=days+":"+format+":"+(expanded?"expanded":"standard"),previous=cache.get(key);
   if(previous&&Date.now()-previous.at<TTL&&q.get("refresh")!=="1")return respond(previous.value);
   try{
     const now=Date.now();
-    const tournaments=(await get("/tournaments?game=OP&limit=500"))
-      .filter(x=>x?.id&&Number(x.players)>=16&&Number.isFinite(Date.parse(x.date))&&Date.parse(x.date)>=now-days*86400000&&Date.parse(x.date)<=now+86400000)
+    const earliest=now-days*86400000;
+    // Collect more event pages for the prep report; standard Meta stays lightweight.
+    const events=[],maxPages=expanded?5:1;
+    let pagesScanned=0,listingPartial=false;
+    for(let page=1;page<=maxPages;page++){
+      let batch;
+      try{batch=await get("/tournaments?game=OP&limit=500&page="+page)}
+      catch(e){if(page===1)throw e;listingPartial=true;break}
+      pagesScanned++;
+      events.push(...batch);
+      if(batch.length<500||batch.some(x=>Number.isFinite(Date.parse(x?.date))&&Date.parse(x.date)<earliest))break;
+    }
+    const tournaments=events
+      .filter(x=>x?.id&&Number(x.players)>=16&&Number.isFinite(Date.parse(x.date))&&Date.parse(x.date)>=earliest&&Date.parse(x.date)<=now+86400000)
       .sort((a,b)=>Date.parse(b.date)-Date.parse(a.date));
     const formats=[...new Set(tournaments.map(t=>String(t.format||"")).filter(Boolean))];
     const chosen=format==="all"?"all":format==="auto"?String(tournaments[0]?.format||""):format;
-    const selected=tournaments.filter(x=>chosen==="all"||String(x.format||"")===chosen).slice(0,24);
-    const collected=[];let consulted=0,partial=false,rateLimited=false;
+    const eligible=tournaments.filter(x=>chosen==="all"||String(x.format||"")===chosen);
+    const cap=expanded?80:24;
+    const selected=eligible.slice(0,cap);
+    const collected=[];let consulted=0,partial=listingPartial,rateLimited=false;
+    const deadline=Date.now()+(expanded?35000:22000);
     for(let i=0;i<selected.length;i+=4){
       const batch=await Promise.allSettled(selected.slice(i,i+4).map(eventData));
       for(const item of batch){
@@ -75,10 +91,14 @@ export default {async fetch(request){
         if(item.status==="fulfilled")collected.push(item.value);
         else {partial=true;if(item.reason?.rateLimited)rateLimited=true}
       }
-      if(rateLimited)break;
+      if(rateLimited||Date.now()>deadline){partial=true;break}
     }
     const value={source:"Limitless",sourceUrl:"https://play.limitlesstcg.com",updatedAt:new Date().toISOString(),
-      days,formatUsed:chosen||"unknown",formats,scannedEvents:consulted,includedEvents:collected.length,partial,rateLimited,
+      days,formatUsed:chosen||"unknown",formats,
+      eligibleEvents:eligible.length,scannedEvents:consulted,includedEvents:collected.length,
+      coverageLimit:cap,pagesScanned,listingPartial,
+      truncated:eligible.length>selected.length||consulted<selected.length||listingPartial,
+      partial,rateLimited,
       firstSecondAvailable:false,...aggregate(collected)};
     cache.set(key,{at:Date.now(),value});
     if(cache.size>20)cache.delete(cache.keys().next().value);

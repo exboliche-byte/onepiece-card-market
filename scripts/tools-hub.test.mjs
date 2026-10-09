@@ -68,17 +68,10 @@ test("Manual trade totals never change the owned collection",()=>{
   assert.match(page,/-16\.00 €/);
   assert.equal(JSON.stringify(t.state.owned),before);
 });
-test("All tools render and the tournament panel reads personal rounds",()=>{
+test("Deck recommendations and trades remain available after moving tournament prep",()=>{
   const t=setup();
   assert.match(t.tab("decks"),/Mazos que casi puedes construir/);
   assert.doesNotMatch(t.tab("trade"),/Alertas de precios/);
-  t.state.tournaments=[{leaderId:"OP01-003",rounds:[
-    {opponentId:"OP01-002",kind:"swiss",result:"W",start:"1"},
-    {opponentId:"OP01-001",kind:"swiss",result:"L",start:"2"},
-    {opponentId:"OP01-002",kind:"bye",result:"W"}
-  ]}];
-  assert.match(t.tab("coach"),/2 rondas personales/);
-  assert.match(t.tab("coach"),/data-tools-leader=/);
   assert.match(t.tab("trade"),/Intercambio manual/);
 });
 test("Competitive endpoint adds optional multi-leader mode without removing exact leader filtering",()=>{
@@ -207,6 +200,8 @@ test("Recommendations and matchup coach are placed in Mazos and Torneos",()=>{
  assert.match(html,/OnePieceTools\?\.decksView/);
  const tournament=fs.readFileSync(path.join(root,"tournaments.js"),"utf8");
  assert.match(tournament,/id="tourneyCoachOpen"/);
- assert.match(tournament,/OnePieceTools\?\.coachView/);
- assert.match(fs.readFileSync(path.join(root,"tools-hub.js"),"utf8"),/tools-leader-grid/);
+ assert.match(tournament,/TournamentPrep\?\.view/);
+ assert.match(tournament,/TournamentPrep\?\.bind/);
+ assert.match(html,/src="\/tournament-prep\.js"/);
+ assert.match(fs.readFileSync(path.join(root,"tournament-prep.js"),"utf8"),/prep-leaders/);
 });

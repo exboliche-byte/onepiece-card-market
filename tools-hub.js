@@ -2,7 +2,7 @@
 "use strict";
 /* This module never changes collection quantities or deck records. */
 const h={tab:"trade",owner:null,trade:[[],[]],q:"",list:[],meta:{},loaded:false,busy:false,error:"",
-  sort:"missing",maxMissing:"12",maxCost:"",coach:null,coachBusy:false,coachError:"",coachLeader:"",days:90,cloudReady:false,cloudLoading:false,cloudError:"",cloudConflict:false,
+  sort:"missing",maxMissing:"12",maxCost:"",cloudReady:false,cloudLoading:false,cloudError:"",cloudConflict:false,
   revision:null,pending:false,localRevision:null,hasCache:false,serial:0,saveTimer:null,writing:false,lastCloudAt:0};
 const key=id=>"mialbumonepiece_tools_"+id;
 const text=s=>esc(s);
@@ -302,56 +302,6 @@ function decksView(){
     (h.error?'<div class="notice">'+text(h.error)+'</div>':"")+body+
     '<p class="small">Los costes usan la impresión disponible más barata con precio para cada número de carta. Los precios desconocidos se indican y no se consideran coste cero. Solo se incluyen las listas públicas accesibles en la muestra.</p></div>';
 }
-function rate(w,l){
-  const n=Number(w||0)+Number(l||0);
-  return n?Math.round(1000*Number(w||0)/n)/10+"%":"—";
-}
-function personal(leader){
-  const map=new Map();
-  for(const t of state.tournaments||[]){
-    const own=t.leaderId||t.deckSnapshot?.leader||state.decks.find(d=>d.id===t.deckId)?.leader||"";
-    if(printed(own)!==leader)continue;
-    for(const r of t.rounds||[]){
-      if(!r.opponentId||!["W","L"].includes(r.result)||["bye","noshow"].includes(r.kind))continue;
-      const id=printed(r.opponentId);
-      if(!map.has(id))map.set(id,{w:0,l:0,first:{w:0,l:0},second:{w:0,l:0}});
-      const rec=map.get(id),f=r.result==="W"?"w":"l";
-      rec[f]++;
-      if(r.start==="1")rec.first[f]++;
-      if(r.start==="2")rec.second[f]++;
-    }
-  }
-  return map;
-}
-function coachView(){
-  const leaders=competitiveLeaderOptions();
-  const pick=h.coachLeader||printed(state.decks.find(x=>x.leader)?.leader||"")||leaders[0]?.id||"";
-  const own=personal(pick);
-  const global=(h.coach?.matchups||[]).filter(x=>printed(x.leader)===pick).sort((a,b)=>b.games-a.games).slice(0,35);
-  const ownGames=[...own.values()].reduce((s,v)=>s+v.w+v.l,0);
-  let rows="";
-  for(const x of global){
-    const p=own.get(printed(x.opponent));
-    const name=resolveDeckImportCard(x.opponent)?.name||x.opponent;
-    rows+='<div class="tools-match"><div class="grow"><b>'+text(name)+'</b><div class="small">'+text(x.opponent)+' · n='+Number(x.games||0)+
-      (x.games<10?' (muestra pequeña)':'')+'</div></div><div><b>'+rate(x.wins,x.losses)+'</b><div class="small">Global</div></div>'+
-      '<div><b>'+rate(p?.w,p?.l)+'</b><div class="small">Personal · '+Number((p?.w||0)+(p?.l||0))+'</div></div>'+
-      '<div class="small">1.º '+rate(p?.first.w,p?.first.l)+'<br>2.º '+rate(p?.second.w,p?.second.l)+'</div></div>';
-  }
-  return '<section class="section"><h2>Preparar un torneo</h2>'+
-    '<p class="small">Consulta los emparejamientos del meta y compáralos con tus propias rondas. Los datos globales son de Limitless y no contienen quién salió primero; esa información solo aparece para tus partidas registradas.</p>'+
-    '<input class="field" id="toolsLeaderSearch" type="search" placeholder="Buscar líder por nombre o código">'+
-    '<div class="tools-leader-grid">'+leaders.map(x=>'<button type="button" class="tools-leader '+(pick===x.id?"selected":"")+'" data-tools-leader="'+text(x.id)+'" data-search="'+text(x.id+" "+x.name)+'">'+(x.card?cardImg(x.card,"cardimg"):"")+
-    '<span>'+text(x.name+" · "+x.id)+'</span></button>').join("")+'</div>'+
-    '<label class="control-label">Período<select class="field" id="toolsCoachDays">'+
-    [30,90,180,365].map(v=>'<option value="'+v+'"'+(h.days===v?" selected":"")+'>'+v+' días</option>').join("")+
-    '</select></label><button class="primary btn" id="toolsCoachLoad" '+(h.coachBusy?"disabled":"")+'>'+
-    (h.coachBusy?"Consultando…":"Analizar emparejamientos")+'</button></div>'+
-    (h.coachError?'<div class="notice">'+text(h.coachError)+'</div>':"")+
-    '<p class="small">'+ownGames+' rondas personales con rival identificado para este líder.</p>'+
-    (rows||'<div class="notice">'+(h.coach?"No hay partidas globales suficientes para este líder.":"Elige tu líder y carga el análisis.")+'</div>')+
-    '<p class="small">Prioriza practicar contra rivales habituales con mal resultado. Una muestra de pocas partidas no demuestra un emparejamiento favorable o desfavorable.</p></section>';
-}
 function tradePage(){
  account();
  if(h.owner&&state.sb&&!h.cloudLoading){
@@ -402,16 +352,6 @@ async function loadDecks(){
   }catch(err){h.error=String(err.message||err)}
   finally{h.busy=false;if(state.tab==="decks"||state.tab==="deck-completion")renderShell()}
 }
-async function loadCoach(){
-  h.coachBusy=true;h.coachError="";renderShell();
-  try{
-    const res=await fetch("/api/meta?days="+h.days+"&format=auto");
-    const data=await res.json();
-    if(!res.ok)throw Error(data.error||"No se pudo cargar el meta");
-    h.coach=data;
-  }catch(err){h.coachError=String(err.message||err)}
-  finally{h.coachBusy=false;if(state.tab==="tournaments")renderShell()}
-}
 function bind(){
   document.querySelector("#toolsCloudRetry")?.addEventListener("click",()=>h.cloudReady?void flushCloud():void loadCloud(true));
   document.querySelector("#toolsCloudKeepRemote")?.addEventListener("click",()=>void resolveConflict(false));
@@ -456,15 +396,7 @@ function bind(){
       state.tab="decks";openCompetitiveDeckPreview(0);
     });
   }
-  if(h.tab==="coach"){
-    document.querySelectorAll("[data-tools-leader]").forEach(b=>b.onclick=()=>{h.coachLeader=b.dataset.toolsLeader;renderShell()});
-    document.querySelector("#toolsLeaderSearch")?.addEventListener("input",ev=>{
-      const q=norm(ev.target.value);
-      document.querySelectorAll("[data-tools-leader]").forEach(el=>{el.hidden=!norm(el.dataset.search||"").includes(q)});
-    });
-    document.querySelector("#toolsCoachDays")?.addEventListener("change",ev=>{h.days=Number(ev.target.value);h.coach=null;renderShell()});
-    document.querySelector("#toolsCoachLoad")?.addEventListener("click",loadCoach);
-  }
+
 }
 const style=document.createElement("style");
 style.textContent=".tools-tabs,.tools-controls,.tools-total{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.tools-tabs{margin-bottom:13px}.tools-selected{border-color:var(--accent)!important;color:var(--accent)!important}.tools-results{display:grid;gap:5px;max-height:300px;overflow:auto;margin-top:9px}.tools-found,.tools-item,.tools-match{display:flex;align-items:center;gap:9px;padding:8px;background:var(--panel2);border:1px solid var(--line);border-radius:11px;margin:7px 0;min-width:0}.tools-found .thumb,.tools-item .thumb{width:48px;height:67px;flex:none;object-fit:cover}.tools-item .grow,.tools-found .grow{min-width:0}.tools-controls{margin:7px 0}.tools-controls .btn{padding:6px 9px}.tools-price{width:92px!important;padding:7px!important}.tools-direction{width:auto!important;padding:7px!important}.tools-cols{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.tools-total{justify-content:space-between}.tools-filters{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:12px 0}.tools-deckgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.tools-numbers{display:flex;gap:8px;flex-wrap:wrap;color:var(--accent);margin:5px 0}.tools-deckgrid .btn{margin-top:7px}.tools-hit{border-color:var(--ok)}.tools-good{color:var(--ok)}.tools-match>div:not(.grow){min-width:70px;text-align:right}.tools-match .small{line-height:1.5}@media(max-width:760px){.tools-cols,.tools-deckgrid{grid-template-columns:1fr}.tools-filters{grid-template-columns:repeat(2,minmax(0,1fr))}.tools-match{flex-wrap:wrap}.tools-match .grow{flex-basis:100%}}@media(max-width:430px){.tools-filters{grid-template-columns:1fr}.tools-tabs button{flex:1 1 42%}.tools-item{flex-wrap:wrap}.tools-match>div:not(.grow){flex:1;text-align:left}}";
@@ -476,9 +408,8 @@ document.addEventListener?.("visibilitychange",()=>{
     else if(!h.pending&&!h.writing&&h.cloudReady&&Date.now()-h.lastCloudAt>10000)void loadCloud(true);
   }
 });
-window.OnePieceTools={tradePage,tradeItems,decksView,coachView,loadCloud,flushCloud,
+window.OnePieceTools={tradePage,tradeItems,decksView,loadCloud,flushCloud,
  bindTrade:()=>{h.tab="trade";bind();window.TradeOffers?.bind?.()},
- bindDecks:()=>{h.tab="decks";bind()},
- bindCoach:()=>{h.tab="coach";bind()}
+ bindDecks:()=>{h.tab="decks";bind()}
 };
 })();
