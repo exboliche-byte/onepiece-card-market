@@ -169,7 +169,7 @@ const PAGE=60;
 const state={
   cards:[],packs:[],groups:[],groupByKey:new Map(),prices:{},priceDate:null,importedCards:{},
   collection:{},decks:[],sharedDeck:null,publicCollection:null,tournaments:[],tournamentId:null,tournamentDraft:null,tournamentRoundDraft:null,wishlist:{},user:null,sb:null,
-  tab:"catalog",set:"",query:"",detail:null,deckId:null,collectionStatsOpen:false,wantsOpen:false,deckCompositionSort:"id",deckCompositionDir:"asc",
+  tab:"catalog",set:"",query:"",detail:null,deckId:null,collectionStatsOpen:false,wantsOpen:false,boxesOpen:false,deckCompositionSort:"id",deckCompositionDir:"asc",
   proxyQuery:"",proxySelection:{},
   catalog:{set:"Todas",category:"Todos",color:"Todos",rarity:"Todos",type:"Todos",attribute:"Todos",ownership:"Todas",sort:"id",dir:"asc",page:1,grouped:true,minCost:"",maxCost:"",minPower:"",maxPower:"",minPrice:"",maxPrice:"",query:"",filtersOpen:false},
   owned:{},collectionReady:false,collection:{query:"",set:"Todas",category:"Todos",color:"Todos",rarity:"Todos",type:"Todos",attribute:"Todos",quantity:"Todas",playset:"Todas",sort:"id",dir:"asc",page:1,filtersOpen:false},
@@ -1123,12 +1123,14 @@ async function renderCollectionResults(){
 function collectionView(){
   if(!state.user)return '<div class="wrap"><div class="hero"><h1>Mi colección</h1></div><div class="section center"><h2>Inicia sesión para ver tu colección</h2><p class="muted">Solo se guarda y consulta desde tu cuenta de Supabase.</p><button class="primary btn" data-tab="account">Iniciar sesión</button></div></div>';
   if(!state.collectionReady)return '<div class="wrap"><div class="hero"><h1>Mi colección</h1></div><div class="notice">Cargando la colección desde Supabase…</div><button class="secondary btn" id="retryCollectionLoad">Reintentar carga</button></div>';
+  if(state.boxesOpen)return window.CollectionBoxes?.view?.()||'<div class="notice">No se pudieron cargar tus cajas.</div>';
   if(state.wantsOpen)return window.MyWants?.view?.()||'<div class="notice">No se pudieron cargar Mis wants.</div>';
   if(state.collectionStatsOpen)return collectionStatisticsView();
   return '<div class="wrap"><div class="hero"><div><h1>Mi colección</h1><p>Todas mis cartas, todos los sets, filtrables y ordenables.</p></div></div>'+
     '<div class="inline-actions" style="margin-bottom:12px;gap:8px"><button type="button" class="secondary btn collection-stats-entry" id="openCollectionStats" style="padding:9px 13px;font-size:13px;font-weight:750">📊 Estadísticas de mi colección →</button>'+
     '<button type="button" class="secondary btn" id="openCollectionShare" style="padding:9px 13px;font-size:13px">🔗 Compartir colección</button>'+
-     '<button type="button" class="primary btn" id="openWants" style="padding:9px 13px;font-size:13px">💛 Mis wants →</button></div>'+
+     '<button type="button" class="primary btn" id="openWants" style="padding:9px 13px;font-size:13px">💛 Mis wants →</button>'+
+    '<button type="button" class="secondary btn" id="openCollectionBoxes" style="padding:9px 13px;font-size:13px">📦 Mis cajas →</button></div>'+
     collectionToolbar()+'<div id="collectionResults"></div></div>';
 }
 function collectionStatisticsBreakdowns(){
@@ -1612,7 +1614,10 @@ async function copyMissingDeckWantsToCardmarket(){
   let wants;
   try{wants=deckMissingCardmarketText(deck)}catch(error){return notify(error.message||"No se pudo preparar la lista de Wants.");}
   if(!wants)return notify("Ya tienes todas las cartas de este mazo.");
-
+  return openCardmarketWantsModal(wants,"Estas son únicamente las copias que te faltan para completar tu mazo.");
+}
+async function openCardmarketWantsModal(wants,description="Lista preparada para Cardmarket."){
+  if(!wants)return notify("Esta lista está vacía.");
   // A third-party website cannot be automatically filled from this domain.
   // The universal route is clipboard + a direct user-initiated Cardmarket link.
   document.querySelector(".cardmarket-wants-modal")?.remove();
@@ -1620,7 +1625,7 @@ async function copyMissingDeckWantsToCardmarket(){
   modal.className="modalback cardmarket-wants-modal";
   modal.innerHTML='<div class="modal" role="dialog" aria-modal="true" aria-label="Enviar faltantes a Cardmarket">'+
     '<div class="sectionhead"><h2>Wants de Cardmarket</h2><button class="close" data-wants-close aria-label="Cerrar">×</button></div>'+
-    '<p class="small">Estas son únicamente las copias que te faltan. La lista se prepara automáticamente, sin instalar nada.</p>'+
+    '<p class="small">'+esc(description)+'</p>'+
     '<p class="wants-copy-status" id="wantsCopyStatus" role="status" aria-live="polite">Copiando lista…</p>'+
     '<textarea class="field wants-list-preview" id="wantsListPreview" aria-label="Cartas faltantes para Cardmarket" readonly rows="9"></textarea>'+
     '<div class="wants-steps"><b>Para terminar en Cardmarket:</b>'+
@@ -1658,6 +1663,7 @@ async function copyMissingDeckWantsToCardmarket(){
   // Start during the same click gesture; no extensions or specific browser.
   await copy();
 }
+window.openCardmarketWantsModal=openCardmarketWantsModal;
 function deckListText(d){
   const lines=[];
   if(d?.leader)lines.push('1 '+d.leader);
@@ -2355,7 +2361,7 @@ function renderShell(){
   if(state.tab==="catalog")renderCatalogResults();
   if(state.tab==="collection"){
     if(state.collectionStatsOpen)window.loadCollectionHistory?.();
-    else if(!state.wantsOpen)renderCollectionResults();
+    else if(!state.wantsOpen&&!state.boxesOpen)renderCollectionResults();
   }
   if(state.tab==="album")renderAlbumResults();
   if(state.tab==="decks")renderDeckResults();
@@ -2365,7 +2371,7 @@ function renderShell(){
 function updateLiveCollectionCount(){const el=$("#liveCollectionCount");if(!el)return;if(!state.user){el.textContent="Inicia sesión para consultar tu colección";return}if(!state.collectionReady){el.textContent="Cargando colección desde Supabase…";return}const s=collectionStats();el.textContent="Mi colección: "+s.distinct.toLocaleString("es-ES")+" cartas · "+s.copies.toLocaleString("es-ES")+" copias";}
 function renderVisibleOnly(){
   if(state.tab==="catalog")renderCatalogResults();
-  else if(state.tab==="collection"&&!state.collectionStatsOpen&&!state.wantsOpen)renderCollectionResults();
+  else if(state.tab==="collection"&&!state.collectionStatsOpen&&!state.wantsOpen&&!state.boxesOpen)renderCollectionResults();
   else if(state.tab==="album")renderAlbumResults();
   else if(state.tab==="proxies"){renderProxyResults();renderProxyPicked()}
   else if(state.tab==="decks"){const rows=$("#deckRows");const d=state.decks.find(x=>x.id===state.deckId);if(rows&&d){rows.innerHTML=deckRows(d);bindResultEvents(rows)}renderDeckResults()}
@@ -2538,7 +2544,7 @@ function bindShell(){
     detailHistoryActive=false;state.detail=null;
     // Al volver a entrar, restaurar la clasificación real por cantidad.
     if(state.tab==="catalog"||state.tab==="collection")quantityOrderSnapshots[state.tab]=null;
-    navigateApp(()=>{state.tab=next;state.collectionStatsOpen=false;state.shared=false;state.sharedDeck=null;if(next!=="tournaments"){state.tournamentDraft=null;state.tournamentRoundDraft=null;state.tournamentStats=null}});
+    navigateApp(()=>{state.tab=next;state.collectionStatsOpen=false;if(next!=="collection"){state.wantsOpen=false;state.boxesOpen=false;}state.shared=false;state.sharedDeck=null;if(next!=="tournaments"){state.tournamentDraft=null;state.tournamentRoundDraft=null;state.tournamentStats=null}});
   });
   $("#retryCollectionLoad")?.addEventListener("click",async()=>{if(!state.user)return;const id=state.user.id;await loadCollectionFromCloud(id);if(state.user?.id===id)renderShell()});
   $("#accountBtn")?.addEventListener("click",()=>{if(state.tab!=="account")navigateApp(()=>{state.tab="account";state.shared=false})});
@@ -2575,8 +2581,15 @@ function bindShell(){
     $("#clearCatalogFilters")?.addEventListener("click",()=>{Object.assign(state.catalog,{set:"Todas",category:"Todos",color:"Todos",rarity:"Todos",type:"Todos",attribute:"Todos",ownership:"Todas",minCost:"",maxCost:"",minPower:"",maxPower:"",minPrice:"",maxPrice:"",page:1});renderShell()});
   }
   if(state.tab==="collection"){
-    $("#openWants")?.addEventListener("click",()=>{state.wantsOpen=true;state.collectionStatsOpen=false;renderShell()});
+    $("#openWants")?.addEventListener("click",()=>{
+      state.wantsOpen=true;state.boxesOpen=false;state.collectionStatsOpen=false;
+      window.MyWants?.overview?.();renderShell();
+    });
+    $("#openCollectionBoxes")?.addEventListener("click",()=>{
+      state.boxesOpen=true;state.wantsOpen=false;state.collectionStatsOpen=false;renderShell();
+    });
     if(state.wantsOpen)window.MyWants?.bind?.();
+    if(state.boxesOpen)window.CollectionBoxes?.bind?.();
     $("#openCollectionStats")?.addEventListener("click",()=>navigateApp(()=>{state.collectionStatsOpen=true}));
     $("#openCollectionShare")?.addEventListener("click",openCollectionShare);
     $("#closeCollectionStats")?.addEventListener("click",()=>{
@@ -3982,6 +3995,7 @@ window.addEventListener("popstate",e=>{
 <script src="/meta-report.js"></script>
 <script src="/collection-history.js"></script>
 <script src="/wants.js"></script>
+<script src="/collection-boxes.js"></script>
 <script src="/tools-hub.js"></script>
 <script src="/trade-offers.js"></script>
 <script src="/tournament-prep.js"></script>
