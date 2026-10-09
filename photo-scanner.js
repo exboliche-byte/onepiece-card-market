@@ -206,7 +206,7 @@ function optionText(row){
  if(selected&&!candidates.some(c=>c.code===selected))candidates.unshift({code:selected,score:null});
  return '<option value="">Sin identificar: no guardar</option>'+candidates.map(x=>{
   const c=baseCard(x.code);
-  return '<option value="'+esc(x.code)+'"'+(selected===x.code?' selected':'')+'>'+esc(x.code+' · '+(c?.name||"")+(Number.isFinite(x.score)?' · similitud '+Math.max(0,Math.round(100-x.score))+'% aproximada':''))+'</option>';
+  return '<option value="'+esc(x.code)+'"'+(selected===x.code?' selected':'')+'>'+esc(x.code+' · '+(c?.name||"")+(Number.isFinite(x.score)?' · sugerencia visual':''))+'</option>';
  }).join("");
 }
 function rowList(){
