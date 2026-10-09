@@ -75,8 +75,10 @@ function statusMark(deck,clickable=true){
  if(!p.ready||!p.enabled||!state.collectionReady||!deck||deck.draftCompetitive)return "";
  const s=stats(deck),tone=s.status==="montado"?"ok":s.status==="incompleto"?"partial":"empty";
  const symbol=s.status==="montado"?"✓":s.status==="incompleto"?"◐":"○";
- const label=symbol+' '+escape(s.status)+' · '+s.assigned+'/'+s.required;
- const title='Copias físicas asignadas: '+s.assigned+' de '+s.required;
+ const surplus=s.extra?' · '+s.extra+' por retirar':'';
+ const label=symbol+' '+escape(s.status)+' · '+s.assigned+'/'+s.required+surplus;
+ const title='Copias físicas asignadas: '+s.assigned+' de '+s.required+
+  (s.extra?'. '+s.extra+' copias siguen físicamente en este mazo aunque ya no figuren en su lista.':'');
  return clickable
   ?'<button type="button" class="physical-chip '+tone+'" data-physical-open="'+escape(deck.id)+'" aria-label="Gestionar copias de '+escape(deck.name)+': '+escape(s.status)+'" title="'+title+'">'+label+'</button>'
   :'<span class="physical-chip '+tone+'" title="'+title+'">'+label+'</span>';
@@ -241,24 +243,32 @@ function plan(deck){
   // Minimizar el número de cajas donantes: si una sola tiene todas las
   // copias restantes, usarla antes de repartir el movimiento entre varias.
   const donors=decks().filter(d=>d.id!==deck.id&&next[d.id])
-   .map(d=>({
-    deck:d,
-    available:Object.entries(next[d.id]).reduce((sum,[id,n])=>
-     sum+(code(id)===row.code?integer(n):0),0),
-    intact:stats(d,next).status==="montado"
-   }))
+   .map(d=>{
+    const physical=next[d.id];
+    const available=Object.entries(physical).reduce((sum,[id,n])=>
+     sum+(code(id)===row.code?integer(n):0),0);
+    const take=Math.min(available,missingCount);
+    const requiredHere=requirements(d).get(row.code)?.need||0;
+    const assigned=stats(d,next).assigned;
+    const usefulBefore=Math.min(requiredHere,available);
+    const usefulAfter=Math.min(requiredHere,available-take);
+    return {deck:d,available,
+     afterAssigned:assigned-(usefulBefore-usefulAfter),
+     alreadyUsed:changes.some(step=>step.from===d.id&&step.to===deck.id)};
+   })
    .filter(item=>item.available>0)
    .sort((a,b)=>{
     const aCovers=a.available>=missingCount,bCovers=b.available>=missingCount;
+    // Never split copies if one donor can supply all of this card.
     if(aCovers!==bCovers)return aCovers?-1:1;
-    // Si ninguna caja basta, coger primero las que más aportan:
-    // así no se fragmenta un playset entre tres cajas cuando bastan dos.
+    // Otherwise select donors supplying most copies to touch fewer boxes.
     if(!aCovers&&a.available!==b.available)return b.available-a.available;
-    // A igualdad de eficiencia, evitar desmontar un mazo que siga completo.
-    if(a.intact!==b.intact)return a.intact?1:-1;
-    // Si ambas bastan, preferir la que tenga menos sobrantes del grupo.
-    return (aCovers?a.available-b.available:0)||
-     a.deck.name.localeCompare(b.deck.name,"es");
+    // Re-use an existing donor where that does not split card copies.
+    if(a.alreadyUsed!==b.alreadyUsed)return a.alreadyUsed?-1:1;
+    // Prefer the box with fewer playable cards left after this transfer.
+    return a.afterAssigned-b.afterAssigned||
+     a.deck.name.localeCompare(b.deck.name,"es")||
+     String(a.deck.id).localeCompare(String(b.deck.id));
    });
   for(const {deck:donor} of donors){
    const ids=Object.keys(next[donor.id]||{})
@@ -315,7 +325,8 @@ function draw(){
   const s=stats(selected);
   html+='<button type="button" class="linkbtn physical-back" data-physical-back>← Todos mis mazos</button>'+
    '<h3>'+escape(selected.name)+'</h3><p>'+statusMark(selected,false)+'</p>'+
-   '<p class="small muted">Asignadas '+s.assigned+' de '+s.required+' copias. Las demás permanecen donde están; la lista nunca se borra.</p>';
+   '<p class="small muted">Asignadas '+s.assigned+' de '+s.required+' copias. Las demás permanecen donde están; la lista nunca se borra.</p>'+
+   (s.extra?'<div class="notice physical-warning"><b>Lista modificada: '+s.extra+' '+(s.extra===1?'copia pendiente':'copias pendientes')+' de retirar.</b> Siguen físicamente en este mazo. En «Revisar movimientos» podrás confirmar cuándo las devuelves al álbum.</div>':'');
   const result=plan(selected);
   if(p.preview){
    html+='<h3>Movimientos para montar este mazo</h3>';
@@ -339,10 +350,10 @@ function draw(){
     (result.changes.length?'<button class="primary btn" type="button" data-physical-apply '+(p.busy?'disabled':'')+'>Confirmar movimientos</button>':'')+
     '<button class="secondary btn" type="button" data-physical-cancel>Volver</button></div>';
   }else{
-   html+='<div class="physical-buttons"><button class="primary btn" type="button" data-physical-plan '+(p.busy?'disabled':'')+'>'+(s.assigned?'Completar / remontar':'Montar mazo')+'</button>'+
+   html+='<div class="physical-buttons"><button class="primary btn" type="button" data-physical-plan '+(p.busy?'disabled':'')+'>'+(s.extra?'Revisar movimientos':s.assigned?'Completar / remontar':'Montar mazo')+'</button>'+
     (Object.keys(p.allocations[selected.id]||{}).length?'<button class="secondary btn" type="button" data-physical-unmount '+(p.busy?'disabled':'')+'>Desmontar por completo</button>':'')+'</div>';
    if(s.assigned<s.required)html+='<p class="small muted">Al montar, solo se buscarán las '+(s.required-s.assigned)+' copias que faltan. No se moverán las que ya tiene el mazo.</p>';
-   if(s.extra)html+='<p class="notice physical-warning">La lista ha cambiado: hay '+s.extra+' copias asignadas de más. Al remontar, se devolverán al álbum.</p>';
+
   }
  }else if(p.pending){
   const items=pendingCards();
