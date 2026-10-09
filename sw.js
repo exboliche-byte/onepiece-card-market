@@ -1,5 +1,5 @@
 /* App shell only: private Supabase state and heavy card/price feeds stay on the network. */
-const CACHE="mialbumonepiece-v20";
+const CACHE="mialbumonepiece-v21";
 const SHELL=["/","/index.html","/offline.html","/manifest.json","/icon.svg","/icon-192.png","/icon-512.png","/deck-lab.css","/search-clear.css",
  "/pwa.js","/deck-lab.js","/search-clear.js","/collection-legality.js","/modal-accessibility.js","/image-visibility.js","/scanner.js",
  "/scanner-ocr.js","/scanner-vision.js","/proxy-generator.js","/qrcode-generator.js",
