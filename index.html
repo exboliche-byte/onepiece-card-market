@@ -1419,7 +1419,7 @@ function deckLibraryView(){
   const savedDecks=state.decks.filter(d=>!d?.draftCompetitive);const tiles=savedDecks.map(d=>{const l=card(d.leader),v=deckValidate(d);return '<div class="setcard decktile"><button type="button" class="deck-tile-open" style="width:100%;background:transparent;border:0;color:inherit;text-align:left;cursor:pointer" data-open-deck="'+esc(d.id)+'">'+(l?cardImg(l,"deckleader"):'<div class="deckleader fallback" style="display:grid">Sin líder</div>')+'<div class="decktilebody"><b>'+esc(d.name)+'</b>'+(d.description?'<div class="small" style="white-space:pre-wrap;overflow-wrap:anywhere;margin:5px 0 7px">'+esc(d.description)+'</div>':'')+'<div class="small">'+v.total+'/50 cartas · '+deckUniqueCount(d)+' diferentes · '+(d.leader?"1 líder":"sin líder")+'</div><div class="small">'+(v.valid?"✓ Legal":"⚠ No legal")+' · Valor '+money(deckTotalValue(d))+' · te faltan '+money(deckMissingCost(d))+'</div></button></div>'}).join("");
   return '<div class="wrap"><div class="hero"><div><h1>Mazos</h1><p>Tus mazos sincronizados con '+esc(state.user.email||"tu cuenta")+'.</p></div><button class="secondary btn" id="importDeckBtn">Importar lista</button></div>'+
     '<div class="deck-actions"><button class="deck-action" id="newDeck"><b>＋ Crear mazo</b><span>Construye un mazo desde cero eligiendo líder y cartas.</span></button><button class="deck-action" id="findCompetitiveDecks"><b>🏆 Buscar mazos</b><span>Busca listas con buenos resultados por líder e impórtalas directamente.</span></button><a class="deck-action" id="openDeckCompletion" href="/deck-completion" target="_blank" rel="noopener noreferrer" aria-label="Abrir Qué mazos puedo completar en una pestaña nueva"><b>🃏 ¿Qué mazos puedo completar? ↗</b><span>Encuentra listas que te requieren menos cartas o menos dinero en una pestaña nueva.</span></a></div>'+
-    (state.deckDiscover?competitiveDeckSearchView():"")+
+    (state.deckDiscover?competitiveDeckSearchView():"")+deckSyncStatusView()+
     '<div class="sectionhead"><h2>Mis mazos</h2><span class="small">'+savedDecks.length+' guardado(s)</span></div>'+
     (tiles?'<div class="decklibrary">'+tiles+'</div>':'<div class="section center"><h2>Aún no tienes mazos</h2><p class="muted">Puedes crear uno desde cero o importar una lista competitiva.</p></div>')+'</div>';
 }
@@ -1459,7 +1459,7 @@ function decksView(){
   const draftNotice=draft?'<div class="notice competitive-draft-note"><b>Vista previa — todavía no está guardado.</b> Puedes cambiar líder, cartas y cantidades con el creador de abajo. Pulsa “Guardar en mis mazos” solo cuando quieras conservarlo.'+(draftSource.unresolved?'<br>'+Number(draftSource.unresolved)+' copia(s) de la lista original no se pudieron resolver en el catálogo actual.':'')+'</div>':"";
   const deckMeta=draft?'': '<div class="section" id="deckMetaEditor" hidden><h2>Editar mazo</h2><label class="filter-label" for="editDeckName">Nombre</label><input class="field" id="editDeckName" maxlength="120" value="'+esc(d.name)+'"><label class="filter-label" for="editDeckDescription" style="display:block;margin-top:12px">Descripción</label><textarea class="field" id="editDeckDescription" rows="4" maxlength="2000" placeholder="Descripción del mazo...">'+esc(d.description||"")+'</textarea><div class="inline-actions" style="margin-top:12px"><button class="primary btn" id="saveDeckMeta">Guardar cambios</button><button class="secondary btn" id="cancelDeckMeta">Cancelar</button></div></div>';
   const deckDescription=d.description?'<div class="section" style="white-space:pre-wrap;overflow-wrap:anywhere">'+esc(d.description)+'</div>':'';
-  return '<div class="wrap">'+hero+deckMeta+deckDescription+draftNotice+
+  return '<div class="wrap">'+hero+deckSyncStatusView()+deckMeta+deckDescription+draftNotice+
     '<div class="section">'+(l?'<div class="deck-leader-row">'+cardImg(preferredOwnedDeckPrinting(l),"thumb")+'<div class="grow"><b>Líder · '+esc(l.name)+'</b><div class="small">'+esc(preferredOwnedDeckPrinting(l).id)+' · '+(priceOf(l)!==null?money(priceOf(l)):"Precio —")+' · '+(deckOwnedCopies(l)?"en colección":"te falta")+'</div></div><button class="secondary btn" id="changeLeader">Cambiar</button><button class="danger btn" id="removeLeader">Quitar</button></div>':'<div class="notice"><b>1. Elige el líder.</b> Hasta que no selecciones uno, aquí solo aparecen líderes.</div>')+'</div>'+
     deckStats+
     deckCompositionView(d)+
@@ -1726,7 +1726,8 @@ async function clearAllDecks(){
   decksBackupBusy=true;
   const button=$("#deleteAllDecks");if(button){button.disabled=true;button.textContent="Eliminando mazos…"}
   try{
-    const result=await state.sb.from("decks").delete().eq("user_id",userId);
+    await Promise.all([...deckSyncWrites.values()]);
+    const result=await state.sb.rpc("deck_delete_all_atomic");
     if(result.error)throw result.error;
     const check=await state.sb.from("decks").select("id").eq("user_id",userId).limit(1);
     if(check.error)throw check.error;
@@ -2586,7 +2587,7 @@ function bindShell(){
     $("#newDeck")?.addEventListener("click",()=>{state.newDeck=true;renderShell()});
     $("#newDeck2")?.addEventListener("click",()=>{state.newDeck=true;renderShell()});
     $("#createDeckConfirm")?.addEventListener("click",()=>{const name=$("#newDeckName")?.value.trim();if(!name)return notify("Pon un nombre");if(!state.user){state.newDeck=false;navigateApp(()=>{state.tab="account"});return}const d={id:crypto.randomUUID(),name,description:$("#newDeckDesc")?.value||"",leader:"",cards:{},colors:[],owner_id:state.user.id,updatedAt:new Date().toISOString()};state.decks.unshift(d);state.deckId=d.id;state.deckLibrary=false;state.newDeck=false;saveLocal();syncDeck(d);pushAppHistory();renderShell()});
-    $("#deleteDeck")?.addEventListener("click",()=>{if(confirm("¿Eliminar este mazo?")){const id=state.deckId;state.decks=state.decks.filter(x=>x.id!==id);state.deckId=null;state.deckLibrary=true;saveLocal();syncDeckDelete(id);renderShell()}});
+    $("#deleteDeck")?.addEventListener("click",async()=>{if(!confirm("¿Eliminar este mazo?"))return;const id=state.deckId;if(!await syncDeckDelete(id))return;state.decks=state.decks.filter(x=>x.id!==id);state.deckId=null;state.deckLibrary=true;saveLocal();renderShell();notify("Mazo eliminado de Supabase")});
     $("#changeLeader")?.addEventListener("click",beginLeaderChange);
     $("#removeLeader")?.addEventListener("click",removeLeader);
     $("#shareDeck")?.addEventListener("click",()=>shareDeck());
@@ -2984,7 +2985,10 @@ async function syncCloudInternal(userId){
     if(remoteIds.length){dc=await state.sb.from("deck_cards").select("deck_id,card_id,quantity").in("deck_id",remoteIds);if(dc.error)throw dc.error}
     const cardsBy=new Map();for(const r of dc.data||[]){if(!cardsBy.has(r.deck_id))cardsBy.set(r.deck_id,{});cardsBy.get(r.deck_id)[r.card_id]=Number(r.quantity||0)}
     const remote=(ds.data||[]).map(d=>({id:d.id,name:d.name,description:d.description||"",leader:d.leader_card_id||"",cards:cardsBy.get(d.id)||{},colors:d.colors||[],owner_id:state.user.id,updatedAt:d.updated_at||""}));
-    const remoteIdsSet=new Set(remote.map(d=>d.id)),unsynced=localDecks.filter(d=>!remoteIdsSet.has(d.id)).map(d=>({...d,owner_id:state.user.id}));
+    const deletedResult=await state.sb.from("deck_tombstones").select("deck_id").eq("user_id",userId);
+    if(deletedResult.error)throw deletedResult.error;
+    const deletedIds=new Set((deletedResult.data||[]).map(row=>row.deck_id));
+    const remoteIdsSet=new Set(remote.map(d=>d.id)),unsynced=localDecks.filter(d=>!remoteIdsSet.has(d.id)&&!deletedIds.has(d.id)).map(d=>({...d,owner_id:state.user.id}));
     state.decks=[...remote,...unsynced];saveLocal();
     for(const d of unsynced)await syncDeck(d);
     if(state.user?.id===userId&&state.authError?.startsWith("Sesión iniciada, pero no se pudo sincronizar"))state.authError="";
