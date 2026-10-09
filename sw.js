@@ -1,6 +1,6 @@
 /* Network-first for live catalogue, with a small offline fallback.
    Never cache private/API responses or precache the 25 MB data feed. */
-const CACHE="mialbumonepiece-v12";
+const CACHE="mialbumonepiece-v13";
 const SHELL=["/","/index.html","/manifest.json","/icon.svg"];
 self.addEventListener("install",event=>{
   event.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL).catch(()=>{})).then(()=>self.skipWaiting()));
@@ -26,7 +26,8 @@ self.addEventListener("fetch",event=>{
     try{
       const response=await fetch(event.request,{cache:isData||event.request.mode==="navigate"?"no-store":"default"});
       if(response.ok){
-        if(!isData||url.pathname.endsWith(".json")){
+        // The full card and price feeds are large; do not duplicate them in browser CacheStorage.
+        if(!isData||url.pathname==="/data/packs.json"||url.pathname==="/data/catalog-meta.json"){
           const copy=response.clone();
           event.waitUntil(caches.open(CACHE).then(cache=>cache.put(event.request,copy)).catch(()=>{}));
         }

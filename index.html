@@ -130,7 +130,7 @@
 .app{padding-left:0;padding-bottom:82px}
 .nav.mobile-nav{display:grid;grid-template-columns:repeat(5,minmax(0,1fr))}
 .mobile-nav>button{min-width:0}
-.mobile-nav>button span{font-size:10px}
+.mobile-nav>button span{font-size:11px}
 .mobile-more{position:absolute;bottom:calc(100% + 9px);right:9px;display:grid;gap:4px;padding:8px;width:min(230px,calc(100vw - 18px));border:1px solid var(--line);border-radius:13px;background:#151c29;box-shadow:0 10px 28px #000b}
 .mobile-more[hidden]{display:none}
 .mobile-more button{display:flex;align-items:center;gap:11px;justify-content:flex-start;width:100%;padding:11px;border:0;border-radius:9px;background:transparent;color:var(--text);text-align:left;font-weight:650}
@@ -139,6 +139,18 @@
 .mobile-more button span{font-size:13px}
 }
 
+/* Audit refinements: Proxies stays a dedicated tool; mobile navigation remains compact. */
+.side-group{display:grid;gap:4px}
+.side-group+.side-group{border-top:1px solid var(--line);padding-top:8px}
+.side-group-title{padding:4px 11px;color:var(--muted);font-size:10px;letter-spacing:.07em;font-weight:850}
+.app.sidebar-collapsed .side-group-title{display:none}
+.deck-cloud-status{min-height:23px;margin:8px 0;font-size:12px}
+button:focus-visible,a:focus-visible,summary:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}
+.active-filter-chips{display:flex;flex-wrap:wrap;gap:6px;margin:7px 0 12px}
+.active-filter-chips:empty{display:none}
+.active-filter-chips button{font-size:12px;padding:7px 10px;color:var(--text);background:var(--panel2);border:1px solid var(--line);border-radius:20px;cursor:pointer}
+.active-filter-chips button:hover{border-color:var(--accent)}
 </style>
 </head>
 <body>
@@ -184,7 +196,7 @@ function cardImg(c,cls="cardimg"){
   const cdn=imageCdnUrl(c),official=officialImageUrl(c),fallback=fallbackImageUrl(c);
   const loading=cls.includes("detail")||cls.includes("deckleader")?"eager":"lazy";
   const priority=cls.includes("detail")?' fetchpriority="high"':cls.includes("competitive-leader-img")?' fetchpriority="auto"':"";
-  return '<img class="'+cls+'" loading="'+loading+'" decoding="sync"'+priority+' src="'+esc(cdn)+'" alt="'+esc(c.name||c.id)+'" data-image-official="'+esc(official)+'" data-image-fallback="'+esc(fallback)+'" onerror="if(this.dataset.imageStep!==\'1\'){this.dataset.imageStep=\'1\';this.src=this.dataset.imageOfficial}else if(this.dataset.imageStep!==\'2\'){this.dataset.imageStep=\'2\';this.src=this.dataset.imageFallback}else{this.style.visibility=\'hidden\'}">';
+  return '<img class="'+cls+'" loading="'+loading+'" decoding="async"'+priority+' src="'+esc(cdn)+'" alt="'+esc(c.name||c.id)+'" data-image-official="'+esc(official)+'" data-image-fallback="'+esc(fallback)+'" onerror="if(this.dataset.imageStep!==\'1\'){this.dataset.imageStep=\'1\';this.src=this.dataset.imageOfficial}else if(this.dataset.imageStep!==\'2\'){this.dataset.imageStep=\'2\';this.src=this.dataset.imageFallback}else{this.style.visibility=\'hidden\'}">';
 }
 function deckOwnedImg(c,have,required){
   const total=Math.max(1,Number(required)||1),owned=Math.max(0,Math.min(total,Number(have)||0));
@@ -789,7 +801,9 @@ async function loadMarketPrices({refresh=false}={}){
       const d=await fetchJson(MARKET_DATA_URL,30000);
       if(!d?.cards||d?.schemaVersion===undefined)throw Error("Invalid Cardmarket dataset");
       mergePriceDataset(d);
-      localStorage.setItem("mialbumonepiece_prices",JSON.stringify({version:PRICE_CACHE_VERSION,prices:state.prices,meta:state.marketMeta,updatedAt:state.priceDate}));
+      // QuotaExceededError must never make a successfully downloaded price feed fail.
+      try{localStorage.setItem("mialbumonepiece_prices",JSON.stringify({version:PRICE_CACHE_VERSION,prices:state.prices,meta:state.marketMeta,updatedAt:state.priceDate}))}
+      catch(storageError){console.warn("Caché local de precios llena",storageError)}
       return d;
     }catch(error){
       try{
@@ -945,7 +959,6 @@ function pagination(total,page,key){
 function catalogActiveFilterCount(){
   const f=state.catalog;let n=0;
   if(f.set!=="Todas")n++;
-  if(f.set!=="Todas")n++;
   if(f.category!=="Todos")n++;
   if(f.color!=="Todos")n++;
   if(f.rarity!=="Todos")n++;
@@ -956,6 +969,25 @@ function catalogActiveFilterCount(){
   if(f.minPower!==""||f.maxPower!=="")n++;
   if(f.minPrice!==""||f.maxPrice!=="")n++;
   return n;
+}
+function filterChipBar(mode){
+ return '<div id="'+(mode==="catalog"?"catalogActiveChips":"collectionActiveChips")+'" class="active-filter-chips" aria-label="Filtros activos"></div>';
+}
+function renderFilterChips(mode){
+ const host=document.getElementById(mode==="catalog"?"catalogActiveChips":"collectionActiveChips");
+ if(!host)return;
+ const filter=state[mode],fields={set:"Expansión",category:"Categoría",color:"Color",
+ rarity:"Rareza",type:"Tipo",attribute:"Atributo",ownership:"Colección",
+ quantity:"Cantidad",playset:"Playset",minCost:"Coste mín.",maxCost:"Coste máx.",
+ minPower:"Poder mín.",maxPower:"Poder máx.",minPrice:"Precio mín.",maxPrice:"Precio máx."};
+ const active=Object.entries(fields).filter(([key])=>Object.hasOwn(filter,key)&&!["Todas","Todos",""].includes(String(filter[key])));
+ host.innerHTML=active.map(([key,label])=>'<button type="button" data-clear-filter="'+key+'" aria-label="Quitar filtro '+esc(label)+'">'+esc(label)+': '+esc(filter[key])+' ×</button>').join("");
+ host.querySelectorAll("[data-clear-filter]").forEach(button=>button.onclick=()=>{
+  const key=button.dataset.clearFilter;
+  filter[key]=["set","ownership","quantity","playset"].includes(key)?"Todas":
+    ["minCost","maxCost","minPower","maxPower","minPrice","maxPrice"].includes(key)?"":"Todos";
+  filter.page=1;quantityOrderSnapshots[mode]=null;renderShell();
+ });
 }
 function filterLabel(label,control){
   return '<label class="control-label"><span>'+esc(label)+'</span>'+control+'</label>';
@@ -992,12 +1024,13 @@ function catalogToolbar(){
       filterLabel("Orden",'<select id="catDir" class="field"><option value="asc" '+(f.dir==="asc"?"selected":"")+'>Ascendente</option><option value="desc" '+(f.dir==="desc"?"selected":"")+'>Descendente</option></select>')+
     '</div>'+
     '<button class="secondary btn filter-toggle" id="catalogFilterToggle" type="button" aria-expanded="'+(f.filtersOpen?"true":"false")+'">🔽 FILTRO'+(n?' ('+n+')':'')+'</button>'+
-  '</div>'+catalogFilterPanel()+
+  '</div>'+catalogFilterPanel()+filterChipBar("catalog")+
   '<div class="row" style="margin-bottom:10px"><span class="hint">Versiones agrupadas · '+state.cards.length.toLocaleString("es-ES")+' cartas en el catálogo.</span></div>';
 }
 
 async function renderCatalogResults(){
   const host=$("#catalogResults");if(!host)return;
+  renderFilterChips("catalog");
   if(state.loading&&!state.cards.length){host.innerHTML='<div class="notice">Cargando catálogo de cartas…</div>';return}
   const needsPrices=state.catalog.sort==="price"||state.catalog.minPrice!==""||state.catalog.maxPrice!=="";
   if(needsPrices){try{await ensurePrices();}catch(e){console.warn("catalog prices",e)}}
@@ -1057,12 +1090,13 @@ function collectionToolbar(){
       filterLabel("Orden",'<select id="colDir" class="field"><option value="asc" '+(f.dir==="asc"?"selected":"")+'>Ascendente</option><option value="desc" '+(f.dir==="desc"?"selected":"")+'>Descendente</option></select>')+
     '</div>'+
     '<button class="secondary btn filter-toggle" id="collectionFilterToggle" type="button" aria-expanded="'+(f.filtersOpen?"true":"false")+'">🔽 FILTRO'+(n?' ('+n+')':'')+'</button>'+
-  '</div>'+collectionFilterPanel()+
+  '</div>'+collectionFilterPanel()+filterChipBar("collection")+
   '<p class="hint">Aquí aparecen las cartas que tienes. Importar y exportar está en Cuenta → Datos y copias de seguridad.</p>';
 }
 
 async function renderCollectionResults(){
   const host=$("#collectionResults");if(!host)return;
+  renderFilterChips("collection");
   // Never block the collection UI on the market-price feed. The cards must render
   // from the local/cloud collection even when prices are temporarily unavailable.
   if(state.collection.sort==="price"){
@@ -1419,7 +1453,7 @@ function deckLibraryView(){
   const savedDecks=state.decks.filter(d=>!d?.draftCompetitive);const tiles=savedDecks.map(d=>{const l=card(d.leader),v=deckValidate(d);return '<div class="setcard decktile"><button type="button" class="deck-tile-open" style="width:100%;background:transparent;border:0;color:inherit;text-align:left;cursor:pointer" data-open-deck="'+esc(d.id)+'">'+(l?cardImg(l,"deckleader"):'<div class="deckleader fallback" style="display:grid">Sin líder</div>')+'<div class="decktilebody"><b>'+esc(d.name)+'</b>'+(d.description?'<div class="small" style="white-space:pre-wrap;overflow-wrap:anywhere;margin:5px 0 7px">'+esc(d.description)+'</div>':'')+'<div class="small">'+v.total+'/50 cartas · '+deckUniqueCount(d)+' diferentes · '+(d.leader?"1 líder":"sin líder")+'</div><div class="small">'+(v.valid?"✓ Legal":"⚠ No legal")+' · Valor '+money(deckTotalValue(d))+' · te faltan '+money(deckMissingCost(d))+'</div></button></div>'}).join("");
   return '<div class="wrap"><div class="hero"><div><h1>Mazos</h1><p>Tus mazos sincronizados con '+esc(state.user.email||"tu cuenta")+'.</p></div><button class="secondary btn" id="importDeckBtn">Importar lista</button></div>'+
     '<div class="deck-actions"><button class="deck-action" id="newDeck"><b>＋ Crear mazo</b><span>Construye un mazo desde cero eligiendo líder y cartas.</span></button><button class="deck-action" id="findCompetitiveDecks"><b>🏆 Buscar mazos</b><span>Busca listas con buenos resultados por líder e impórtalas directamente.</span></button><a class="deck-action" id="openDeckCompletion" href="/deck-completion" target="_blank" rel="noopener noreferrer" aria-label="Abrir Qué mazos puedo completar en una pestaña nueva"><b>🃏 ¿Qué mazos puedo completar? ↗</b><span>Encuentra listas que te requieren menos cartas o menos dinero en una pestaña nueva.</span></a></div>'+
-    (state.deckDiscover?competitiveDeckSearchView():"")+
+    (state.deckDiscover?competitiveDeckSearchView():"")+deckSyncStatusView()+
     '<div class="sectionhead"><h2>Mis mazos</h2><span class="small">'+savedDecks.length+' guardado(s)</span></div>'+
     (tiles?'<div class="decklibrary">'+tiles+'</div>':'<div class="section center"><h2>Aún no tienes mazos</h2><p class="muted">Puedes crear uno desde cero o importar una lista competitiva.</p></div>')+'</div>';
 }
@@ -1459,7 +1493,7 @@ function decksView(){
   const draftNotice=draft?'<div class="notice competitive-draft-note"><b>Vista previa — todavía no está guardado.</b> Puedes cambiar líder, cartas y cantidades con el creador de abajo. Pulsa “Guardar en mis mazos” solo cuando quieras conservarlo.'+(draftSource.unresolved?'<br>'+Number(draftSource.unresolved)+' copia(s) de la lista original no se pudieron resolver en el catálogo actual.':'')+'</div>':"";
   const deckMeta=draft?'': '<div class="section" id="deckMetaEditor" hidden><h2>Editar mazo</h2><label class="filter-label" for="editDeckName">Nombre</label><input class="field" id="editDeckName" maxlength="120" value="'+esc(d.name)+'"><label class="filter-label" for="editDeckDescription" style="display:block;margin-top:12px">Descripción</label><textarea class="field" id="editDeckDescription" rows="4" maxlength="2000" placeholder="Descripción del mazo...">'+esc(d.description||"")+'</textarea><div class="inline-actions" style="margin-top:12px"><button class="primary btn" id="saveDeckMeta">Guardar cambios</button><button class="secondary btn" id="cancelDeckMeta">Cancelar</button></div></div>';
   const deckDescription=d.description?'<div class="section" style="white-space:pre-wrap;overflow-wrap:anywhere">'+esc(d.description)+'</div>':'';
-  return '<div class="wrap">'+hero+deckMeta+deckDescription+draftNotice+
+  return '<div class="wrap">'+hero+deckSyncStatusView()+deckMeta+deckDescription+draftNotice+
     '<div class="section">'+(l?'<div class="deck-leader-row">'+cardImg(preferredOwnedDeckPrinting(l),"thumb")+'<div class="grow"><b>Líder · '+esc(l.name)+'</b><div class="small">'+esc(preferredOwnedDeckPrinting(l).id)+' · '+(priceOf(l)!==null?money(priceOf(l)):"Precio —")+' · '+(deckOwnedCopies(l)?"en colección":"te falta")+'</div></div><button class="secondary btn" id="changeLeader">Cambiar</button><button class="danger btn" id="removeLeader">Quitar</button></div>':'<div class="notice"><b>1. Elige el líder.</b> Hasta que no selecciones uno, aquí solo aparecen líderes.</div>')+'</div>'+
     deckStats+
     deckCompositionView(d)+
@@ -1726,7 +1760,8 @@ async function clearAllDecks(){
   decksBackupBusy=true;
   const button=$("#deleteAllDecks");if(button){button.disabled=true;button.textContent="Eliminando mazos…"}
   try{
-    const result=await state.sb.from("decks").delete().eq("user_id",userId);
+    await Promise.all([...deckSyncWrites.values()]);
+    const result=await state.sb.rpc("deck_delete_all_atomic");
     if(result.error)throw result.error;
     const check=await state.sb.from("decks").select("id").eq("user_id",userId).limit(1);
     if(check.error)throw check.error;
@@ -1895,7 +1930,7 @@ async function clearCollection(){
   try{
     await Promise.all([...collectionWrites.values()]);
     if(state.user?.id!==userId)return;
-    const deleted=await state.sb.from("collection_items").delete().eq("user_id",userId);
+    const deleted=await state.sb.rpc("collection_clear_atomic");
     if(deleted.error)throw deleted.error;
     const checked=await state.sb.from("collection_items").select("card_id").eq("user_id",userId).limit(1);
     if(checked.error)throw checked.error;
@@ -1919,33 +1954,26 @@ async function replaceCollectionFromCSV(imported){
   if(!collectionRequireLogin())return false;
   const userId=state.user.id;
   collectionBulkBusy=true;
-  const wanted=new Map([...imported.entries()].filter(([,q])=>Number(q)>0).map(([id,q])=>[id,Math.min(99,Math.round(Number(q)))]));
-  const previousIds=Object.keys(state.owned);
+  const wanted=Object.fromEntries([...imported.entries()].filter(([,q])=>Number(q)>0)
+    .map(([id,q])=>[id,Math.min(99,Math.round(Number(q)))]));
   try{
     await Promise.all([...collectionWrites.values()]);
     if(state.user?.id!==userId)throw Error("Has cambiado de cuenta durante la importación");
-    const rows=[...wanted].map(([card_id,quantity])=>({user_id:userId,card_id,quantity,updated_at:new Date().toISOString()}));
-    // Write new quantities first; do not delete old inventory if the upload fails.
-    for(let i=0;i<rows.length;i+=100){
-      const up=await state.sb.from("collection_items").upsert(rows.slice(i,i+100),{onConflict:"user_id,card_id"}).select("card_id,quantity");
-      if(up.error)throw up.error;
-      if((up.data||[]).length!==rows.slice(i,i+100).length)throw Error("El servidor no confirmó todas las filas del CSV");
-    }
-    const removed=previousIds.filter(id=>!wanted.has(id));
-    for(let i=0;i<removed.length;i+=100){
-      const del=await state.sb.from("collection_items").delete().eq("user_id",userId).in("card_id",removed.slice(i,i+100));
-      if(del.error)throw del.error;
-    }
-    const loaded=await loadCollectionFromCloud(userId);
-    if(!loaded)throw Error("No se pudo verificar la colección importada");
-    if(Object.keys(state.owned).length!==wanted.size||[...wanted].some(([id,q])=>qty(id)!==q))
-      throw Error("La colección en Supabase no coincide con el CSV; revisa los cambios antes de repetir");
+    // A single Supabase transaction validates all print IDs and replaces the whole collection.
+    // A rejected RPC changes zero rows.
+    const saved=await state.sb.rpc("collection_replace_atomic",{p_cards:wanted});
+    if(saved.error)throw saved.error;
+    if(state.user?.id!==userId)return false;
+    if(!await loadCollectionFromCloud(userId))throw Error("Importación completada, pero no se pudo comprobar la colección");
+    if(Object.keys(state.owned).length!==Object.keys(wanted).length||
+      Object.entries(wanted).some(([id,q])=>qty(id)!==q))
+      throw Error("La colección leída no coincide con el CSV. Revisa antes de reintentar.");
     return true;
-  }catch(e){
-    console.warn("Importación en Supabase fallida",e);
+  }catch(error){
+    console.warn("Falló la importación transaccional",error);
     if(state.user?.id===userId){
-      await loadCollectionFromCloud(userId); // show only what's actually on the server
-      notify("Importación incompleta en Supabase. Revisa tu colección antes de reintentar.");
+      await loadCollectionFromCloud(userId);
+      notify("No se completó la importación. Comprueba tu colección.");
     }
     return false;
   }finally{
@@ -1953,6 +1981,7 @@ async function replaceCollectionFromCSV(imported){
     if(state.user?.id===userId)renderShell();
   }
 }
+
 
 function deckCardTotal(d){return Object.values(d?.cards||{}).reduce((s,n)=>s+Number(n||0),0)}
 function addDeckCardToCollection(id){
@@ -2252,7 +2281,18 @@ function nav(){
   const items=[["catalog","Catálogo"],["collection","Colección"],["album","Expansiones"],["decks","Mazos"],["tournaments","Torneos"],["meta","Meta"],["trades","Intercambios"],["proxies","Proxies"],["account","Cuenta"]];
   const tabButton=([id,label],side)=>'<button type="button" class="'+(state.tab===id?"active":"")+'" data-tab="'+id+'" aria-label="'+label+'"'+(state.tab===id?' aria-current="page"':'')+'>'+navIcon(id)+'<span'+(side?' class="side-label"':'')+'>'+label+'</span></button>';
   const scanButton='<button type="button" data-scan-open aria-label="Abrir escáner de cartas">'+navIcon("scanner")+'<span class="side-label">Escáner</span></button>';
-  const side='<aside class="desktop-side" aria-label="Menú principal"><div class="side-head"><span class="side-brand">ONE PIECE</span><button type="button" id="sidebarToggle" class="side-toggle" aria-label="Plegar o desplegar menú" aria-expanded="'+(!sidebarCollapsed)+'">'+navIcon("collapse")+'</button></div><nav class="side-items" aria-label="Secciones">'+items.slice(0,-1).map(item=>tabButton(item,true)).join("")+scanButton+tabButton(items[items.length-1],true)+'</nav></aside>';
+  const sideGroups=[
+    ["EXPLORAR",["catalog","album"]],
+    ["MI COLECCIÓN",["collection","scanner"]],
+    ["JUGAR",["decks","tournaments","meta"]],
+    ["COMUNIDAD",["trades"]],
+    ["CREAR",["proxies"]],
+    ["CUENTA",["account"]]
+  ];
+  const side='<aside class="desktop-side" aria-label="Menú principal"><div class="side-head"><span class="side-brand">ONE PIECE</span><button type="button" id="sidebarToggle" class="side-toggle" aria-label="Plegar o desplegar menú" aria-expanded="'+(!sidebarCollapsed)+'">'+navIcon("collapse")+'</button></div><nav class="side-items" aria-label="Secciones">'+
+    sideGroups.map(([heading,ids])=>'<div class="side-group"><div class="side-group-title">'+heading+'</div>'+
+      ids.map(id=>id==="scanner"?scanButton:tabButton(items.find(item=>item[0]===id),true)).join("")+'</div>').join("")+
+    '</nav></aside>';
   // En móvil, Torneos ocupa el acceso directo que antes tenía Expansiones.
   // El menú lateral de ordenador conserva su orden original.
   const mobileMain=["catalog","collection","tournaments","decks"];
@@ -2592,7 +2632,7 @@ function bindShell(){
     $("#newDeck")?.addEventListener("click",()=>{state.newDeck=true;renderShell()});
     $("#newDeck2")?.addEventListener("click",()=>{state.newDeck=true;renderShell()});
     $("#createDeckConfirm")?.addEventListener("click",()=>{const name=$("#newDeckName")?.value.trim();if(!name)return notify("Pon un nombre");if(!state.user){state.newDeck=false;navigateApp(()=>{state.tab="account"});return}const d={id:crypto.randomUUID(),name,description:$("#newDeckDesc")?.value||"",leader:"",cards:{},colors:[],owner_id:state.user.id,updatedAt:new Date().toISOString()};state.decks.unshift(d);state.deckId=d.id;state.deckLibrary=false;state.newDeck=false;saveLocal();syncDeck(d);pushAppHistory();renderShell()});
-    $("#deleteDeck")?.addEventListener("click",()=>{if(confirm("¿Eliminar este mazo?")){const id=state.deckId;state.decks=state.decks.filter(x=>x.id!==id);state.deckId=null;state.deckLibrary=true;saveLocal();syncDeckDelete(id);renderShell()}});
+    $("#deleteDeck")?.addEventListener("click",async()=>{if(!confirm("¿Eliminar este mazo?"))return;const id=state.deckId;if(!await syncDeckDelete(id))return;state.decks=state.decks.filter(x=>x.id!==id);state.deckId=null;state.deckLibrary=true;saveLocal();renderShell();notify("Mazo eliminado de Supabase")});
     $("#changeLeader")?.addEventListener("click",beginLeaderChange);
     $("#removeLeader")?.addEventListener("click",removeLeader);
     $("#shareDeck")?.addEventListener("click",()=>shareDeck());
@@ -2835,19 +2875,13 @@ function writeCollection(id,nextValue){
     const old=qty(id);
     if(n===old)return true;
     try{
-      if(n===0){
-        const deleted=await state.sb.from("collection_items").delete().eq("user_id",userId).eq("card_id",id);
-        if(deleted.error)throw deleted.error;
-        const verify=await state.sb.from("collection_items").select("card_id").eq("user_id",userId).eq("card_id",id);
-        if(verify.error)throw verify.error;
-        if(verify.data?.length)throw Error("La carta sigue guardada en la nube");
-      }else{
-        const saved=await state.sb.from("collection_items").upsert({
-          user_id:userId,card_id:id,quantity:n,updated_at:new Date().toISOString()
-        },{onConflict:"user_id,card_id"}).select("card_id,quantity");
-        if(saved.error)throw saved.error;
-        if(!saved.data?.some(c=>c.card_id===id&&Number(c.quantity)===n))throw Error("Supabase no confirmó la cantidad");
-      }
+      // Server checks the previous exact-print quantity and changes it atomically.
+      // A stale browser cannot overwrite another device's newer copy count.
+      const result=await state.sb.rpc("collection_write_atomic",{
+        p_id:id,p_expected:old,p_next:n
+      });
+      if(result.error)throw result.error;
+      if(Number(result.data)!==n)throw Error("La cantidad confirmada no coincide");
       if(state.user?.id!==userId)return false;
       if(n===0)delete state.owned[id];else state.owned[id]=n;
       // Notify the open scanner only after an exact-print write is confirmed.
@@ -2860,7 +2894,16 @@ function writeCollection(id,nextValue){
       return true;
     }catch(e){
       console.warn("Error al guardar la colección",id,e);
-      if(state.user?.id===userId)notify("No se pudo guardar en Supabase. Tu colección no se ha modificado.");
+      if(state.user?.id===userId){
+        if(String(e?.code||"")==="40001"||/otro dispositivo|conflicto/i.test(String(e?.message||""))){
+          await loadCollectionFromCloud(userId);
+          window.dispatchEvent(new CustomEvent("mialbum:collection-updated",{
+            detail:{userId,id,quantity:qty(id)}
+          }));
+          renderShell();
+          notify("Otra sesión cambió esta carta. Colección actualizada; repite la acción si quieres.");
+        }else notify("No se pudo guardar en Supabase. Tu colección no se ha modificado.");
+      }
       return false;
     }
   }).finally(()=>{if(collectionWrites.get(id)===write)collectionWrites.delete(id)});
@@ -2868,23 +2911,66 @@ function writeCollection(id,nextValue){
   return write;
 }
 function syncOne(id,n){return writeCollection(id,n)}
-async function syncDeck(d){
-  if(d?.draftCompetitive)return false;
-  if(!state.sb||!state.user||!d)return false;
-  try{
-    d.owner_id=state.user.id;d.updatedAt=d.updatedAt||new Date().toISOString();
-    const meta=await state.sb.from("decks").upsert({id:d.id,user_id:state.user.id,name:d.name,leader_card_id:d.leader||null,description:d.description||null,colors:d.colors||[],updated_at:d.updatedAt},{onConflict:"id"});
-    if(meta.error)throw meta.error;
-    const del=await state.sb.from("deck_cards").delete().eq("deck_id",d.id);if(del.error)throw del.error;
-    const rows=Object.entries(d.cards||{}).map(([card_id,quantity])=>({deck_id:d.id,card_id,quantity:Number(quantity)}));
-    if(rows.length){const ins=await state.sb.from("deck_cards").insert(rows);if(ins.error)throw ins.error}
+const deckSyncWrites=new Map();
+const deckSyncErrors=new Map();
+function deckSyncStatusView(){
+  if(!state.user)return "";
+  const error=deckSyncErrors.size?[...deckSyncErrors.values()][0]:"";
+  return '<p id="deckCloudStatus" class="small deck-cloud-status" role="status" aria-live="polite">'+
+    esc(error?"⚠ "+error:deckSyncWrites.size?"Guardando mazos en Supabase…":"✓ Mazos sincronizados")+'</p>';
+}
+function updateDeckSyncStatus(){
+  const status=document.getElementById("deckCloudStatus");if(!status)return;
+  const error=deckSyncErrors.size?[...deckSyncErrors.values()][0]:"";
+  status.textContent=error?"⚠ "+error:deckSyncWrites.size?"Guardando mazos en Supabase…":"✓ Mazos sincronizados";
+}
+function syncDeck(d){
+  if(d?.draftCompetitive||!state.sb||!state.user||!d)return Promise.resolve(false);
+  const userId=state.user.id,id=d.id,client=state.sb;
+  const snapshot={
+    p_deck_id:id,p_name:d.name,p_leader:d.leader||"",p_description:d.description||"",
+    p_colors:d.colors||[],p_cards:{...(d.cards||{})},
+    p_updated_at:d.updatedAt||new Date().toISOString()
+  };
+  const prior=deckSyncWrites.get(id)||Promise.resolve();
+  const operation=prior.catch(()=>{}).then(async()=>{
+    if(state.user?.id!==userId)return false;
+    const response=await client.rpc("deck_save_atomic",snapshot);
+    if(response.error)throw response.error;
+    deckSyncErrors.delete(id);
     return true;
-  }catch(e){console.warn("deck sync",e);return false}
+  }).catch(error=>{
+    if(state.user?.id===userId){
+      deckSyncErrors.set(id,"Mazo sin sincronizar: "+String(error?.message||error));
+      notify("No se pudo guardar en Supabase. Se conserva el mazo local.");
+    }
+    console.warn("Guardado atómico de mazo",error);
+    return false;
+  }).finally(()=>{
+    if(deckSyncWrites.get(id)===operation)deckSyncWrites.delete(id);
+    updateDeckSyncStatus();
+  });
+  deckSyncWrites.set(id,operation);
+  updateDeckSyncStatus();
+  return operation;
 }
 async function syncDeckDelete(id){
-  if(!state.sb||!state.user)return;
-  try{const r=await state.sb.from("decks").delete().eq("id",id).eq("user_id",state.user.id);if(r.error)throw r.error}catch(e){console.warn("deck delete",e)}
+  if(!state.sb||!state.user)return false;
+  const userId=state.user.id,client=state.sb;
+  try{
+    await (deckSyncWrites.get(id)||Promise.resolve());
+    if(state.user?.id!==userId)return false;
+    const result=await client.rpc("deck_delete_atomic",{p_deck_id:id});
+    if(result.error)throw result.error;
+    deckSyncErrors.delete(id);updateDeckSyncStatus();
+    return true;
+  }catch(error){
+    console.warn("No se pudo borrar el mazo",error);
+    if(state.user?.id===userId)notify("No se ha borrado el mazo de Supabase.");
+    return false;
+  }
 }
+
 // Server state is authoritative for untouched cards; pending local edits always win.
 // In particular a deleted card must NEVER return from an older remote/legacy snapshot.
 let collectionLoadId=0;
@@ -2947,9 +3033,19 @@ async function syncCloudInternal(userId){
     if(remoteIds.length){dc=await state.sb.from("deck_cards").select("deck_id,card_id,quantity").in("deck_id",remoteIds);if(dc.error)throw dc.error}
     const cardsBy=new Map();for(const r of dc.data||[]){if(!cardsBy.has(r.deck_id))cardsBy.set(r.deck_id,{});cardsBy.get(r.deck_id)[r.card_id]=Number(r.quantity||0)}
     const remote=(ds.data||[]).map(d=>({id:d.id,name:d.name,description:d.description||"",leader:d.leader_card_id||"",cards:cardsBy.get(d.id)||{},colors:d.colors||[],owner_id:state.user.id,updatedAt:d.updated_at||""}));
-    const remoteIdsSet=new Set(remote.map(d=>d.id)),unsynced=localDecks.filter(d=>!remoteIdsSet.has(d.id)).map(d=>({...d,owner_id:state.user.id}));
-    state.decks=[...remote,...unsynced];saveLocal();
-    for(const d of unsynced)await syncDeck(d);
+    const deletedResult=await state.sb.from("deck_tombstones").select("deck_id").eq("user_id",userId);
+    if(deletedResult.error)throw deletedResult.error;
+    const deletedIds=new Set((deletedResult.data||[]).map(row=>row.deck_id));
+    const remoteIdsSet=new Set(remote.map(d=>d.id)),unsynced=localDecks.filter(d=>!remoteIdsSet.has(d.id)&&!deletedIds.has(d.id)).map(d=>({...d,owner_id:state.user.id}));
+    // Offline edits to an existing deck must not be discarded by a refresh.
+    // Only the strictly newer local version is a candidate for cloud reconciliation.
+    const remoteById=new Map(remote.map(d=>[d.id,d]));
+    const pendingExisting=localDecks.filter(d=>!d.draftCompetitive&&!deletedIds.has(d.id)&&remoteById.has(d.id)&&
+      Date.parse(d.updatedAt||"")>Date.parse(remoteById.get(d.id).updatedAt||""));
+    const pendingById=new Map(pendingExisting.map(d=>[d.id,{...d,owner_id:userId}]));
+    state.decks=[...remote.map(d=>pendingById.get(d.id)||d),...unsynced];
+    saveLocal();
+    for(const d of [...pendingExisting,...unsynced])await syncDeck(d);
     if(state.user?.id===userId&&state.authError?.startsWith("Sesión iniciada, pero no se pudo sincronizar"))state.authError="";
     if(state.user?.id===userId&&state.authError?.startsWith("No se pudo cargar tu colección"))state.authError="";
     return true;
@@ -3667,7 +3763,11 @@ async function previewImport(text){
     const sum=[...imported.values()].reduce((a,x)=>a+x,0);
     const logicalCount=new Set([...imported.keys()].map(baseId)).size;
     const createdCount=Object.keys(created).length;
-    const msg="Filas: "+(rows.length-1)+
+    const oldOwned=state.owned||{};
+    const additions=[...imported].filter(([id,q])=>q>0&&!oldOwned[id]).length;
+    const updates=[...imported].filter(([id,q])=>q>0&&oldOwned[id]&&Number(oldOwned[id])!==q).length;
+    const removals=Object.keys(oldOwned).filter(id=>Number(oldOwned[id])>0&&!(imported.get(id)>0)).length;
+    const msg="Cambios respecto a tu colección: "+additions+" versiones añadidas, "+updates+" cantidades modificadas y "+removals+" versiones eliminadas.\\n"+"Filas: "+(rows.length-1)+
       " · versiones: "+imported.size+
       " · cartas: "+logicalCount+
       " · "+sum+" copias"+
@@ -3767,6 +3867,7 @@ window.addEventListener("popstate",e=>{
 });
 }boot();
 </script>
+<script src="/modal-accessibility.js"></script>
 <script src="/image-visibility.js"></script>
 <script src="/scanner.js"></script>
 <script src="/proxy-generator.js"></script>
