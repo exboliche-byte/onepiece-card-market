@@ -37,3 +37,26 @@ test("unknown promotions and either card of a banned pair remain visible",()=>{
 test("imported exact print references keep logical legality rules",()=>{
  assert.equal(status(card("OP03-010__csv_ab29_reprint",1),buildPlayableIndex([])),"rotated");
 });
+
+test("Official July 2026 exception list keeps older legal starters in Standard",()=>{
+ const old=[card("ST01-011",1),card("ST02-007",1),card("ST06-008",1)];
+ const idx=buildPlayableIndex(old);
+ for(const c of old)assert.equal(status(c,idx),null,c.id);
+ assert.equal(status(card("ST02-004",1),idx),"rotated");
+});
+test("Previously banned cards released in April remain legal if their block is legal",()=>{
+ const legal=buildPlayableIndex([card("OP07-045",2),card("EB01-059",2)]);
+ assert.equal(status(card("OP07-045",2),legal),null);
+ assert.equal(status(card("EB01-059",2),legal),null);
+});
+test("Archived collection displays prohibited cards first, and uses independent search filters",async()=>{
+ const fs=await import("node:fs");
+ const html=fs.readFileSync(new URL("../index.html",import.meta.url),"utf8");
+ const sw=fs.readFileSync(new URL("../sw.js",import.meta.url),"utf8");
+ assert.match(html,/bannedGroup\+rotatedGroup/);
+ assert.match(html,/banned\.map\(c=>cardTile/);
+ assert.match(html,/visibleRotated\.map\(c=>cardTile/);
+ assert.match(html,/function switchCollectionArchiveMode/);
+ assert.match(html,/collectionArchiveFilters\?\{/);
+ assert.match(sw,/\/collection-legality\.js/);
+});

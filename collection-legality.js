@@ -9,11 +9,13 @@
   const mihawkBanFrom=Date.parse("2026-10-12T00:00:00+02:00");
   // Manga block-X exceptions and confirmed updated block-4 reprints.
   // Once a logical card has an eligible reprint, all artworks are legal.
+  // Bandai reference: https://www.onepiece-cardgame.com/news/blockicon-card.html (2026-07-03)
   const updatedOldCards=new Set([
     "OP01-016","OP01-120","OP02-013","OP03-122","OP04-083",
     "OP01-039","OP01-055","OP02-005","OP02-068",
     "OP03-008","OP03-044","OP03-048","OP03-072","OP03-097",
-    "OP04-016","OP04-077","OP04-096"
+    "OP04-016","OP04-077","OP04-096",
+    "ST01-011","ST02-007","ST06-008"
   ]);
   function baseId(id){
     return String(id||"").toUpperCase()

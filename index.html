@@ -127,6 +127,7 @@
 .collection-legal-reason{display:inline-flex;align-items:center;padding:4px 7px;font-size:11px;font-weight:800;border:1px solid var(--line);border-radius:7px;background:var(--panel2);color:var(--muted);margin-top:9px}
 .collection-legal-reason.banned{border-color:#98494a;color:#f3a5a6}
 .collection-archive-note{margin:0 0 12px;line-height:1.5}
+.collection-legality-group{margin:10px 0 22px}.collection-legality-group h2{font-size:17px;display:flex;align-items:center;gap:8px;margin:12px 0}.collection-legality-group h2 .small{font-size:12px;font-weight:500}
 .collection-view-tabs .btn,.discovery-view-tabs .btn,.trade-mode-tabs .btn{min-width:0;min-height:38px;font-size:12px;padding:7px 5px}
 .collection-view-tabs .btn.active,.discovery-view-tabs .btn.active,.trade-mode-tabs .btn.active{border-color:var(--accent);background:#342f1a;color:var(--accent);opacity:1}
 .collection-view-tabs .btn:disabled,.discovery-view-tabs .btn:disabled{cursor:default;opacity:1}
@@ -682,6 +683,29 @@ function collectionLegalityStatus(c){
   }
   return rules.status(c,collectionLegalCache.index);
 }
+let collectionMainFilters=null,collectionArchiveFilters=null;
+function switchCollectionArchiveMode(archived){
+  const next=!!archived;
+  if(next===state.collectionArchivedOpen)return;
+  if(next){
+    collectionMainFilters={...state.collection};
+    state.collection=collectionArchiveFilters?{...collectionArchiveFilters}:{
+      ...state.collection,query:"",set:"Todas",category:"Todos",color:"Todos",
+      rarity:"Todos",type:"Todos",attribute:"Todos",quantity:"Todas",playset:"Todas",
+      sort:"id",dir:"asc",page:1,filtersOpen:false
+    };
+  }else{
+    collectionArchiveFilters={...state.collection};
+    state.collection=collectionMainFilters?{...collectionMainFilters}:{
+      ...state.collection,query:"",set:"Todas",category:"Todos",color:"Todos",
+      rarity:"Todos",type:"Todos",attribute:"Todos",quantity:"Todas",playset:"Todas",
+      sort:"id",dir:"asc",page:1,filtersOpen:false
+    };
+  }
+  state.collectionArchivedOpen=next;
+  state.collection.page=1;
+  quantityOrderSnapshots.collection=null;
+}
 function filteredCards(mode){
   const f=state[mode];
   let list=mode==="collection"
@@ -1189,15 +1213,27 @@ async function renderCollectionResults(){
     try{await ensureCollectionPrices();}catch(e){console.warn("collection prices",e)}
   }
   updateCollectionValue();
-  const list=filteredCards("collection"),pages=Math.max(1,Math.ceil(list.length/PAGE));state.collection.page=Math.min(state.collection.page,pages);
-  const start=(state.collection.page-1)*PAGE,visible=list.slice(start,start+PAGE),active=collectionActiveFilterCount();
-  const archived=!!state.collectionArchivedOpen;
+  const list=filteredCards("collection"),archived=!!state.collectionArchivedOpen;
+  const active=collectionActiveFilterCount();
+  const banned=archived?list.filter(c=>collectionLegalityStatus(c)==="banned"):[];
+  const rotated=archived?list.filter(c=>collectionLegalityStatus(c)==="rotated"):[];
+  const pages=Math.max(1,Math.ceil((archived?rotated.length:list.length)/PAGE));
+  state.collection.page=Math.min(state.collection.page,pages);
+  const start=(state.collection.page-1)*PAGE;
+  const visibleRotated=archived?rotated.slice(start,start+PAGE):[];
+  const visible=archived?[...banned,...visibleRotated]:list.slice(start,start+PAGE);
   const haveInView=state.cards.some(c=>qty(c.id)>0&&Boolean(collectionLegalityStatus(c))===archived);
   const empty=list.length===0&&haveInView;
+  const noResults=empty?
+    '<div class="section center"><b>Los filtros no muestran ninguna carta.</b><p class="muted">Prueba a limpiar los filtros de esta sección.</p><button class="secondary btn" id="collectionResetVisible">Limpiar filtros</button></div>':
+    !list.length&&!archived?'<div class="section center"><p class="muted">No tienes cartas jugables en Standard en esta sección.</p></div>':"";
+  const bannedGroup='<section class="collection-legality-group"><h2>Prohibidas <span class="small muted">('+banned.length+' versiones)</span></h2>'+
+    (banned.length?'<div class="grid">'+banned.map(c=>cardTile(c,'<span class="collection-legal-reason banned">Prohibida</span>')).join("")+'</div>':'<p class="small muted">No tienes cartas prohibidas en tu colección.</p>')+'</section>';
+  const rotatedGroup='<section class="collection-legality-group"><h2>Rotadas de Standard <span class="small muted">('+rotated.length+' versiones)</span></h2>'+
+    (rotated.length?'<div class="grid">'+visibleRotated.map(c=>cardTile(c,'<span class="collection-legal-reason rotated">Rotada · Standard</span>')).join("")+'</div>'+pagination(rotated.length,state.collection.page,"collection"):
+      '<p class="small muted">No tienes cartas rotadas en tu colección.</p>')+'</section>';
   host.innerHTML='<div class="notice">'+list.length.toLocaleString("es-ES")+' resultados.'+(active?' Filtros activos: '+active+'.':'')+'</div>'+
-    (empty?'<div class="section center"><b>Hay cartas en esta sección, pero los filtros no muestran ninguna.</b><p class="muted">Limpia los filtros para volver a verlas.</p><button class="secondary btn" id="collectionResetVisible">Limpiar filtros</button></div>':
-      !list.length?'<div class="section center"><p class="muted">'+(archived?'No tienes cartas prohibidas o rotadas en tu colección.':'No tienes cartas jugables en Standard en esta sección.')+'</p></div>':
-      '<div class="grid">'+visible.map(c=>cardTile(c,archived?'<span class="collection-legal-reason '+(collectionLegalityStatus(c)==="banned"?'banned':'rotated')+'">'+(collectionLegalityStatus(c)==="banned"?'Prohibida':'Rotada · Standard')+'</span>':"")).join("")+'</div>'+pagination(list.length,state.collection.page,"collection"));
+    (empty?noResults:archived?bannedGroup+rotatedGroup:(!list.length?noResults:'<div class="grid">'+visible.map(c=>cardTile(c)).join("")+'</div>'+pagination(list.length,state.collection.page,"collection")));
   bindResultEvents(host);
   $("#collectionResetVisible")?.addEventListener("click",()=>{Object.assign(state.collection,{query:"",set:"Todas",category:"Todos",color:"Todos",rarity:"Todos",type:"Todos",attribute:"Todos",quantity:"Todas",playset:"Todas",page:1});renderShell()});
   if(state.collection.sort!=="price"){
@@ -1219,9 +1255,9 @@ function collectionView(){
   if(!state.collectionReady)return '<div class="wrap"><div class="hero"><h1>Mi colección</h1></div><div class="notice">Cargando la colección desde Supabase…</div><button class="secondary btn" id="retryCollectionLoad">Reintentar carga</button></div>';
   if(state.boxesOpen)return window.CollectionBoxes?.view?.()||'<div class="notice">No se pudieron cargar tus cajas.</div>';
   if(state.collectionStatsOpen)return collectionStatisticsView();
-  if(state.collectionArchivedOpen)return '<div class="wrap collection-top"><div class="hero"><h1>Cartas no jugables</h1></div>'+
+  if(state.collectionArchivedOpen)return '<div class="wrap collection-top"><div class="hero"><h1>Prohibidas y rotadas</h1></div>'+
     collectionViewNav("archived")+
-    '<p class="small muted collection-archive-note">Tus cartas prohibidas y las que han rotado fuera de Standard están aquí, sin eliminarse de tu cuenta. Las cartas rotadas pueden seguir utilizándose en el formato Extra. Las parejas prohibidas solo son ilegales cuando aparecen juntas en un mismo mazo.</p>'+
+    '<p class="small muted collection-archive-note">Las prohibidas se muestran primero y las rotadas después. Todas las cantidades se conservan. Las rotadas se pueden utilizar en Extra, mientras que una pareja prohibida solo es ilegal si ambas cartas están juntas en un mismo mazo.</p>'+
     collectionToolbar()+'<div id="collectionResults"></div></div>';
   return '<div class="wrap collection-top"><div class="hero collection-title-row"><h1>Mi colección</h1>'+
     '<button class="secondary btn collection-share-icon" id="openCollectionShare" type="button" title="Compartir colección" aria-label="Compartir colección">↗</button></div>'+
@@ -2593,6 +2629,7 @@ function restoreReloadView(saved){
   state.tab=view.tab;
   state.collectionStatsOpen=state.tab==="collection"&&!!view.collectionStatsOpen;
   state.collectionArchivedOpen=state.tab==="collection"&&!!view.collectionArchivedOpen;
+  if(state.collectionArchivedOpen)collectionArchiveFilters={...state.collection};
   state.album.set=String(view.albumSet||"");
   state.deckLibrary=view.deckLibrary!==false;
   state.deckId=state.user&&state.decks.some(d=>d.id===view.deckId)?view.deckId:null;
@@ -2634,7 +2671,7 @@ function restoreAppView(view){
   state.detail=null;detailHistoryActive=false;state.auth=false;state.newDeck=false;state.shared=false;
   state.tab=view.tab||"catalog";
   state.collectionStatsOpen=state.tab==="collection"&&!!view.collectionStatsOpen;
-  state.collectionArchivedOpen=state.tab==="collection"&&!!view.collectionArchivedOpen;
+  switchCollectionArchiveMode(state.tab==="collection"&&!!view.collectionArchivedOpen);
   state.album.set=view.albumSet||"";
   state.deckLibrary=view.deckLibrary!==false;
   const oldDraft=state.decks.find(d=>d.id===state.deckId&&d.draftCompetitive);
@@ -2683,7 +2720,7 @@ function bindShell(){
     // Al volver a entrar, restaurar la clasificación real por cantidad.
     if(state.tab==="catalog"||state.tab==="collection")quantityOrderSnapshots[state.tab]=null;
     if(next==="wants")window.MyWants?.overview?.();
-    navigateApp(()=>{state.tab=next;state.collectionStatsOpen=false;state.collectionArchivedOpen=false;if(next!=="collection")state.boxesOpen=false;state.shared=false;state.sharedDeck=null;if(next!=="tournaments"){state.tournamentDraft=null;state.tournamentRoundDraft=null;state.tournamentStats=null}});
+    navigateApp(()=>{state.tab=next;state.collectionStatsOpen=false;switchCollectionArchiveMode(false);if(next!=="collection")state.boxesOpen=false;state.shared=false;state.sharedDeck=null;if(next!=="tournaments"){state.tournamentDraft=null;state.tournamentRoundDraft=null;state.tournamentStats=null}});
   });
   $("#retryCollectionLoad")?.addEventListener("click",async()=>{if(!state.user)return;const id=state.user.id;await loadCollectionFromCloud(id);if(state.user?.id===id)renderShell()});
   $("#accountBtn")?.addEventListener("click",()=>{if(state.tab!=="account")navigateApp(()=>{state.tab="account";state.shared=false})});
@@ -2721,12 +2758,12 @@ function bindShell(){
   }
   if(state.tab==="collection"){
     $("#openCollectionBoxes")?.addEventListener("click",()=>{
-      state.boxesOpen=true;state.collectionStatsOpen=false;state.collectionArchivedOpen=false;renderShell();
+      state.boxesOpen=true;state.collectionStatsOpen=false;switchCollectionArchiveMode(false);renderShell();
     });
     if(state.boxesOpen)window.CollectionBoxes?.bind?.();
-    $("#openCollectionCards")?.addEventListener("click",()=>navigateApp(()=>{state.collectionArchivedOpen=false;state.collectionStatsOpen=false;state.collection.page=1}));
-    $("#openCollectionArchived")?.addEventListener("click",()=>navigateApp(()=>{state.collectionArchivedOpen=true;state.collectionStatsOpen=false;state.collection.page=1}));
-    $("#openCollectionStats")?.addEventListener("click",()=>navigateApp(()=>{state.collectionStatsOpen=true;state.collectionArchivedOpen=false}));
+    $("#openCollectionCards")?.addEventListener("click",()=>navigateApp(()=>{switchCollectionArchiveMode(false);state.collectionStatsOpen=false}));
+    $("#openCollectionArchived")?.addEventListener("click",()=>navigateApp(()=>{switchCollectionArchiveMode(true);state.collectionStatsOpen=false}));
+    $("#openCollectionStats")?.addEventListener("click",()=>navigateApp(()=>{state.collectionStatsOpen=true;switchCollectionArchiveMode(false)}));
     $("#openCollectionShare")?.addEventListener("click",openCollectionShare);
     $("#closeCollectionStats")?.addEventListener("click",()=>{
       if(history.state?.mialbumView?.collectionStatsOpen&&history.length>1)history.back();
