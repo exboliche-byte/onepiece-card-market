@@ -3034,8 +3034,15 @@ async function syncCloudInternal(userId){
     if(deletedResult.error)throw deletedResult.error;
     const deletedIds=new Set((deletedResult.data||[]).map(row=>row.deck_id));
     const remoteIdsSet=new Set(remote.map(d=>d.id)),unsynced=localDecks.filter(d=>!remoteIdsSet.has(d.id)&&!deletedIds.has(d.id)).map(d=>({...d,owner_id:state.user.id}));
-    state.decks=[...remote,...unsynced];saveLocal();
-    for(const d of unsynced)await syncDeck(d);
+    // Offline edits to an existing deck must not be discarded by a refresh.
+    // Only the strictly newer local version is a candidate for cloud reconciliation.
+    const remoteById=new Map(remote.map(d=>[d.id,d]));
+    const pendingExisting=localDecks.filter(d=>!d.draftCompetitive&&!deletedIds.has(d.id)&&remoteById.has(d.id)&&
+      Date.parse(d.updatedAt||"")>Date.parse(remoteById.get(d.id).updatedAt||""));
+    const pendingById=new Map(pendingExisting.map(d=>[d.id,{...d,owner_id:userId}]));
+    state.decks=[...remote.map(d=>pendingById.get(d.id)||d),...unsynced];
+    saveLocal();
+    for(const d of [...pendingExisting,...unsynced])await syncDeck(d);
     if(state.user?.id===userId&&state.authError?.startsWith("Sesión iniciada, pero no se pudo sincronizar"))state.authError="";
     if(state.user?.id===userId&&state.authError?.startsWith("No se pudo cargar tu colección"))state.authError="";
     return true;
