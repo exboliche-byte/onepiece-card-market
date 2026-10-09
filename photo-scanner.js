@@ -77,6 +77,24 @@ function detectionRegions(source){
   worker.postMessage({type:"detect",requestId:1,width:working.width,height:working.height,pixels:pixels.buffer},[pixels.buffer]);
  });
 }
+function layoutRegions(count,source=canvas){
+ if(!source||!Number.isInteger(count)||count<1||count>MAX_CARDS)return [];
+ const landscape=source.width>=source.height;
+ const columns=count===1?1:count===2?(landscape?2:1):count===3?(landscape?3:1):
+   count===4?2:count===6?(landscape?3:2):count===9?3:Math.ceil(Math.sqrt(count*source.width/source.height));
+ const rowsCount=Math.ceil(count/columns);
+ const cellW=source.width/columns,cellH=source.height/rowsCount;
+ const regions=[];
+ for(let n=0;n<count;n++){
+  const x=n%columns,y=Math.floor(n/columns);
+  const w=Math.min(cellW*.95,cellH*.95*.716),h=w/.716;
+  regions.push({cx:(x+.5)*cellW,cy:(y+.5)*cellH,w,h,angle:0,manual:true});
+ }
+ return regions;
+}
+function photoLayoutOptions(){
+ return [[0,"Detección automática"],[1,"Una carta"],[2,"2 cartas"],[3,"3 cartas"],[4,"4 cartas (2 × 2)"],[6,"6 cartas"],[9,"9 cartas (3 × 3)"],[12,"12 cartas"]];
+}
 function workerStop(){if(worker)worker.terminate();worker=null;workerReady=false;if(matcher){const job=matcher;matcher=null;clearTimeout(job.timer);job.reject(Error("Escaneo interrumpido"))}}
 function workerStart(){
  workerStop();
@@ -115,8 +133,8 @@ async function recognize(region){
 function baseSuggestions(ranked){
  const found=new Set(),options=[];
  for(const candidate of ranked||[]){
-  const card=baseCard(candidate.id),code=card?.id;
-  if(!code||found.has(code))continue;
+  const code=base(candidate.id),card=baseCard(code);
+  if(!card||!code||found.has(code))continue;
   found.add(code);options.push({code,score:candidate.score,art:candidate.art});
   if(options.length>=6)break;
  }
@@ -289,10 +307,11 @@ async function recognizeAdded(region){
  finally{if(active&&gen===generation){busy=false;drawPreview();rowList();refreshControls()}}
 }
 function refreshControls(){
- for(const q of ["#photoUpload","#photoCapture","#photoReset","#photoSave","#photoUndoBox"]){
+ for(const q of ["#photoUpload","#photoCapture","#photoReset","#photoSave","#photoUndoBox","#photoLayoutApply","#photoLayout"]){
   const item=$(q);if(item)item.disabled=busy;
  }
  const u=$("#photoUndoBox");if(u)u.disabled=busy||!regions.length;
+ const layout=$("#photoLayoutApply");if(layout)layout.disabled=busy||!canvas;
  const save=$("#photoSave");
  if(save)save.disabled=busy||!rows.some(r=>!r.omitted&&r.printId);
 }
@@ -378,7 +397,9 @@ function open(){
  '<button type="button" id="photoUndoBox" disabled>Quitar último recorte</button>'+
  '<button type="button" id="photoReset">Limpiar</button></div>'+
  '<input type="file" id="photoFile" accept="image/jpeg,image/png,image/webp,image/*" hidden>'+
- '<input type="file" id="photoCameraFile" accept="image/*" capture="environment" hidden>'+
+ '<input type="file" id="photoCameraFile" accept="image/*" capture="environment" hidden>'+ 
+ '<div class="photo-layout"><label>Distribución de cartas <select id="photoLayout">'+photoLayoutOptions().map(([v,label])=>'<option value="'+v+'">'+esc(label)+'</option>').join('')+'</select></label>'+ 
+ '<button type="button" id="photoLayoutApply" disabled>Reanalizar distribución</button></div>'+
  '<p class="photo-tip">Extiende las cartas boca arriba, separadas, sobre un fondo uniforme y fotografía desde arriba. También puedes dibujar recuadros sobre la foto para añadir cartas que falten.</p>'+
  '<div id="photoStatus" role="status" aria-live="polite">Elige una imagen para empezar.</div>'+
  '<canvas id="photoPreview" hidden aria-label="Fotografía con recuadros. Arrastra para marcar una carta no detectada."></canvas>'+
@@ -391,7 +412,7 @@ function open(){
  "#photoScanPanel *{box-sizing:border-box}#photoScanPanel .photo-shell{max-width:880px;margin:auto;padding:12px 12px 100px}"+
  "#photoScanPanel header{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:10px 0 16px}#photoScanPanel header b{font-size:21px}#photoScanPanel header small{display:block;color:#bac6d7;font-size:12px}"+
  "#photoScanPanel button{border:1px solid #637088;border-radius:9px;background:#233246;color:white;padding:10px;cursor:pointer;font-weight:700}#photoScanPanel button:disabled{opacity:.4;cursor:default}"+
- "#photoScanPanel .photo-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}#photoScanPanel .photo-tip{color:#cbd3e2;font-size:12px;line-height:1.45}"+
+ "#photoScanPanel .photo-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}#photoScanPanel .photo-layout{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:end;margin:10px 0}#photoScanPanel .photo-layout label{font-size:12px}#photoScanPanel .photo-layout button{min-height:38px}#photoScanPanel .photo-tip{color:#cbd3e2;font-size:12px;line-height:1.45}"+
  "#photoScanPanel #photoStatus{margin:12px 0;padding:10px;border:1px solid #405a71;background:#15202c;border-radius:8px}#photoScanPanel .photo-error{color:#ffc5af!important;border-color:#b75f4e!important}"+
  "#photoScanPanel #photoPreview{display:block;width:100%;height:auto;touch-action:none;border:1px solid #74849a;border-radius:8px}#photoScanPanel #photoPreview[hidden]{display:none}"+
  "#photoScanPanel #photoCards{display:grid;gap:10px}#photoScanPanel .photo-card-row{display:flex;gap:12px;background:#162131;border:1px solid #3b4c65;border-radius:11px;padding:10px}"+
@@ -408,6 +429,7 @@ function open(){
  $("#photoCapture").onclick=()=>$("#photoCameraFile").click();
  $("#photoFile").onchange=e=>{void processFile(e.target.files?.[0]);e.target.value=""};
  $("#photoCameraFile").onchange=e=>{void processFile(e.target.files?.[0]);e.target.value=""};
+ $("#photoLayoutApply").onclick=()=>void analyzeRegions(Number($("#photoLayout").value));
  $("#photoReset").onclick=()=>{
   if(rows.length&&!confirm("¿Descartar los recortes sin guardar?"))return;
   ++generation;workerStop();stopDetection();canvas=null;regions=[];rows=[];busy=false;
