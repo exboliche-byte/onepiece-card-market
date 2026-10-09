@@ -18,7 +18,11 @@ test("Collection boxes and two-step Wants screens load syntactically",()=>{
 });
 test("Heart buttons are compact and contain no distracting labels",()=>{
  const all=html.split("\n").filter(line=>line.includes('data-want="'));
- assert.equal(all.length,6);
+ // The deck's leader and regular cards reuse a single heart renderer.
+ assert.ok(all.length>=5);
+ assert.match(html,/deckCollectionWantActions\(display\.id,l\.id,1\)/);
+ assert.match(html,/deckCollectionWantActions\(display\.id,source\.id,need\)/);
+ assert.match(html,/deck-owned-actions\{display:grid;grid-template-columns:minmax\(0,2fr\) minmax\(0,1fr\)/);
  for(const line of all){
   assert.match(line,/aria-label="Añadir a mis wants"/);
   assert.match(line,/>💛<\/button>/);
