@@ -30,7 +30,7 @@ function dhash(pixels,w,h,region,dx=0,dy=0,zoom=1){
  }
  return result;
 }
-function match(pixels,w,h,hints=[]){
+function match(pixels,w,h,hints=[],limit=8){
  if(!refs.length)return [];
  const views=[[0,0,1],[-.025,-.02,1.05],[.025,.02,1.05],[0,0,.94]];
  const art=views.map(([dx,dy,z])=>dhash(pixels,w,h,[.05,.10,.95,.72],dx,dy,z));
@@ -47,7 +47,7 @@ function match(pixels,w,h,hints=[]){
   scored.push({id:reference.id,score:Math.round(da*.78+df*.22+codeBonus),art:da,whole:df});
  }
  scored.sort((a,b)=>a.score-b.score);
- return scored.slice(0,8);
+ return scored.slice(0,Math.max(1,Math.min(40,Number(limit)||8)));
 }
 async function initialize(){
  try{
@@ -71,7 +71,7 @@ if(typeof self!=="undefined")self.onmessage=({data})=>{
  try{
   const pixels=new Uint8ClampedArray(data.pixels);
   if(pixels.length!==W*H*4)throw Error("Fotograma inválido");
-  const ranked=match(pixels,W,H,data.hints||[]);
+  const ranked=match(pixels,W,H,data.hints||[],data.limit||8);
   self.postMessage({type:"result",ranked,frames:data.frames});
  }catch(error){self.postMessage({type:"frame-error",message:String(error?.message||error)})}
  finally{busy=false}
