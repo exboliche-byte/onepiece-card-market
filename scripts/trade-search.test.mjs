@@ -83,3 +83,12 @@ test("Asynchronous trade refresh retains card and username search focus",()=>{
  assert.match(html,/field\.focus\(\{preventScroll:true\}\)/);
  assert.match(html,/field\.setSelectionRange\(keepFocus\.start,keepFocus\.end\)/);
 });
+
+test("Trade results have one full-width row per card and responsive non-overflowing columns",()=>{
+ const css=code.slice(code.indexOf('style.textContent='));
+ assert.match(css,/\.tools-results\{display:grid;grid-template-columns:minmax\(0,1fr\);grid-auto-flow:row/);
+ assert.match(css,/\.tools-found\{display:grid;grid-template-columns:55px minmax\(0,1fr\) 44px 44px/);
+ assert.match(css,/overflow-x:hidden/);
+ assert.match(css,/@media\(max-width:540px\)\{\.tools-found\{grid-template-columns:42px minmax\(0,1fr\) 36px 36px/);
+ assert.match(css,/\.tools-found \.grow\{min-width:0;overflow-wrap:anywhere\}/);
+});
