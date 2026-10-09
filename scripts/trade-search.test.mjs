@@ -84,21 +84,21 @@ test("Asynchronous trade refresh retains card and username search focus",()=>{
  assert.match(html,/field\.setSelectionRange\(keepFocus\.start,keepFocus\.end\)/);
 });
 
-test("Trade results have one full-width row per card and responsive non-overflowing columns",()=>{
+test("Trade results use a non-stretching flex column with one compact row per card",()=>{
  const css=code.slice(code.indexOf('style.textContent='));
- assert.match(css,/\.tools-results\{display:grid;grid-template-columns:minmax\(0,1fr\);grid-auto-flow:row/);
- assert.match(css,/\.tools-found\{display:grid;grid-template-columns:55px minmax\(0,1fr\) 44px 44px/);
+ assert.match(css,/\.tools-results\{display:flex;flex-direction:column;align-items:stretch/);
+ assert.match(css,/\.tools-results \.tools-found\{display:flex;flex:0 0 auto/);
+ assert.match(css,/height:auto;min-height:0/);
  assert.match(css,/overflow-x:hidden/);
- assert.match(css,/@media\(max-width:540px\)\{\.tools-found\{grid-template-columns:42px minmax\(0,1fr\) 36px 36px/);
- assert.match(css,/\.tools-found \.grow\{min-width:0;overflow-wrap:anywhere\}/);
+ assert.match(css,/\.tools-found-actions\{display:flex/);
+ assert.doesNotMatch(css,/\.tools-results\{display:grid/);
 });
 
-test("Trade results reserve readable text space at narrow mobile widths",()=>{
+test("Mobile results keep text readable with actions on their own short line",()=>{
  assert.match(code,/class="tools-found-actions"/);
- assert.match(code,/grid-template-areas:/);
- assert.match(code,/image info/);
- assert.match(code,/image actions/);
- assert.match(code,/\.tools-item\{display:grid;grid-template-columns:55px minmax\(0,1fr\)/);
- assert.match(code,/\.tools-results \.tools-found>\.grow\{grid-area:info/);
+ assert.match(code,/\.tools-results \.tools-found>\.grow\{flex:1 1 130px/);
+ assert.match(code,/\.tools-results \.tools-found-actions\{flex:0 0 calc\(100% - 53px\)/);
+ assert.match(code,/\.tools-item\{display:flex;flex-wrap:wrap/);
  assert.match(code,/word-break:normal/);
+ assert.doesNotMatch(code,/grid-template-areas:/);
 });
