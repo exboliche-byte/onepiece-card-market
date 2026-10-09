@@ -1756,7 +1756,9 @@ function deckLibraryView(){
     '<div class="deck-actions"><button class="deck-action" id="newDeck"><b>＋ Crear</b><span>Construye un mazo desde cero eligiendo líder y cartas.</span></button><button class="deck-action" id="findCompetitiveDecks"><b>🏆 Buscar</b><span>Busca mazos por líder o por carta.</span></button><button class="deck-action" id="openDeckCompletion" type="button" aria-label="Abrir Descubrir mazos"><b>🃏 Descubrir</b><span>Encuentra mazos con tus cartas.</span></button></div>'+
     deckSyncStatusView()+
     '<div class="sectionhead deck-library-heading"><h2>Mis mazos</h2><div class="deck-library-heading-actions">'+
-    '<button type="button" class="secondary btn" data-physical-open="">📍 Copias</button>'+ 
+    '<button type="button" class="secondary btn" data-physical-open="">📍 Copias</button>'+
+    (window.DeckPhysical?.pendingButton?.()||'')+
+    (window.DeckPhysical?.activeTrackingButton?.()||'')+
      (savedDecks.length?'<button type="button" class="secondary btn" id="compareLibraryDecks">⇄ Comparar</button>':'')+
     '<span class="small">'+savedDecks.length+' guardado(s)</span></div></div>'+
     (tiles?'<div class="decklibrary">'+tiles+'</div>':'<div class="section center"><h2>Aún no tienes mazos</h2><p class="muted">Puedes crear uno desde cero o importar una lista competitiva.</p></div>')+'</div>';
