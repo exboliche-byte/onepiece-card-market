@@ -20,6 +20,32 @@ o que hay que crear otro**. Primero comprobar en Vercel la variable pública
 directamente con `get_project`, `list_tables`, `execute_sql` y
 `apply_migration`. Este procedimiento funcionó el 9 de octubre de 2026.
 
+### Acceso directo reutilizable (confirmado 2026-10-09)
+
+1. Usar directamente el ID de proyecto `zawzbdbdbcshljhlvgjx` con las
+   acciones administrativas conectadas de Supabase (`get_project`,
+   `execute_sql`, `apply_migration`, `list_migrations`). **No es necesario
+   ejecutar `list_projects` antes:** puede devolver una lista vacía para
+   esta conexión aunque `get_project` funcione y el proyecto esté activo.
+2. Si se necesita confirmar el ID contra producción, consultar por la
+   conexión Vercel el endpoint
+   `https://onepiece-card-market.vercel.app/api/config` con
+   `web_fetch_vercel_url`. Extraer **solo** la referencia del hostname
+   `supabaseUrl` (el contenido de la respuesta incluye una clave pública
+   que no se debe volcar en logs ni en documentos).
+3. Para ejecutar SQL, verificar primero el proyecto mediante
+   `get_project({id:"zawzbdbdbcshljhlvgjx"})`; usar
+   `apply_migration({project_id:"zawzbdbdbcshljhlvgjx",name,query})`
+   para cambios de esquema y `execute_sql` para comprobaciones.
+   Revisar con `list_migrations` y consultar los avisos de seguridad
+   tras cambios de privilegios.
+4. Ejemplo completado: migración
+   `allow_unilateral_trade_offers_20261009` (versión
+   `20261009130323`), código fuente
+   `supabase/migrations/20261009_unilateral_trade_offers.sql`.
+   Admite entregar, recibir o intercambiar cartas con un lado vacío,
+   pero nunca ambos vacíos; la transferencia sigue siendo atómica.
+
 Nunca imprimir ni cambiar claves privadas de Supabase o Vercel, ni usar
 `service_role` en el frontend. Aplicar siempre políticas RLS por
 `auth.uid() = user_id` antes de exponer tablas al navegador.
