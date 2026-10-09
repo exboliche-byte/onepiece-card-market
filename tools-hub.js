@@ -294,11 +294,11 @@ function personalStats(leader){
 function deckFit(r,m){
  const id=printed(r.leaderId),meta=(h.metaData?.leaders||[]).find(x=>printed(x.id)===id);
  const personal=personalStats(id),familiar=(state.decks||[]).some(d=>!d.draftCompetitive&&printed(d.leader)===id);
- const trusted=meta&&Number(meta.games)>=10&&Number.isFinite(Number(meta.confidenceRate));
+ const trusted=meta&&Number(meta.confidenceGames||meta.games)>=10&&Number.isFinite(Number(meta.confidenceRate));
  const metaStrength=trusted?Math.max(0,Math.min(1,Number(meta.confidenceRate)/100)):0.43;
  const affinity=0.5+Math.min(1,personal.games/20)*(personal.smoothed-0.5)+(familiar?0.1:0);
  const owned=m.owned/Math.max(1,m.total),cost=m.unknown?0:1/(1+m.cost/60);
- const weights={competitive:[0.65,0.20,0.10,0.05],balanced:[0.48,0.22,0.20,0.10],budget:[0.30,0.15,0.30,0.25]}[h.preference]||[0.65,0.20,0.10,0.05];
+ const weights={competitive:[0.80,0.12,0.05,0.03],balanced:[0.60,0.20,0.15,0.05],budget:[0.35,0.15,0.25,0.25]}[h.preference]||[0.80,0.12,0.05,0.03];
  const score=100*(weights[0]*metaStrength+weights[1]*affinity+weights[2]*owned+weights[3]*cost);
  return {score,personal,meta,reason:trusted?"Meta fiable: "+Number(meta.confidenceRate).toFixed(1)+"% · "+Number(meta.games).toLocaleString("es-ES")+" partidas":"Meta sin muestra suficiente; recomendación provisional"};
 }
