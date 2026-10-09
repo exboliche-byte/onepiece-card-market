@@ -2,7 +2,7 @@ name: Diagnose live meta APIs
 on:
   push:
     branches: [fix-login-decks-meta-back-20261009]
-    paths: [.github/workflows/diagnose-meta-live.yml]
+    paths: [.github/workflows/diagnose-meta-live.yml, index.html, meta.js, scripts/**]
 permissions:
   contents: read
 jobs:
@@ -10,9 +10,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 4
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Verify build and regression tests
+        run: sh scripts/vercel-build.sh
       - name: Inspect public and upstream JSON endpoints (no credentials)
         run: |
           node --input-type=module <<'JS'
