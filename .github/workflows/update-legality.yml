@@ -1,0 +1,49 @@
+name: Sync official One Piece legality
+
+on:
+  schedule:
+    - cron: "37 */12 * * *"
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/update-legality.mjs"
+      - ".github/workflows/update-legality.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: official-legality-sync
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: true
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a5917
+        with:
+          node-version: "22"
+      - name: Test legality rules
+        run: node --test scripts/legality-feed.test.mjs scripts/collection-legality.test.mjs
+      - name: Fetch official Bandai restrictions and block exceptions
+        run: node scripts/update-legality.mjs
+      - name: Publish verified data only if changed
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/legality.json
+          if git diff --cached --quiet; then
+            echo "Official rules unchanged"
+          else
+            git commit -m "data: sync official One Piece legality"
+            git fetch origin main
+            git rebase origin/main
+            git push origin HEAD:main
+          fi

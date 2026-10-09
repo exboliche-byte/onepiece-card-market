@@ -1257,7 +1257,8 @@ function collectionView(){
   if(state.collectionStatsOpen)return collectionStatisticsView();
   if(state.collectionArchivedOpen)return '<div class="wrap collection-top"><div class="hero"><h1>Prohibidas y rotadas</h1></div>'+
     collectionViewNav("archived")+
-    '<p class="small muted collection-archive-note">Las prohibidas se muestran primero y las rotadas después. Todas las cantidades se conservan. Las rotadas se pueden utilizar en Extra, mientras que una pareja prohibida solo es ilegal si ambas cartas están juntas en un mismo mazo.</p>'+
+    '<p class="small muted collection-archive-note">Las prohibidas aparecen antes que las rotadas. Las reglas se sincronizan automáticamente con Bandai (Europa), sin borrar tus cartas. Las parejas prohibidas solo son ilegales cuando aparecen juntas en un mismo mazo.</p>'+
+    '<p class="small muted">Standard: bloque mínimo '+window.OnePieceLegality.info().minimumBlock+' · <a href="https://en.onepiece-cardgame.com/news/restriction.html" target="_blank" rel="noopener noreferrer">Prohibiciones oficiales</a> · <a href="https://en.onepiece-cardgame.com/news/blockicon-card.html" target="_blank" rel="noopener noreferrer">Rotación oficial</a></p>'+
     collectionToolbar()+'<div id="collectionResults"></div></div>';
   return '<div class="wrap collection-top"><div class="hero collection-title-row"><h1>Mi colección</h1>'+
     '<button class="secondary btn collection-share-icon" id="openCollectionShare" type="button" title="Compartir colección" aria-label="Compartir colección">↗</button></div>'+
@@ -2013,12 +2014,13 @@ function deckCardAllowedByLeader(cc,leader){
 }
 function deckValidate(d){
   const total=Object.values(d.cards||{}).reduce((s,n)=>s+Number(n||0),0),messages=[],leader=card(d.leader);
-  const banned=new Set(["OP06-047","OP03-040","OP06-086","ST10-001","OP06-116"]);
-  const pairs=[["OP07-115","EB04-058"],["OP11-040","OP11-067"],["OP11-040","OP08-069"]];
+  const banned=new Set(window.OnePieceLegality?.bannedIds?.()||["OP06-047","OP03-040","OP06-086","ST10-001","OP06-116"]);
+  const pairs=window.OnePieceLegality?.bannedPairs?.()||[["OP07-115","EB04-058"],["OP11-040","OP11-067"],["OP11-040","OP08-069"]];
+  const restricted=new Set(window.OnePieceLegality?.restrictedIds?.()||[]);
   let illegal=0;if(!leader)messages.push("Líder no seleccionado");if(total!==50)messages.push(total+"/50 cartas no líder");
   const ids=Object.entries(d.cards||{}),baseCounts=new Map();
   for(const [id,n] of ids){
-    const c=card(id),base=baseId(id),limit=deckCopyLimitForId(id);
+    const c=card(id),base=baseId(id),limit=restricted.has(base)?1:deckCopyLimitForId(id);
     baseCounts.set(base,(baseCounts.get(base)||0)+Number(n||0));
     if(!c){illegal++;continue}
     if(c.category==="Leader"){illegal++;continue}
@@ -2027,7 +2029,7 @@ function deckValidate(d){
     if(leader&&!deckCardAllowedByLeader(c,leader)){illegal++;messages.push(c.id+" color no compatible")}
   }
   for(const [base,count] of baseCounts){
-    const limit=deckCopyLimitForId(base);
+    const limit=restricted.has(base)?1:deckCopyLimitForId(base);
     if(count>limit){illegal++;messages.push(base+">"+limit+" copias totales entre versiones")}
   }
   for(const [a,b] of pairs){if(ids.some(([id,n])=>baseId(id)===a&&Number(n)>0)&&ids.some(([id,n])=>baseId(id)===b&&Number(n)>0)){illegal++;messages.push("pareja prohibida "+a+" + "+b)}}
@@ -4157,6 +4159,10 @@ async function boot(){
   loadLocal();
   if(location.pathname==="/deck-completion")state.tab="deck-completion";
   loadCachedPrices();
+  // Refresh the public legality data at every app start; never alters the collection.
+  void window.OnePieceLegality?.load?.().then(changed=>{
+    if(changed){collectionLegalCache=null;if(state.tab==="collection"&&state.collectionReady&&!state.collectionStatsOpen&&!state.boxesOpen)renderVisibleOnly()}
+  }).catch(e=>console.warn("Official legality refresh",e));
   if(reloadViewPending)showReloadPlaceholder();
   else renderShell();
   try{
