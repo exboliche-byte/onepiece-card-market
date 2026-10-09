@@ -87,7 +87,7 @@ test("Asynchronous trade refresh retains card and username search focus",()=>{
 test("Trade results use a non-stretching flex column with one compact row per card",()=>{
  const css=code.slice(code.indexOf('style.textContent='));
  assert.match(css,/\.tools-results\{display:flex;flex-direction:column;align-items:stretch/);
- assert.match(css,/\.tools-results \.tools-found\{display:flex;flex:0 0 auto/);
+ assert.match(css,/\.tools-results>\.tools-found\{display:flex;flex:0 0 auto/);
  assert.match(css,/height:auto;min-height:0/);
  assert.match(css,/overflow-x:hidden/);
  assert.match(css,/\.tools-found-actions\{display:flex/);
@@ -96,9 +96,44 @@ test("Trade results use a non-stretching flex column with one compact row per ca
 
 test("Mobile results keep text readable with actions on their own short line",()=>{
  assert.match(code,/class="tools-found-actions"/);
- assert.match(code,/\.tools-results \.tools-found>\.grow\{flex:1 1 130px/);
- assert.match(code,/\.tools-results \.tools-found-actions\{flex:0 0 calc\(100% - 53px\)/);
+ assert.match(code,/\.tools-found-content\{display:block;flex:1 1 0/);
+ assert.match(code,/\.tools-found-actions\{flex:0 0 auto;margin-left:53px/);
  assert.match(code,/\.tools-item\{display:flex;flex-wrap:wrap/);
  assert.match(code,/word-break:normal/);
  assert.doesNotMatch(code,/grid-template-areas:/);
+});
+
+
+test("Search returns 36 independent, well-nested card articles rather than matryoshka rows",async()=>{
+ const {hub,input,output,state}=setup();
+ state.cards=Array.from({length:36},(_,i)=>({
+  id:"OP20-"+String(i+1).padStart(3,"0"),name:"Newgate card "+(i+1),set:"OP-20"
+ }));
+ hub.tradePage();
+ await hub.loadCloud();
+ hub.bindTrade();
+ input.value="newgate";
+ input.handlers.input();
+ const markup=output.innerHTML;
+ assert.equal((markup.match(/<article\\b/g)||[]).length,36);
+ assert.equal((markup.match(/<\\/article>/g)||[]).length,36);
+ // Validate every tag we produce, not only the article count. An omitted
+ // closing div previously nested all following cards and caused giant rows.
+ const tags=markup.match(/<\\/?(?:article|div|span|strong|button)\\b[^>]*>/g)||[];
+ const stack=[];
+ let completed=0;
+ for(const tag of tags){
+  const closing=tag.startsWith("</"),name=tag.match(/^<\\/?([a-z]+)/)[1];
+  if(closing){
+   assert.equal(stack.pop(),name,"Misnested tag: "+tag);
+   if(name==="article"){assert.equal(stack.length,0,"Article nested inside another card");completed++;}
+  }else{
+   if(name==="article")assert.equal(stack.length,0,"Results must be siblings, never nested");
+   stack.push(name);
+  }
+ }
+ assert.equal(stack.length,0,"All card containers must be closed");
+ assert.equal(completed,36);
+ assert.equal((markup.match(/data-trade-add="0"/g)||[]).length,36);
+ assert.equal((markup.match(/data-trade-add="1"/g)||[]).length,36);
 });
