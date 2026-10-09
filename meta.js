@@ -41,7 +41,7 @@ function tier(x){
 }
 function standardMetaData(v){
  if(!v)return null;
- const leaders=(v.leaders||[]).filter(x=>standardLeaderPlayable(x.id));
+ const leaders=(v.leaders||[]).filter(x=>typeof standardLeaderPlayable!=="function"||standardLeaderPlayable(x.id));
  const available=new Set(leaders.map(x=>String(baseId(x.id)).toUpperCase()));
  return {...v,leaders,matchups:(v.matchups||[]).filter(x=>
    available.has(String(baseId(x.leader)).toUpperCase())&&available.has(String(baseId(x.opponent)).toUpperCase()))};

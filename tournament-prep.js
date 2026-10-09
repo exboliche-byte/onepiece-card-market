@@ -28,11 +28,11 @@ function summarizePersonal(leader,days,tournaments,decks,now=Date.now()){
  recent.sort((a,b)=>b.date.localeCompare(a.date));
  return {total,pairs,events,recent};
 }
-function leaderOptions(){return (competitiveLeaderOptions()||[]).filter(x=>standardLeaderPlayable(x.id))}
+function leaderOptions(){return (competitiveLeaderOptions()||[]).filter(x=>typeof standardLeaderPlayable!=="function"||standardLeaderPlayable(x.id))}
 function selected(){
  const options=leaderOptions(),wanted=id(st.leader);
  if(options.some(x=>id(x.id)===wanted))return wanted;
- return id(state.decks?.find(x=>x.leader&&standardLeaderPlayable(x.leader))?.leader||options[0]?.id);
+ return id(state.decks?.find(x=>x.leader&&(typeof standardLeaderPlayable!=="function"||standardLeaderPlayable(x.leader)))?.leader||options[0]?.id);
 }
 function cardFor(x){return resolveDeckImportCard(x)||leaderOptions().find(v=>id(v.id)===id(x))?.card}
 const name=x=>cardFor(x)?.name||x;
@@ -43,11 +43,11 @@ const currentError=()=>st.scope==="global"?st.errorGlobal:st.errorCommunity;
 function matchRows(d,leader,personal){
  const m=new Map();
  for(const x of d?.matchups||[]){
-  if(id(x.leader)!==leader||!id(x.opponent)||!standardLeaderPlayable(x.opponent))continue;
+  if(id(x.leader)!==leader||!id(x.opponent)||(typeof standardLeaderPlayable==="function"&&!standardLeaderPlayable(x.opponent)))continue;
   const key=id(x.opponent),prior=m.get(key);
   if(!prior||n(x.games)>n(prior.global?.games))m.set(key,{key,global:x,local:personal.pairs.get(key)||blank()});
  }
- for(const [key,local] of personal.pairs)if(!m.has(key)&&standardLeaderPlayable(key))m.set(key,{key,global:null,local});
+ for(const [key,local] of personal.pairs)if(!m.has(key)&&(typeof standardLeaderPlayable!=="function"||standardLeaderPlayable(key)))m.set(key,{key,global:null,local});
  const rows=[...m.values()].map(x=>{
   const games=n(x.global?.games),wins=n(x.global?.wins),localGames=n(x.local.wins)+n(x.local.losses);
   return {...x,games,percent:games?(Number.isFinite(x.global?.rate)?x.global.rate/100:wins/games):null,localGames,localPercent:localGames?n(x.local.wins)/localGames:null};
