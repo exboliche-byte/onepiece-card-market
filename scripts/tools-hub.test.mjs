@@ -131,7 +131,7 @@ test("Cloud load prefers existing remote settings to stale browser cache",async(
   const cloud=mockDb({user_id:"u1",trade:[[{id:"OP01-002",q:1,manual:5}],[]],
     revision:9});t.state.sb=cloud.client;
   assert.equal(await t.hub.loadCloud(),true);
-  const page=t.hub.view();
+  const page=t.hub.tradePage();
   assert.match(page,/Zoro/);
   assert.doesNotMatch(page,/5000\.00 €/);
   assert.equal(cloud.writes(),0);
@@ -150,7 +150,7 @@ test("Offline pending changes with same revision save; conflicts never overwrite
   await other.hub.loadCloud();await other.hub.flushCloud();
   assert.equal(cloud2.writes(),0);
   assert.match(other.hub.tradePage(),/Decide cuál conservar/);
-  assert.match(other.hub.view(),/Reemplazar datos de Supabase/);
+  assert.match(other.hub.tradePage(),/Reemplazar datos de Supabase/);
 });
 test("Own-account SQL permissions are enabled for the tools table",()=>{
   const sql=fs.readFileSync(path.join(root,"supabase/migrations/20261009_user_tools_sync.sql"),"utf8");
@@ -166,8 +166,8 @@ test("Legacy browser drafts conflict visibly if another device already has cloud
   t.state.sb=remote.client;
   assert.equal(await t.hub.loadCloud(),true);
   assert.equal(remote.writes(),0);
-  assert.match(t.hub.view(),/datos guardados antes de la sincronización/);
-  assert.match(t.hub.view(),/Reemplazar datos de Supabase/);
+  assert.match(t.hub.tradePage(),/datos guardados antes de la sincronización/);
+  assert.match(t.hub.tradePage(),/Reemplazar datos de Supabase/);
   const local=JSON.parse(t.written["mialbumonepiece_tools_u1"]);
   assert.equal(local.trade[0][0].manual,8);
 });
