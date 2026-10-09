@@ -1666,7 +1666,8 @@ function decksView(){
   const deckDescription=d.description?'<div class="section" style="white-space:pre-wrap;overflow-wrap:anywhere">'+esc(d.description)+'</div>':'';
   const plannedDeckFeatures='<nav class="deck-feature-spaces" aria-label="Herramientas de mazo">'+
     '<button class="secondary btn deck-feature-space" id="deckSimulate" type="button"><strong>♧ Simular mano</strong><small>Manos y probabilidades</small></button>'+
-    '<button class="secondary btn deck-feature-space" id="deckCompare" type="button"><strong>⇄ Comparar mazos</strong><small>Diferencias entre listas</small></button></nav>';
+    '<button class="secondary btn deck-feature-space" id="deckCompare" type="button"><strong>⇄ Comparar mazos</strong><small>Diferencias entre listas</small></button>'+
+    '<button class="secondary btn deck-feature-space" id="deckAssistant" type="button"><strong>✦ Mejorar mazo</strong><small>Recomendaciones del meta</small></button></nav>';
   return '<div class="wrap">'+hero+plannedDeckFeatures+deckSyncStatusView()+deckMeta+deckDescription+draftNotice+
     '<div class="section">'+(l?'<div class="deck-leader-row">'+cardImg(preferredOwnedDeckPrinting(l),"thumb")+'<div class="grow"><b>Líder · '+esc(l.name)+'</b><div class="small">'+esc(preferredOwnedDeckPrinting(l).id)+' · '+(priceOf(l)!==null?money(priceOf(l)):"Precio —")+' · '+(deckOwnedCopies(l)?"en colección":"te falta")+'</div></div><button class="secondary btn" id="changeLeader">Cambiar</button><button class="danger btn" id="removeLeader">Quitar</button></div>':'<div class="notice"><b>1. Elige el líder.</b> Hasta que no selecciones uno, aquí solo aparecen líderes.</div>')+'</div>'+
     deckStats+
@@ -2925,6 +2926,7 @@ function bindShell(){
     $("#shareDeck")?.addEventListener("click",()=>shareDeck());
     $("#deckSimulate")?.addEventListener("click",()=>window.OnePieceDeckLab?.simulate?.());
     $("#deckCompare")?.addEventListener("click",()=>window.OnePieceDeckLab?.compare?.());
+    $("#deckAssistant")?.addEventListener("click",()=>window.OnePieceDeckLab?.assist?.());
     bindSearch("#deckSearch",v=>{state.deckQuery=v;state.deckPage=1;renderDeckResults()});
     const map={deckSet:"set",deckCat:"category",deckColor:"color",deckRarity:"rarity",deckType:"type",deckAttribute:"attribute",deckOwnership:"ownership",deckSort:"sort",deckDir:"dir"};
     Object.entries(map).forEach(([id,k])=>$("#"+id)?.addEventListener("change",async()=>{state.deckFilters[k]=$("#"+id).value;state.deckPage=1;await renderDeckResults()}));
