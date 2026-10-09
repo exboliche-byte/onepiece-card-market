@@ -151,6 +151,114 @@ function deckLeaderColors(deck){
 function darkTint(color,factor,base){
   return "rgb("+color.map((v,i)=>Math.min(255,Math.round(v*factor+base[i]))).join(",")+")";
 }
+
+// Draw an original nautical chart over the actual leader-color background.
+// Canvas-only art keeps the JPG fast, cross-origin safe and unique to each leader palette.
+function drawNauticalChart(ctx){
+  const w=WIDTH,h=ctx.canvas.height;
+  ctx.save();
+  // Seeded weathering: never flickers between repeated exports of the same deck.
+  let seed=0x4f4e4550;
+  const random=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296};
+  for(let i=0;i<780;i++){
+    const x=random()*w,y=random()*h,r=1+random()*3;
+    ctx.fillStyle=i%4?"rgba(242,220,165,.044)":"rgba(2,10,18,.10)";
+    ctx.fillRect(x,y,r,r);
+  }
+  // Faded latitude/longitude grids and nautical bearing lines.
+  ctx.strokeStyle="rgba(235,218,179,.115)";ctx.lineWidth=1.5;
+  for(let x=130;x<w;x+=175){
+    ctx.beginPath();ctx.moveTo(x,0);
+    ctx.bezierCurveTo(x+70,h*.3,x-65,h*.68,x+15,h);ctx.stroke();
+  }
+  for(let y=195;y<h;y+=190){
+    ctx.beginPath();ctx.moveTo(0,y);
+    ctx.bezierCurveTo(w*.35,y-42,w*.7,y+47,w,y-6);ctx.stroke();
+  }
+  // Engraved island coastlines, drawn at several contour depths.
+  function coast(cx,cy,rx,ry,phase){
+    for(const depth of [1,.84,.69]){
+      ctx.beginPath();
+      for(let i=0;i<=76;i++){
+        const a=i*Math.PI*2/76;
+        const jag=1+.13*Math.sin(a*5+phase)+.075*Math.cos(a*11-phase)+.045*Math.sin(a*19+phase);
+        const x=cx+Math.cos(a)*rx*jag*depth;
+        const y=cy+Math.sin(a)*ry*jag*depth;
+        if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);
+      }
+      ctx.closePath();
+      if(depth===1){ctx.fillStyle="rgba(3,12,24,.17)";ctx.fill();}
+      ctx.strokeStyle=depth===1?"rgba(225,198,132,.32)":"rgba(230,207,162,.13)";
+      ctx.lineWidth=depth===1?3:1.6;ctx.stroke();
+    }
+  }
+  coast(-65,h*.43,230,375,1.7);
+  coast(w+85,h*.33,310,460,.9);
+  coast(w*.83,h*.71,180,275,2.4);
+  coast(w*.12,h*.88,320,290,.6);
+  coast(w*.53,h*.53,92,135,1.2);
+  // Compass rose with radial tick marks and engraved gold/ivory directional petals.
+  function compass(cx,cy,rad,alpha){
+    ctx.save();ctx.translate(cx,cy);ctx.rotate(-.1);ctx.globalAlpha=alpha;
+    for(const r of [rad,rad*.94,rad*.76,rad*.38]){
+      ctx.beginPath();ctx.arc(0,0,r,0,Math.PI*2);
+      ctx.lineWidth=r===rad?8:3;ctx.strokeStyle="rgba(238,219,167,.72)";ctx.stroke();
+    }
+    for(let i=0;i<72;i++){
+      const a=(i*Math.PI/36)-Math.PI/2,major=i%6===0,inner=rad*(major?.77:.89);
+      ctx.beginPath();ctx.moveTo(Math.cos(a)*inner,Math.sin(a)*inner);
+      ctx.lineTo(Math.cos(a)*rad*.96,Math.sin(a)*rad*.96);
+      ctx.lineWidth=major?3:1.4;ctx.strokeStyle="rgba(235,220,177,.76)";ctx.stroke();
+    }
+    for(let i=0;i<8;i++){
+      const a=i*Math.PI/4-Math.PI/2,spread=.13;
+      ctx.beginPath();ctx.moveTo(0,0);
+      ctx.lineTo(Math.cos(a-spread)*rad*.19,Math.sin(a-spread)*rad*.19);
+      ctx.lineTo(Math.cos(a)*(i%2?rad*.59:rad*.88),Math.sin(a)*(i%2?rad*.59:rad*.88));
+      ctx.lineTo(Math.cos(a+spread)*rad*.19,Math.sin(a+spread)*rad*.19);
+      ctx.closePath();
+      ctx.fillStyle=i%2?"rgba(231,194,109,.43)":"rgba(242,229,192,.65)";
+      ctx.fill();ctx.strokeStyle="rgba(2,18,30,.6)";ctx.lineWidth=2;ctx.stroke();
+    }
+    ctx.beginPath();ctx.arc(0,0,rad*.105,0,Math.PI*2);
+    ctx.fillStyle="rgba(9,21,32,.67)";ctx.fill();ctx.strokeStyle="rgba(235,212,153,.75)";
+    ctx.lineWidth=4;ctx.stroke();
+    ctx.restore();
+  }
+  compass(w*.23,HEADER_H+(h-HEADER_H-FOOTER_H)*.43,Math.min(w*.31,h*.23),.42);
+  compass(w*.76,HEADER_H*.57,104,.39);
+  function route(x1,y1,cx,cy,x2,y2){
+    ctx.beginPath();ctx.moveTo(x1,y1);ctx.quadraticCurveTo(cx,cy,x2,y2);ctx.stroke();
+  }
+  ctx.save();ctx.lineWidth=2.2;ctx.strokeStyle="rgba(242,201,117,.38)";ctx.setLineDash([18,14]);
+  route(-40,h*.23,w*.44,h*.07,w+20,h*.57);
+  route(0,h*.91,w*.46,h*.56,w,h*.38);
+  route(w*.12,h*.14,w*.63,h*.74,w*.92,h*.89);
+  ctx.restore();
+  // Navigation stars highlight the map without competing with card art.
+  function navStar(x,y,r){
+    ctx.save();ctx.translate(x,y);ctx.strokeStyle="rgba(242,210,132,.48)";ctx.lineWidth=2.4;
+    for(let i=0;i<8;i++){const a=i*Math.PI/4;ctx.beginPath();ctx.moveTo(Math.cos(a)*r*.2,Math.sin(a)*r*.2);ctx.lineTo(Math.cos(a)*r,Math.sin(a)*r);ctx.stroke();}
+    ctx.beginPath();ctx.arc(0,0,r*.14,0,Math.PI*2);ctx.fillStyle="rgba(241,218,169,.7)";ctx.fill();ctx.restore();
+  }
+  navStar(w*.7,h*.28,38);navStar(w*.53,h*.79,31);navStar(w*.9,h*.56,28);
+  // A subtle galleon silhouette on the ocean chart.
+  ctx.save();ctx.translate(w*.72,h*.53);ctx.scale(1.2,1.2);
+  ctx.strokeStyle="rgba(4,16,27,.42)";ctx.fillStyle="rgba(3,12,23,.21)";ctx.lineWidth=4;
+  ctx.beginPath();ctx.moveTo(-104,35);ctx.lineTo(105,35);ctx.lineTo(65,75);ctx.lineTo(-75,75);ctx.closePath();ctx.fill();ctx.stroke();
+  ctx.beginPath();ctx.moveTo(0,35);ctx.lineTo(0,-127);ctx.moveTo(-58,35);ctx.lineTo(-58,-85);ctx.moveTo(51,35);ctx.lineTo(51,-77);ctx.stroke();
+  for(const [mx,my,top] of [[0,7,-110],[-58,14,-73],[51,17,-66]]){
+    ctx.beginPath();ctx.moveTo(mx,my);ctx.quadraticCurveTo(mx+64,(my+top)/2,mx+7,top);ctx.lineTo(mx+7,my);ctx.closePath();ctx.fill();ctx.stroke();
+  }
+  ctx.restore();
+  // Antique gold edging similar to printed pirate charts, outside the text itself.
+  ctx.fillStyle="rgba(214,166,68,.62)";
+  ctx.fillRect(0,0,w,9);ctx.fillRect(0,HEADER_H-9,w,5);
+  ctx.fillRect(0,h-FOOTER_H,w,7);ctx.fillRect(0,h-9,w,9);
+  ctx.fillStyle="rgba(6,15,26,.6)";
+  ctx.fillRect(0,9,w,3);ctx.fillRect(0,h-FOOTER_H+7,w,3);
+  ctx.restore();
+}
 function drawHeader(ctx,deck,playCount,entryCount,leaderColors){
   const palette=leaderColors?.length?leaderColors:[[65,101,133]];
   // A single color keeps a consistent tone; multi-color leaders blend all their colors.
@@ -170,6 +278,7 @@ function drawHeader(ctx,deck,playCount,entryCount,leaderColors){
     glow.addColorStop(1,"rgba("+color.join(",")+",0)");
     ctx.fillStyle=glow;ctx.fillRect(0,0,WIDTH,ctx.canvas.height);
   });
+  drawNauticalChart(ctx);
   ctx.fillStyle="rgba(0,0,0,.28)";ctx.fillRect(0,0,WIDTH,155);
   ctx.textAlign="left";ctx.textBaseline="alphabetic";
   ctx.fillStyle="#ffffff";ctx.font="900 30px system-ui,sans-serif";
@@ -180,6 +289,9 @@ function drawHeader(ctx,deck,playCount,entryCount,leaderColors){
   ctx.fillText(playCount+"/50 CARTAS",WIDTH-MARGIN,67);
   ctx.font="600 20px system-ui,sans-serif";
   ctx.fillText(entryCount+" IMPRESIONES · 1 LÍDER MÁX.",WIDTH-MARGIN,110);
+  // Keep the decorative title frame crisp above the translucent header panel.
+  ctx.fillStyle="rgba(225,185,103,.84)";ctx.fillRect(0,0,WIDTH,9);
+  ctx.fillStyle="rgba(225,185,103,.55)";ctx.fillRect(0,153,WIDTH,5);
 }
 function drawDeckQRCode(ctx,url){
   if(typeof qrcode!=="function")throw Error("El generador QR no está disponible.");
