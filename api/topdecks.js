@@ -153,6 +153,18 @@ function json(body,status=200){
 export default {
  async fetch(request){
   const url=new URL(request.url);
+  if(url.searchParams.get("probe")==="1"){
+   const response=await fetch(HOST+PAGES[1],{headers:{"user-agent":"Mozilla/5.0","accept":"text/html"}});
+   const html=await response.text();
+   const low=html.toLowerCase(),idx=low.indexOf("1nop");
+   return json({status:response.status,contentType:response.headers.get("content-type"),length:html.length,
+    title:html.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1]||"",
+    links:(html.match(/deckgen/gi)||[]).length,
+    codes:(html.match(/1n(?:op|eb|st)\d{2}-\d{3}/gi)||[]).length,
+    tr:(html.match(/<tr\b/gi)||[]).length,
+    sample:idx>=0?html.slice(Math.max(0,idx-190),idx+650):html.slice(0,600)
+   });
+  }
   const leader=normalizeCode(url.searchParams.get("leader")||"all");
   const cardFilter=normalizeCode(url.searchParams.get("card")||"");
   if((leader!=="ALL"&&!codePattern.test(leader))||(cardFilter&&!codePattern.test(cardFilter)))
