@@ -8,7 +8,7 @@ const make=(fetcher=async()=>({ok:true,headers:new Headers({"content-type":"text
  runInNewContext(js+"\n({parseDeckComposition,parseTopDecksPage,endpoint})",{
   URL,URLSearchParams,Headers,Response,Request,Math,Map,Date,Number,String,Array,Object,
   fetch:fetcher,getLegalityRules:async()=>({}),deckPlayable:(l,c)=>!!l&&Object.values(c).reduce((a,b)=>a+b,0)===50,
-  setTimeout,clearTimeout,console
+  setTimeout,clearTimeout,AbortController,console
  });
 const dg="1nOP13-001a4nOP01-016a4nEB04-002a3nST21-003a4nEB04-007a4nST31-004a4nEB02-017a4nOP14-022a4nOP14-031a4nOP13-027a2nOP13-118a2nOP15-032a1nOP04-016a4nST31-005a1nOP13-040a1nOP05-038a4nOP08-036";
 const page="https://onepiecetopdecks.com/deck-list/english-op16-deck-list-the-time-of-battle/";
