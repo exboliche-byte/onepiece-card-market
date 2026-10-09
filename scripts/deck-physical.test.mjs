@@ -110,3 +110,57 @@ test("pending and deactivate buttons appear only when tracking is active",async(
  state.collectionReady=false;
  assert.equal(api.pendingButton(),"");
 });
+
+test("prefer taking all four Sanjis from Sabo rather than splitting between Sabo and Buffy",async()=>{
+ const {api,state,koalaDeck,allocations}=setup(6);
+ const buffy="44444444-4444-4444-8444-444444444444";
+ state.decks.push({id:buffy,name:"Buffy",leader:"",cards:{"OP11-011":2}});
+ allocations[buffy]={"OP11-011_p1":2};
+ await api.load();
+ const planned=api._testing.plan(koalaDeck);
+ assert.equal(planned.changes.length,1);
+ assert.equal(planned.changes[0].from,sabo);
+ assert.equal(planned.changes[0].quantity,4);
+ assert.equal(planned.next[koala]["OP11-011"],4);
+ assert.equal(planned.next[buffy]["OP11-011_p1"],2,"Buffy remains fully mounted");
+ assert.equal(planned.next[sabo],undefined,"Sabo provides its whole playset");
+});
+test("prefer one donor covering the remainder even when a smaller donor is incomplete",async()=>{
+ const {api,state,koalaDeck,allocations}=setup(6);
+ const buffy="44444444-4444-4444-8444-444444444444";
+ state.decks.push({id:buffy,name:"Buffy",leader:"",cards:{"OP11-011":4}});
+ allocations[buffy]={"OP11-011_p1":2};
+ await api.load();
+ const planned=api._testing.plan(koalaDeck);
+ assert.equal(planned.changes.length,1);
+ assert.equal(planned.changes[0].from,sabo);
+ assert.equal(planned.changes[0].quantity,4);
+});
+test("use the largest partial donor first when no box covers the shortage",async()=>{
+ const {api,state,koalaDeck,allocations}=setup(5);
+ const buffy="44444444-4444-4444-8444-444444444444";
+ state.decks.push({id:buffy,name:"Buffy",leader:"",cards:{"OP11-011":2}});
+ allocations[sabo]={"OP11-011":3};
+ allocations[buffy]={"OP11-011_p1":2};
+ await api.load();
+ const planned=api._testing.plan(koalaDeck);
+ assert.equal(planned.changes.length,2);
+ assert.equal(planned.changes[0].from,sabo);
+ assert.equal(planned.changes[0].quantity,3);
+ assert.equal(planned.changes[1].from,buffy);
+ assert.equal(planned.changes[1].quantity,1);
+});
+test("show all free album movements before donor movements, regardless of card order",async()=>{
+ const {api,state,koalaDeck}=setup(7);
+ state.owned["OP11-012"]=1;
+ koalaDeck.cards={"OP11-011":4,"OP11-012":1};
+ await api.load();
+ const planned=api._testing.plan(koalaDeck);
+ assert.equal(planned.changes.length,3);
+ const display=api._testing.orderedMovements(planned.changes);
+ assert.equal(display[0].from,null);
+ assert.equal(display[1].from,null);
+ assert.equal(display[2].from,sabo);
+ assert.equal(display[2].quantity,1);
+ assert.equal(planned.changes[1].from,sabo,"display order must not change calculation or confirmation");
+});
