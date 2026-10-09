@@ -2785,7 +2785,17 @@ function bindShell(){
     $("#newDeck")?.addEventListener("click",()=>{state.newDeck=true;renderShell()});
     $("#newDeck2")?.addEventListener("click",()=>{state.newDeck=true;renderShell()});
     $("#createDeckConfirm")?.addEventListener("click",()=>{const name=$("#newDeckName")?.value.trim();if(!name)return notify("Pon un nombre");if(!state.user){state.newDeck=false;navigateApp(()=>{state.tab="account"});return}const d={id:crypto.randomUUID(),name,description:$("#newDeckDesc")?.value||"",leader:"",cards:{},colors:[],owner_id:state.user.id,updatedAt:new Date().toISOString()};state.decks.unshift(d);state.deckId=d.id;state.deckLibrary=false;state.newDeck=false;saveLocal();syncDeck(d);pushAppHistory();renderShell()});
-    $("#deleteDeck")?.addEventListener("click",async()=>{if(!confirm("¿Eliminar este mazo?"))return;const id=state.deckId;if(!await syncDeckDelete(id))return;state.decks=state.decks.filter(x=>x.id!==id);state.deckId=null;state.deckLibrary=true;saveLocal();renderShell();notify("Mazo eliminado de Supabase")});
+    $("#deleteDeck")?.addEventListener("click",async()=>{
+      const id=state.deckId,deck=state.decks.find(x=>x.id===id),userId=state.user?.id;
+      if(!deck||!userId||!confirm("¿Eliminar el mazo «"+deck.name+"»? Se borrará de tu cuenta."))return;
+      const button=$("#deleteDeck");if(button){button.disabled=true;button.textContent="Eliminando…"}
+      const removed=await syncDeckDelete(id);
+      if(!removed){if(button){button.disabled=false;button.textContent="Eliminar mazo"}return}
+      if(state.user?.id!==userId)return;
+      state.decks=state.decks.filter(x=>x.id!==id);
+      state.deckId=null;state.deckLibrary=true;state.deckDiscover=false;state.deckPreviewOrigin="";
+      saveLocal();replaceAppHistory();renderShell();notify("Mazo eliminado correctamente");
+    });
     $("#changeLeader")?.addEventListener("click",beginLeaderChange);
     $("#removeLeader")?.addEventListener("click",removeLeader);
     $("#shareDeck")?.addEventListener("click",()=>shareDeck());
@@ -3172,18 +3182,34 @@ function syncDeck(d,{automatic=false}={}){
   return operation;
 }
 async function syncDeckDelete(id){
-  if(!state.sb||!state.user)return false;
+  if(!state.sb||!state.user||!id)return false;
   const userId=state.user.id,client=state.sb;
   try{
+    // An in-flight write must finish before we issue a permanent delete.
     await (deckSyncWrites.get(id)||Promise.resolve());
     if(state.user?.id!==userId)return false;
     const result=await client.rpc("deck_delete_atomic",{p_deck_id:id});
-    if(result.error)throw result.error;
-    deckSyncErrors.delete(id);updateDeckSyncStatus();
+    if(result.error){
+      // Locally-created decks that never reached Supabase are safe to
+      // remove only when Supabase independently confirms the row is absent.
+      if(!String(result.error.message||"").includes("Mazo no encontrado"))throw result.error;
+      const check=await client.from("decks").select("id").eq("id",id).eq("user_id",userId).limit(1);
+      if(check.error||check.data?.length)throw result.error;
+    }else{
+      // Do not remove it from local state on an ambiguous RPC response.
+      const check=await client.from("decks").select("id").eq("id",id).eq("user_id",userId).limit(1);
+      if(check.error)throw check.error;
+      if(check.data?.length)throw Error("El mazo sigue en Supabase");
+    }
+    if(state.user?.id!==userId)return false;
+    deckPendingSyncIds.delete(id);
+    deckSyncErrors.delete(id);
+    if(!deckPendingSyncIds.size)deckRetryAttempts=0;
+    updateDeckSyncStatus();
     return true;
   }catch(error){
     console.warn("No se pudo borrar el mazo",error);
-    if(state.user?.id===userId)notify("No se ha borrado el mazo de Supabase.");
+    if(state.user?.id===userId)notify("No se ha borrado el mazo: "+String(error?.message||error).slice(0,160));
     return false;
   }
 }
