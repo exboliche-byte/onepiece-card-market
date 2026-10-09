@@ -388334,6 +388334,81 @@
     "syncCarryForward": true
   },
   {
+    "id": "EB03-052_p1",
+    "number": "EB03-052",
+    "name": "Shirahoshi",
+    "rarity": "R",
+    "cardClass": "CHARACTER",
+    "cost": "3",
+    "life": null,
+    "attribute": [
+      "Wisdom"
+    ],
+    "power": null,
+    "counter": "1000",
+    "color": [
+      "Yellow"
+    ],
+    "feature": [
+      "Merfolk",
+      "Fish-Man Island"
+    ],
+    "trigger": null,
+    "blockIcon": "4",
+    "effect": "[Activate: Main] You may trash this Character: If your Leader is [Shirahoshi], add 1 card from the top of your deck to the top of your Life cards. Then, all of your {Neptunian} type Characters gain +1000 power during this turn.",
+    "imageUrl": "https://asia-en.onepiece-cardgame.com/images/cardlist/card/EB03-052.png",
+    "isParallel": true,
+    "languages": [
+      "English",
+      "Thai",
+      "Chinese Traditional"
+    ],
+    "foreignData": [
+      {
+        "language": "Thai",
+        "name": "Shirahoshi",
+        "effect": "[สั่งใช้ : เมน] สามารถนำคาแรกเตอร์นี้ ไปวางที่แทรช : ถ้าลีดเดอร์ของฝ่ายเรา คือ [Shirahoshi] ละก็, จะนำการ์ดจากบนสุดของ เด็คของเรา จำนวนไม่เกิน 1 ใบ, มาวางเพิ่มที่บนสุดของไลฟ์. จากนั้น, ในเทิร์นนี้, คาแรกเตอร์ของฝ่ายเรา ทั้งหมด ที่มีคุณสมบัติ < เจ้าทะเล >, จะพาวเวอร์ +1000.",
+        "trigger": null,
+        "attribute": [
+          "ปัญญา"
+        ],
+        "feature": [
+          "เผ่าเงือก",
+          "เกาะมนุษย์เงือก"
+        ]
+      },
+      {
+        "language": "Chinese Traditional",
+        "name": "白星公主",
+        "effect": "【啟動主要】可將這張角色卡放置在廢棄區：若自己的領航卡是「白星公主」時，將1張自己卡組上面的卡片加入生命值區上面。之後，自己擁有《海王類》特徵的角色卡全數，在這個回合，力量值+1000。",
+        "trigger": null,
+        "attribute": null,
+        "feature": [
+          "人魚族",
+          "魚人島"
+        ]
+      }
+    ],
+    "set": "LIMITEDPRODUCTCARD",
+    "source_set": "LIMITEDPRODUCTCARD",
+    "origin_set": "EB-03",
+    "set_name": "Premium Card Collection -6 assort vol.2-",
+    "pack_name": "Premium Card Collection -6 assort vol.2-",
+    "category": "Character",
+    "colors": [
+      "Yellow"
+    ],
+    "attributes": [
+      "Wisdom"
+    ],
+    "types": [
+      "Merfolk",
+      "Fish-Man Island"
+    ],
+    "image": "https://limitlesstcg.nyc3.cdn.digitaloceanspaces.com/one-piece/EB03/EB03-052_p1_EN.webp",
+    "catalogSource": "Limitless exact English print verified by image filename"
+  },
+  {
     "id": "OP02-013_p4",
     "number": "OP02-013",
     "name": "Portgas.D.Ace",
@@ -388391,8 +388466,7 @@
       "Whitebeard Pirates"
     ],
     "image": "https://limitlesstcg.nyc3.cdn.digitaloceanspaces.com/one-piece/OP02/OP02-013_p4_EN.webp",
-    "catalogSource": "Limitless exact English print verified by image filename",
-    "syncCarryForward": true
+    "catalogSource": "Limitless exact English print verified by image filename"
   },
   {
     "id": "OP04-083_p4",
@@ -388455,8 +388529,7 @@
       "Revolutionary Army"
     ],
     "image": "https://limitlesstcg.nyc3.cdn.digitaloceanspaces.com/one-piece/OP04/OP04-083_p4_EN.webp",
-    "catalogSource": "Limitless exact English print verified by image filename",
-    "syncCarryForward": true
+    "catalogSource": "Limitless exact English print verified by image filename"
   },
   {
     "id": "OP06-118_p3",
@@ -388516,7 +388589,307 @@
       "Straw Hat Crew"
     ],
     "image": "https://limitlesstcg.nyc3.cdn.digitaloceanspaces.com/one-piece/OP06/OP06-118_p3_EN.webp",
-    "catalogSource": "Limitless exact English print verified by image filename",
-    "syncCarryForward": true
+    "catalogSource": "Limitless exact English print verified by image filename"
+  },
+  {
+    "id": "OP03-026_p1",
+    "number": "OP03-026",
+    "name": "Kuroobi",
+    "rarity": "UC",
+    "cardClass": "CHARACTER",
+    "cost": "4",
+    "life": null,
+    "attribute": [
+      "Strike"
+    ],
+    "power": "3000",
+    "counter": "1000",
+    "color": [
+      "Green"
+    ],
+    "feature": [
+      "Fish-Man",
+      "East Blue",
+      "Arlong Pirates"
+    ],
+    "trigger": "[Trigger] Play this card.",
+    "blockIcon": "1",
+    "effect": "[On Play] If your Leader has the {East Blue} type, rest up to 1 of your opponent's Characters.",
+    "imageUrl": "https://asia-en.onepiece-cardgame.com/images/cardlist/card/OP03-026.png",
+    "isParallel": true,
+    "languages": [
+      "English",
+      "Korean",
+      "Thai",
+      "Chinese Traditional"
+    ],
+    "foreignData": [
+      {
+        "language": "Korean",
+        "name": "쿠로오비",
+        "effect": "【등장 시】자신의 리더가 《이스트 블루》 특징을 가진 경우, 상대의 캐릭터를 1장까지 레스트로 한다.",
+        "trigger": "이 카드를 등장시킨다.",
+        "attribute": [
+          "타격"
+        ],
+        "feature": [
+          "어인족",
+          "이스트 블루",
+          "아론 일당"
+        ]
+      },
+      {
+        "language": "Thai",
+        "name": "Kuroobi",
+        "effect": "[เมื่อลงสนาม] ถ้าลีดเดอร์ของเรา มีคุณสมบัติ < อีสต์บลู >, ทำการ เรสต์ คาแรกเตอร์ของคู่แข่ง จำนวนไม่เกิน 1 ใบ.",
+        "trigger": "[ทริกเกอร์] นำการ์ดใบนี้ลงสนาม.",
+        "attribute": [
+          "ตี"
+        ],
+        "feature": [
+          "เผ่ามนุษย์เงือก",
+          "อีสต์บลู",
+          "กลุ่มโจรสลัดอาร์ลอง"
+        ]
+      },
+      {
+        "language": "Chinese Traditional",
+        "name": "克羅歐比",
+        "effect": "【登場時】若自己的領航卡擁有《東方藍》特徵時，將最多1張對手的角色卡置為休息狀態。",
+        "trigger": "【觸發器】使這張卡片登場。",
+        "attribute": null,
+        "feature": [
+          "魚人族",
+          "東方藍",
+          "惡龍海賊團"
+        ]
+      }
+    ],
+    "set": "OTHER-PRODUCT-CARD",
+    "source_set": "OTHER-PRODUCT-CARD",
+    "origin_set": "OP-03",
+    "set_name": "Regional Participation Pack Vol.2",
+    "pack_name": "Regional Participation Pack Vol.2",
+    "category": "Character",
+    "colors": [
+      "Green"
+    ],
+    "attributes": [
+      "Strike"
+    ],
+    "types": [
+      "Fish-Man",
+      "East Blue",
+      "Arlong Pirates"
+    ],
+    "image": "https://limitlesstcg.nyc3.cdn.digitaloceanspaces.com/one-piece/OP03/OP03-026_p1_EN.webp",
+    "catalogSource": "Limitless exact English print verified by image filename"
+  },
+  {
+    "id": "OP12-049_p1",
+    "number": "OP12-049",
+    "name": "Buggy",
+    "rarity": "UC",
+    "cardClass": "CHARACTER",
+    "cost": "6",
+    "life": null,
+    "attribute": [
+      "Slash"
+    ],
+    "power": "7000",
+    "counter": "2000",
+    "color": [
+      "Blue"
+    ],
+    "feature": [
+      "The Four Emperors",
+      "Cross Guild"
+    ],
+    "trigger": null,
+    "blockIcon": "3",
+    "effect": null,
+    "imageUrl": "https://asia-en.onepiece-cardgame.com/images/cardlist/card/OP12-049.png",
+    "isParallel": true,
+    "languages": [
+      "English",
+      "Thai",
+      "Chinese Traditional"
+    ],
+    "foreignData": [
+      {
+        "language": "Thai",
+        "name": "Buggy",
+        "effect": null,
+        "trigger": null,
+        "attribute": [
+          "ฟัน"
+        ],
+        "feature": [
+          "สี่จักรพรรดิ",
+          "ครอสกิลด์"
+        ]
+      },
+      {
+        "language": "Chinese Traditional",
+        "name": "巴其",
+        "effect": null,
+        "trigger": null,
+        "attribute": null,
+        "feature": [
+          "四皇",
+          "十字公會"
+        ]
+      }
+    ],
+    "set": "OTHER-PRODUCT-CARD",
+    "source_set": "OTHER-PRODUCT-CARD",
+    "origin_set": "OP-12",
+    "set_name": "4th Anniversary! Treasure Campaign Pack",
+    "pack_name": "4th Anniversary! Treasure Campaign Pack",
+    "category": "Character",
+    "colors": [
+      "Blue"
+    ],
+    "attributes": [
+      "Slash"
+    ],
+    "types": [
+      "The Four Emperors",
+      "Cross Guild"
+    ],
+    "image": "https://limitlesstcg.nyc3.cdn.digitaloceanspaces.com/one-piece/OP12/OP12-049_p1_EN.webp",
+    "catalogSource": "Limitless exact English print verified by image filename"
+  },
+  {
+    "id": "OP16-095_p1",
+    "number": "OP16-095",
+    "name": "Monkey.D.Luffy",
+    "rarity": "R",
+    "cardClass": "CHARACTER",
+    "cost": "2",
+    "life": null,
+    "attribute": [
+      "Strike"
+    ],
+    "power": "2000",
+    "counter": "2000",
+    "color": [
+      "Black"
+    ],
+    "feature": [
+      "Land of Wano",
+      "Straw Hat Crew"
+    ],
+    "trigger": null,
+    "blockIcon": "5",
+    "effect": "[On Play] Up to 1 of your black {Land of Wano} type Characters gains [Unblockable] during this turn. (This card cannot be blocked.)",
+    "imageUrl": "https://asia-en.onepiece-cardgame.com/images/cardlist/card/OP16-095.png",
+    "isParallel": true,
+    "languages": [
+      "English"
+    ],
+    "foreignData": null,
+    "set": "LIMITEDPRODUCTCARD",
+    "source_set": "LIMITEDPRODUCTCARD",
+    "origin_set": "OP-16",
+    "set_name": "Premium Card Collection -6 assort vol.2-",
+    "pack_name": "Premium Card Collection -6 assort vol.2-",
+    "category": "Character",
+    "colors": [
+      "Black"
+    ],
+    "attributes": [
+      "Strike"
+    ],
+    "types": [
+      "Land of Wano",
+      "Straw Hat Crew"
+    ],
+    "image": "https://limitlesstcg.nyc3.cdn.digitaloceanspaces.com/one-piece/OP16/OP16-095_p1_EN.webp",
+    "catalogSource": "Limitless exact English print verified by image filename"
+  },
+  {
+    "id": "ST06-002_p1",
+    "number": "ST06-002",
+    "name": "Koby",
+    "rarity": "C",
+    "cardClass": "CHARACTER",
+    "cost": "1",
+    "life": null,
+    "attribute": [
+      "Strike"
+    ],
+    "power": "2000",
+    "counter": "1000",
+    "color": [
+      "Black"
+    ],
+    "feature": [
+      "Navy"
+    ],
+    "trigger": null,
+    "blockIcon": "1",
+    "effect": "[On Play] You may trash 1 card from your hand: K.O. up to 1 of your opponent's Characters with a cost of 0.",
+    "imageUrl": "https://asia-en.onepiece-cardgame.com/images/cardlist/card/ST06-002.png",
+    "isParallel": true,
+    "languages": [
+      "English",
+      "Korean",
+      "Thai",
+      "Chinese Traditional"
+    ],
+    "foreignData": [
+      {
+        "language": "Korean",
+        "name": "코비",
+        "effect": "【등장 시】자신의 패 1장을 버릴 수 있다: 상대의 코스트 0인 캐릭터를 1장까지 KO 시킨다.",
+        "trigger": null,
+        "attribute": [
+          "타격"
+        ],
+        "feature": [
+          "해군"
+        ]
+      },
+      {
+        "language": "Thai",
+        "name": "Koby",
+        "effect": "[เมื่อลงสนาม] สามารถทิ้งการ์ดบนมือของเรา จำนวน 1 ใบ : ทำการ KO คาแรกเตอร์ของคู่แข่ง ที่มีคอสต์ 0 จำนวนไม่เกิน 1 ใบ.",
+        "trigger": null,
+        "attribute": [
+          "ตี"
+        ],
+        "feature": [
+          "กองทัพเรือ"
+        ]
+      },
+      {
+        "language": "Chinese Traditional",
+        "name": "克比",
+        "effect": "【登場時】可以廢棄1張自己的手牌：KO最多1張對手費用0的角色卡。",
+        "trigger": null,
+        "attribute": null,
+        "feature": [
+          "海軍"
+        ]
+      }
+    ],
+    "set": "PROMOTIONCARD",
+    "source_set": "PROMOTIONCARD",
+    "origin_set": "ST-06",
+    "set_name": "Promotion Pack 2023",
+    "pack_name": "Promotion Pack 2023",
+    "category": "Character",
+    "colors": [
+      "Black"
+    ],
+    "attributes": [
+      "Strike"
+    ],
+    "types": [
+      "Navy"
+    ],
+    "image": "https://limitlesstcg.nyc3.cdn.digitaloceanspaces.com/one-piece/ST06/ST06-002_p1_EN.webp",
+    "catalogSource": "Limitless exact English print verified by image filename"
   }
 ]
