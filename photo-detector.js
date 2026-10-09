@@ -31,13 +31,13 @@ function findComponents(mask,w,h,mode){
   const bw=xmax-xmin+1,bh=ymax-ymin+1,area=bw*bh;
   if(area<minArea||area>N*.77||bw<minDim||bh<minDim||tail<Math.min(180,area*(mode==="edge"?.018:.12)))continue;
   const cx=sx/tail,cy=sy/tail;
-  const angle=.5*Math.atan2(2*(sxy/tail-cx*cy),syy/tail-cy*cy-(sxx/tail-cx*cx));
+  const angle=-.5*Math.atan2(2*(sxy/tail-cx*cy),syy/tail-cy*cy-(sxx/tail-cx*cx));
   const ca=Math.cos(angle),sa=Math.sin(angle);
   let x0=Infinity,x1=-Infinity,y0=Infinity,y1=-Infinity;
   const stride=Math.max(1,Math.round(tail/7000));
   for(let k=0;k<tail;k+=stride){
    const at=queue[k],y=(at/w)|0,x=at-y*w,dx=x-cx,dy=y-cy;
-   const xx=dx*ca-dy*sa,yy=dx*sa+dy*ca;
+   const xx=dx*ca+dy*sa,yy=-dx*sa+dy*ca;
    if(xx<x0)x0=xx;if(xx>x1)x1=xx;if(yy<y0)y0=yy;if(yy>y1)y1=yy;
   }
   let rw=x1-x0+1,rh=y1-y0+1,a=angle;
