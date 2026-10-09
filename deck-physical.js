@@ -1,7 +1,7 @@
 /* Seguimiento optativo de copias físicas. Nunca altera collection_items ni deck_cards. */
 (function(){
 "use strict";
-const p={userId:null,ready:false,loading:null,enabled:false,allocations:{},revision:0,exists:false,busy:false,error:"",modal:null,selected:null,preview:false};
+const p={userId:null,ready:false,loading:null,enabled:false,allocations:{},revision:0,exists:false,busy:false,error:"",modal:null,selected:null,preview:false,pending:false};
 const integer=n=>Math.max(0,Math.floor(Number(n)||0));
 const identity=id=>String(id||"");
 const decks=()=>state.decks.filter(d=>!d.draftCompetitive);
@@ -13,7 +13,7 @@ function account(){
  const id=state.user?.id||null;
  if(p.userId===id)return;
  if(p.modal)p.modal.remove();
- Object.assign(p,{userId:id,ready:false,loading:null,enabled:false,allocations:{},revision:0,exists:false,busy:false,error:"",modal:null,selected:null,preview:false});
+ Object.assign(p,{userId:id,ready:false,loading:null,enabled:false,allocations:{},revision:0,exists:false,busy:false,error:"",modal:null,selected:null,preview:false,pending:false});
 }
 function sanitize(raw){
  const result={};
@@ -147,6 +147,59 @@ async function save(raw,enabled=p.enabled){
   return false;
  }finally{if(p.userId===uid){p.busy=false;if(p.modal)draw()}}
 }
+
+/* Copias necesarias para los mazos parcialmente montados, sin tocar los demás. */
+function pendingCards(raw=p.allocations){
+ const usage=usedByPrinting(raw),free={};
+ for(const [id,count] of Object.entries(owned())){
+  const available=Math.max(0,integer(count)-integer(usage[id]));
+  if(available){const key=code(id);free[key]=(free[key]||0)+available;}
+ }
+ const grouped=new Map();
+ for(const deck of decks()){
+  if(stats(deck,raw).status!=="incompleto")continue;
+  const assigned={};
+  for(const [id,count] of Object.entries(raw[deck.id]||{})){
+   const key=code(id);assigned[key]=(assigned[key]||0)+integer(count);
+  }
+  for(const row of requirements(deck).values()){
+   const missing=Math.max(0,row.need-integer(assigned[row.code]));
+   if(!missing)continue;
+   let item=grouped.get(row.code);
+   if(!item){
+    item={code:row.code,id:row.preferred[0],title:row.title,required:0,free:0,missing:0,decks:[]};
+    grouped.set(row.code,item);
+   }
+   item.required+=missing;
+   item.decks.push({id:deck.id,name:deck.name,missing});
+  }
+ }
+ return [...grouped.values()].map(item=>{
+  item.free=Math.min(item.required,integer(free[item.code]));
+  item.missing=item.required-item.free;
+  return item;
+ }).filter(item=>item.missing>0).sort((a,b)=>b.missing-a.missing||a.title.localeCompare(b.title,"es"));
+}
+function pendingButton(){
+ account();
+ if(!p.ready||!p.enabled||!state.collectionReady)return "";
+ const amount=pendingCards().reduce((sum,item)=>sum+item.missing,0);
+ return '<button type="button" class="secondary btn" data-physical-pending>🛒 Cartas pendientes'+(amount?' ('+amount+')':'')+'</button>';
+}
+function activeTrackingButton(){
+ account();
+ return p.ready&&p.enabled?'<button type="button" class="secondary btn" data-physical-toggle title="Dejar de utilizar el seguimiento de mazos">Desactivar seguimiento</button>':"";
+}
+async function disableTracking(){
+ account();
+ if(!p.enabled||p.busy)return;
+ if(!confirm("¿Desactivar el seguimiento de mazos? Se ocultarán estados y cartas pendientes. Las ubicaciones quedarán guardadas para una futura reactivación."))return;
+ if(await save(clone(),false)){
+  p.selected=null;p.preview=false;p.pending=false;
+  if(p.modal)draw();
+  notify("Seguimiento de copias desactivado.");
+ }
+}
 function preferredIds(row){
  const choices=Object.keys(owned()).filter(id=>integer(owned()[id])>0&&code(id)===row.code);
  return choices.sort((a,b)=>{
@@ -259,6 +312,34 @@ function draw(){
    if(s.assigned<s.required)html+='<p class="small muted">Al montar, solo se buscarán las '+(s.required-s.assigned)+' copias que faltan. No se moverán las que ya tiene el mazo.</p>';
    if(s.extra)html+='<p class="notice physical-warning">La lista ha cambiado: hay '+s.extra+' copias asignadas de más. Al remontar, se devolverán al álbum.</p>';
   }
+ }else if(p.pending){
+  const items=pendingCards();
+  const priced=items.map(item=>{
+   const exact=card(item.id);
+   const raw=exact&&typeof priceOf==="function"?priceOf(exact):null;
+   const price=raw!==null&&Number.isFinite(Number(raw))&&Number(raw)>0?Number(raw):null;
+   return {...item,price};
+  });
+  const total=priced.reduce((sum,item)=>sum+(item.price||0)*item.missing,0);
+  const unknown=priced.some(item=>item.price===null);
+  html+='<button type="button" class="linkbtn physical-back" data-physical-back>← Gestor de copias</button>'+
+   '<h3>🛒 Cartas pendientes</h3>'+
+   '<p class="small muted">Copias que necesitas comprar para terminar de montar todos los mazos incompletos. Se descuentan las copias libres y no se toca ningún otro mazo. Los desmontados no cuentan.</p>';
+  if(!items.length)html+='<div class="notice">No necesitas comprar cartas para completar tus mazos parcialmente montados.</div>';
+  else{
+   html+='<p><b>'+items.reduce((sum,item)=>sum+item.missing,0)+' copias pendientes</b> · '+items.length+' cartas diferentes</p>'+
+    '<div class="physical-pending-list">'+priced.map(item=>
+     '<div class="physical-pending-row">'+cardPhoto(item.id)+
+     '<div class="physical-card-info"><b>'+escape(item.title)+'</b>'+
+     '<div class="small muted">'+escape(item.code)+'</div>'+
+     '<div class="physical-pending-count">Comprar '+item.missing+' '+(item.missing===1?'copia':'copias')+'</div>'+
+     '<div class="small muted">Mazos: '+item.decks.map(d=>escape(d.name)+' ('+d.missing+')').join(' · ')+'</div>'+
+     '<div class="small">'+(item.price!==null?'Precio orientativo: '+money(item.price)+'/ud. · '+money(item.price*item.missing):'Precio no disponible')+'</div>'+
+     '</div></div>').join("")+'</div>'+
+    '<div class="physical-pending-total"><b>Total orientativo: '+money(total)+'</b>'+
+    (unknown?'<div class="small muted">No incluye cartas sin precio disponible.</div>':'')+
+    '<div class="small muted">Precios de la impresión mostrada; otras versiones pueden tener otro precio.</div></div>';
+  }
  }else{
   const total=Object.values(owned()).reduce((s,n)=>s+integer(n),0),used=Object.values(usedByPrinting(p.allocations)).reduce((s,n)=>s+n,0);
   html+='<p class="small">📚 En álbum / libres: <b>'+Math.max(0,total-used)+'</b> · En mazos: <b>'+used+'</b></p>';
@@ -270,15 +351,15 @@ function draw(){
    return '<div class="physical-deck-line"><div><b>'+escape(d.name)+'</b><div>'+statusMark(d,false)+'</div></div>'+
     '<button type="button" class="secondary btn" data-physical-deck="'+escape(d.id)+'">Gestionar</button></div>';
   }).join("")+'</div>';
-  html+='<div class="physical-footer"><button type="button" class="linkbtn" data-physical-disable>Desactivar seguimiento (conservar ubicaciones)</button></div>';
  }
+ if(p.enabled)html+='<div class="physical-footer"><button type="button" class="linkbtn" data-physical-disable '+(p.busy?'disabled':'')+'>Desactivar seguimiento y dejar de utilizarlo (conservar ubicaciones)</button></div>';
  html+='</div>';
  modal.innerHTML=html;
  modal.querySelector('[data-physical-close]')?.addEventListener('click',close);
  modal.querySelector('[data-physical-enable]')?.addEventListener('click',async()=>{if(await save(clone(),true))draw()});
- modal.querySelector('[data-physical-disable]')?.addEventListener('click',async()=>{if(confirm('¿Ocultar el seguimiento físico? Las ubicaciones quedarán guardadas para cuando lo reactives.')){if(await save(clone(),false)){p.selected=null;p.preview=false;draw()}}});
- modal.querySelectorAll('[data-physical-deck]').forEach(b=>b.onclick=()=>{p.selected=b.dataset.physicalDeck;p.preview=false;draw()});
- modal.querySelector('[data-physical-back]')?.addEventListener('click',()=>{p.selected=null;p.preview=false;draw()});
+ modal.querySelector('[data-physical-disable]')?.addEventListener('click',()=>void disableTracking());
+ modal.querySelectorAll('[data-physical-deck]').forEach(b=>b.onclick=()=>{p.selected=b.dataset.physicalDeck;p.preview=false;p.pending=false;draw()});
+ modal.querySelector('[data-physical-back]')?.addEventListener('click',()=>{p.selected=null;p.preview=false;p.pending=false;draw()});
  modal.querySelector('[data-physical-plan]')?.addEventListener('click',()=>{p.preview=true;draw()});
  modal.querySelector('[data-physical-cancel]')?.addEventListener('click',()=>{p.preview=false;draw()});
  modal.querySelector('[data-physical-apply]')?.addEventListener('click',async()=>{
@@ -309,14 +390,15 @@ function draw(){
 }
 function close(){
  if(p.modal){p.modal.remove();p.modal=null}
- p.selected=null;p.preview=false;
+ p.selected=null;p.preview=false;p.pending=false;
 }
-async function open(id){
+async function open(id,view="decks"){
  account();
  if(!state.user||!state.collectionReady)return notify('Inicia sesión y carga tu colección para gestionar copias.');
  if(!await load())return notify(p.error||'No se pudo cargar el seguimiento.');
  close();
- p.selected=getDeck(id)?id:null;
+ if(view==="pending"&&!p.enabled)return notify("Activa el seguimiento de copias para ver las cartas pendientes.");
+ p.selected=getDeck(id)?id:null;p.pending=view==="pending";
  p.modal=document.createElement('div');p.modal.className='modalback physical-modal';
  p.modal.addEventListener('click',e=>{if(e.target===p.modal)close()});
  document.body.appendChild(p.modal);draw();
@@ -325,6 +407,12 @@ function bind(){
  account();
  document.querySelectorAll('[data-physical-open]').forEach(button=>{
   button.addEventListener('click',()=>void open(button.dataset.physicalOpen));
+ });
+ document.querySelectorAll('[data-physical-pending]').forEach(button=>{
+  button.addEventListener('click',()=>void open(null,"pending"));
+ });
+ document.querySelectorAll('[data-physical-toggle]').forEach(button=>{
+  button.addEventListener('click',()=>void disableTracking());
  });
  if(state.user&&state.sb&&state.collectionReady&&!p.ready&&!p.loading)void load();
 }
@@ -340,6 +428,6 @@ async function clearDeleted(){
  if(Object.keys(p.allocations).length)await save({});
 }
 window.addEventListener('keydown',e=>{if(e.key==='Escape'&&p.modal){close();e.stopPropagation()}});
-window.DeckPhysical={bind,open,load,statusMark,forgetDeleted,clearDeleted,
- _testing:{sanitize,requirements,stats,plan,discrepancies,usedByPrinting}};
+window.DeckPhysical={bind,open,load,statusMark,pendingButton,activeTrackingButton,forgetDeleted,clearDeleted,
+ _testing:{sanitize,requirements,stats,plan,pendingCards,discrepancies,usedByPrinting}};
 })();
