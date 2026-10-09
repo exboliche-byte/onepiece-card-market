@@ -62,7 +62,7 @@ test("Manual trade totals never change the owned collection",()=>{
   ],watch:[]});
   const t=setup({"mialbumonepiece_tools_u1":saved});
   const before=JSON.stringify(t.state.owned),page=t.hub.tradePage();
-  assert.match(page,/Intercambio manual/);
+  assert.match(page,/Cartas del intercambio/);
   assert.match(page,/24\.00 €/);
   assert.match(page,/8\.00 €/);
   assert.match(page,/-16\.00 €/);
@@ -72,7 +72,7 @@ test("Deck recommendations and trades remain available after moving tournament p
   const t=setup();
   assert.match(t.tab("decks"),/Mazos que casi puedes construir/);
   assert.doesNotMatch(t.tab("trade"),/Alertas de precios/);
-  assert.match(t.tab("trade"),/Intercambio manual/);
+  assert.match(t.tab("trade"),/Cartas del intercambio/);
 });
 test("Competitive endpoint adds optional multi-leader mode without removing exact leader filtering",()=>{
   assert.match(api,/leader!=="all"&&leaderId!==leader/);
@@ -191,7 +191,7 @@ test("Mutual acceptance, exact-print transfer and private policies are present",
 test("Recommendations and matchup coach are placed in Mazos and Torneos",()=>{
  assert.match(html,/id="openDeckCompletion"/);
  assert.match(html,/id="openDeckCompletion" type="button"/);
- assert.doesNotMatch(html,/href="\\/deck-completion" target="_blank"/);
+ assert.doesNotMatch(html,/href="\/deck-completion" target="_blank"/);
  assert.doesNotMatch(html,/state\.deckToolsOpen/);
  assert.match(html,/state\.tab==="deck-completion"\?deckCompletionView\(\)/);
  assert.match(html,/if\(location\.pathname==="\/deck-completion"\)state\.tab="deck-completion"/);
