@@ -855,7 +855,7 @@ async function open(){
     '<button id="scanFlip">Cambiar cámara</button></div>'+
     '<div class="scanActions">'+
     '<button id="scanCandidates" hidden disabled>Ver posibles cartas</button><button id="scanRetry">Reiniciar motores</button><button id="scanResume">Continuar</button>'+
-    '<button id="scanManual">Buscar manualmente</button><button id="scanUndo" hidden>↶ Deshacer</button></div>'+
+    '<button id="scanManual">Buscar manualmente</button><button id="scanPhoto">📷 Escanear foto</button><button id="scanUndo" hidden>↶ Deshacer</button></div>'+
     '<div class="scanHelp">Llena el recuadro con la carta y evita reflejos. Confirma siempre la impresión.</div>'+
     '</div>';
   document.body.appendChild(p);
@@ -868,6 +868,7 @@ async function open(){
   $("#scanCandidates").onclick=()=>showVisualChoices();
   $("#scanRetry").onclick=()=>{if(running)void startRecognition()};
   $("#scanManual").onclick=manual;
+  $("#scanPhoto").onclick=()=>window.OnePiecePhotoScanner?.open();
   $("#scanUndo").onclick=()=>void undoLastSavedScan();
   $("#scanTorch").onclick=toggleTorch;
   $("#scanFlip").onclick=switchCamera;
