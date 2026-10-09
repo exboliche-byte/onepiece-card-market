@@ -105,6 +105,15 @@
 .wants-actions .btn{display:grid;place-items:center;min-height:43px;text-align:center;text-decoration:none}
 @media(max-width:500px){.wants-actions{grid-template-columns:1fr}}
 
+/* Barra de búsqueda de catálogo con escáner y menú de herramientas agrupado. */
+.catalog-search-inline{display:flex;align-items:stretch;gap:7px;min-width:0}
+.catalog-search-inline #catalogSearch{min-width:0;flex:1 1 auto}
+.catalog-search-scan{display:flex;gap:6px;align-items:center;justify-content:center;flex:0 0 auto;min-height:40px;padding:6px 11px;font-size:12px;white-space:nowrap}
+.catalog-search-scan svg{width:20px;height:20px;display:block;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.mobile-more{max-height:min(78dvh,660px);overflow-y:auto}
+.mobile-more-group+.mobile-more-group{border-top:1px solid var(--line);margin-top:5px;padding-top:5px}
+.mobile-more-heading{color:var(--muted);font-size:10px;letter-spacing:.07em;font-weight:800;padding:5px 11px 2px}
+@media(max-width:440px){.catalog-search-scan{padding:6px 10px}.catalog-search-scan span{display:none}}
 /* UI reorganizada: sin alterar colección, metajuego ni mazos persistidos. */
 .collection-title-row{display:flex;align-items:center;justify-content:space-between;gap:9px}
 .collection-title-row h1{margin:0}
@@ -1079,7 +1088,8 @@ function catalogFilterPanel(){
 function catalogToolbar(){
   const f=state.catalog,n=catalogActiveFilterCount();
   return '<div class="catalog-controls" id="catalogToolbar">'+
-    '<input id="catalogSearch" class="field" inputmode="search" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="search" aria-label="Buscar cartas" placeholder="🔎 Buscar por nombre, ID o expansión..." value="'+esc(f.query)+'">'+
+    '<div class="catalog-search-inline"><input id="catalogSearch" class="field" inputmode="search" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="search" aria-label="Buscar cartas" placeholder="🔎 Buscar por nombre, ID o expansión..." value="'+esc(f.query)+'">'+
+    '<button type="button" class="secondary btn catalog-search-scan" data-scan-open title="Escanear una carta" aria-label="Abrir escáner desde el buscador">'+navIcon("scanner")+'<span>Escanear</span></button></div>'+
     '<div class="sort-controls">'+
       filterLabel("Ordenar por",'<select id="catSort" class="field"><option value="id" '+(f.sort==="id"?"selected":"")+'>Número de carta</option><option value="name" '+(f.sort==="name"?"selected":"")+'>Nombre</option><option value="set" '+(f.sort==="set"?"selected":"")+'>Expansión</option><option value="rarity" '+(f.sort==="rarity"?"selected":"")+'>Rareza</option><option value="cost" '+(f.sort==="cost"?"selected":"")+'>Coste</option><option value="power" '+(f.sort==="power"?"selected":"")+'>Poder</option><option value="price" '+(f.sort==="price"?"selected":"")+'>Precio</option><option value="quantity" '+(f.sort==="quantity"?"selected":"")+'>Cantidad que tengo</option></select>')+
       filterLabel("Orden",'<select id="catDir" class="field"><option value="asc" '+(f.dir==="asc"?"selected":"")+'>Ascendente</option><option value="desc" '+(f.dir==="desc"?"selected":"")+'>Descendente</option></select>')+
@@ -1528,13 +1538,13 @@ function deckLibraryView(){
   if(state.deckDiscover)return '<div class="wrap deck-discover-page">'+competitiveDeckSearchView()+'</div>';
   if(!state.user){
     return '<div class="wrap"><div class="hero"><div><h1>Mazos</h1><p>Busca listas competitivas o inicia sesión para crear e importar tus mazos.</p></div></div>'+
-      '<div class="deck-actions"><button class="deck-action" id="deckAccountBtn"><b>＋ Crear</b><span>Inicia sesión para guardar y sincronizar tus mazos.</span></button><button class="deck-action" id="findCompetitiveDecks"><b>🏆 Buscar</b><span>Busca resultados de torneos por líder e importa la lista.</span></button><a class="deck-action" href="/deck-completion" target="_blank" rel="noopener noreferrer" aria-label="Abrir Qué mazos puedo completar en una pestaña nueva"><b>🃏 Qué mazos ↗</b><span>Comprueba qué mazos puedes completar.</span></a></div>'+
+      '<div class="deck-actions"><button class="deck-action" id="deckAccountBtn"><b>＋ Crear</b><span>Inicia sesión para guardar y sincronizar tus mazos.</span></button><button class="deck-action" id="findCompetitiveDecks"><b>🏆 Buscar</b><span>Busca resultados de torneos por líder e importa la lista.</span></button><button class="deck-action" id="openDeckCompletion" type="button" aria-label="Abrir Descubrir mazos"><b>🃏 Descubrir</b><span>Explora mazos que puedes completar.</span></button></div>'+
       
       '<div class="section center"><h2>Inicia sesión para gestionar tus mazos</h2><p class="muted">La búsqueda puede consultarse sin cuenta; para importar o guardar necesitas iniciar sesión.</p><button class="primary btn" id="deckAccountBtn2">Entrar o crear cuenta</button></div></div>';
   }
   const savedDecks=state.decks.filter(d=>!d?.draftCompetitive);const tiles=savedDecks.map(d=>{const l=card(d.leader),v=deckValidate(d);return '<div class="setcard decktile"><button type="button" class="deck-tile-open" style="width:100%;background:transparent;border:0;color:inherit;text-align:left;cursor:pointer" data-open-deck="'+esc(d.id)+'">'+(l?cardImg(l,"deckleader"):'<div class="deckleader fallback" style="display:grid">Sin líder</div>')+'<div class="decktilebody"><b>'+esc(d.name)+'</b>'+(d.description?'<div class="small" style="white-space:pre-wrap;overflow-wrap:anywhere;margin:5px 0 7px">'+esc(d.description)+'</div>':'')+'<div class="small">'+v.total+'/50 cartas · '+deckUniqueCount(d)+' diferentes · '+(d.leader?"1 líder":"sin líder")+'</div><div class="small">'+(v.valid?"✓ Legal":"⚠ No legal")+' · Valor '+money(deckTotalValue(d))+' · te faltan '+money(deckMissingCost(d))+'</div></button></div>'}).join("");
   return '<div class="wrap"><div class="hero"><div><h1>Mazos</h1><p>Tus mazos sincronizados con '+esc(state.user.email||"tu cuenta")+'.</p></div><button class="secondary btn" id="importDeckBtn">Importar lista</button></div>'+
-    '<div class="deck-actions"><button class="deck-action" id="newDeck"><b>＋ Crear</b><span>Construye un mazo desde cero eligiendo líder y cartas.</span></button><button class="deck-action" id="findCompetitiveDecks"><b>🏆 Buscar</b><span>Busca listas con buenos resultados por líder e impórtalas directamente.</span></button><a class="deck-action" id="openDeckCompletion" href="/deck-completion" target="_blank" rel="noopener noreferrer" aria-label="Abrir Qué mazos puedo completar en una pestaña nueva"><b>🃏 Qué mazos ↗</b><span>Encuentra listas que te requieren menos cartas o menos dinero en una pestaña nueva.</span></a></div>'+
+    '<div class="deck-actions"><button class="deck-action" id="newDeck"><b>＋ Crear</b><span>Construye un mazo desde cero eligiendo líder y cartas.</span></button><button class="deck-action" id="findCompetitiveDecks"><b>🏆 Buscar</b><span>Busca listas con buenos resultados por líder e impórtalas directamente.</span></button><button class="deck-action" id="openDeckCompletion" type="button" aria-label="Abrir Descubrir mazos"><b>🃏 Descubrir</b><span>Encuentra mazos con tus cartas.</span></button></div>'+
     deckSyncStatusView()+
     '<div class="sectionhead deck-library-heading"><h2>Mis mazos</h2><div class="deck-library-heading-actions">'+
     '<button class="secondary btn deck-compare-pending" type="button" disabled>⇄ Comparar <small>Próximamente</small></button>'+
@@ -2385,7 +2395,7 @@ let sidebarCollapsed=false;
 try{sidebarCollapsed=localStorage.getItem("mialbumonepiece_sidebar_collapsed")==="1"}catch{}
 function nav(){
   const items=[["catalog","Catálogo"],["collection","Colección"],["wants","Wants"],["album","Expansiones"],["decks","Mazos"],["tournaments","Torneos"],["meta","Meta"],["trades","Intercambios"],["proxies","Proxies"],["account","Cuenta"]];
-  const tabButton=([id,label],side)=>'<button type="button" class="'+(state.tab===id?"active":"")+'" data-tab="'+id+'" aria-label="'+label+'"'+(state.tab===id?' aria-current="page"':'')+'>'+navIcon(id)+'<span'+(side?' class="side-label"':'')+'>'+label+'</span></button>';
+  const tabButton=([id,label],side)=>'<button type="button" class="'+((state.tab===id||(id==="decks"&&state.tab==="deck-completion"))?"active":"")+'" data-tab="'+id+'" aria-label="'+label+'"'+((state.tab===id||(id==="decks"&&state.tab==="deck-completion"))?' aria-current="page"':'')+'>'+navIcon(id)+'<span'+(side?' class="side-label"':'')+'>'+label+'</span></button>';
   const scanButton='<button type="button" data-scan-open aria-label="Abrir escáner de cartas">'+navIcon("scanner")+'<span class="side-label">Escáner</span></button>';
   const sideGroups=[
     ["EXPLORAR",["catalog","album","meta"]],
@@ -2404,7 +2414,11 @@ function nav(){
   const mobileMain=["catalog","collection","tournaments","decks"];
   const mobileMore=items.filter(([id])=>!mobileMain.includes(id));
   const moreActive=mobileMore.some(([id])=>id===state.tab);
-  const mobile='<nav class="nav mobile-nav" aria-label="Secciones principales">'+items.filter(([id])=>mobileMain.includes(id)).sort((a,b)=>mobileMain.indexOf(a[0])-mobileMain.indexOf(b[0])).map(item=>tabButton(item,false)).join("")+'<button type="button" id="mobileMoreToggle" class="'+(moreActive?"active":"")+'" aria-label="Más opciones" aria-expanded="false" aria-controls="mobileMorePanel">'+navIcon("more")+'<span>Más</span></button><div id="mobileMorePanel" class="mobile-more" hidden>'+mobileMore.map(item=>tabButton(item,false)).join("")+'<button type="button" data-scan-open aria-label="Abrir escáner de cartas">'+navIcon("scanner")+'<span>Escáner</span></button></div></nav>';
+  const moreGroups=[["EXPLORAR",["album","meta"]],["MIS CARTAS",["wants"]],["COMUNIDAD",["trades"]],["HERRAMIENTAS",["proxies","scanner"]],["CUENTA",["account"]]];
+  const moreHtml=moreGroups.map(([heading,ids])=>'<div class="mobile-more-group"><div class="mobile-more-heading">'+heading+'</div>'+
+    ids.map(id=>id==="scanner"?'<button type="button" data-scan-open aria-label="Abrir escáner de cartas">'+navIcon("scanner")+'<span>Escáner</span></button>':
+      tabButton(items.find(([k])=>k===id),false)).join("")+'</div>').join("");
+  const mobile='<nav class="nav mobile-nav" aria-label="Secciones principales">'+items.filter(([id])=>mobileMain.includes(id)).sort((a,b)=>mobileMain.indexOf(a[0])-mobileMain.indexOf(b[0])).map(item=>tabButton(item,false)).join("")+'<button type="button" id="mobileMoreToggle" class="'+(moreActive?"active":"")+'" aria-label="Más opciones" aria-expanded="false" aria-controls="mobileMorePanel">'+navIcon("more")+'<span>Más</span></button><div id="mobileMorePanel" class="mobile-more" hidden>'+moreHtml+'</div></nav>';
   return side+mobile;
 }
 function deckCompletionView(){
@@ -2601,10 +2615,9 @@ function navigateApp(mutator){
   window.scrollTo({top:0,behavior:"auto"});
 }
 function bindShell(){
-  $("#deckCompletionBack")?.addEventListener("click",()=>{
-    if(history.length>1){history.back();return}
-    navigateApp(()=>{state.tab="decks";state.deckLibrary=true;state.deckId=null;state.deckPreviewOrigin="";});
-  });
+  $("#deckCompletionBack")?.addEventListener("click",()=>navigateApp(()=>{
+    state.tab="decks";state.deckLibrary=true;state.deckId=null;state.deckPreviewOrigin="";state.deckDiscover=false;
+  }));
   $("#sidebarToggle")?.addEventListener("click",()=>{
     sidebarCollapsed=!sidebarCollapsed;
     document.querySelector(".app")?.classList.toggle("sidebar-collapsed",sidebarCollapsed);
@@ -2713,6 +2726,7 @@ function bindShell(){
   if(state.tab==="decks"){
     $("#deckAccountBtn")?.addEventListener("click",()=>navigateApp(()=>{state.tab="account"}));
     $("#deckAccountBtn2")?.addEventListener("click",()=>navigateApp(()=>{state.tab="account"}));
+    $("#openDeckCompletion")?.addEventListener("click",()=>navigateApp(()=>{state.tab="deck-completion";state.deckLibrary=true;state.deckId=null;state.deckPreviewOrigin="";state.deckDiscover=false}));
     $("#findCompetitiveDecks")?.addEventListener("click",()=>navigateApp(()=>{state.deckDiscover=true;state.deckDiscoverError="";state.deckLibrary=true}));
     $("#closeCompetitiveSearch")?.addEventListener("click",()=>navigateApp(()=>{state.deckDiscover=false;state.deckDiscoverError="";state.deckLibrary=true}));
     $("#runCompetitiveSearch")?.addEventListener("click",searchCompetitiveDecks);

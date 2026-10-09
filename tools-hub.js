@@ -244,12 +244,12 @@ function tradeSide(i){
   }
   return '<section class="section"><div class="sectionhead"><h2>'+(i?"Recibo":"Entrego")+'</h2><b>'+money(sums.amount)+'</b></div>'+
     '<div class="small">'+sums.copies+' copia(s)'+(sums.unknown?" · "+sums.unknown+" sin precio":"")+'</div>'+
-    (rows||'<div class="notice">Añade cartas desde el buscador.</div>')+'</section>';
+    (rows||'<div class="notice">'+(i?"Sin cartas que recibir (regalo).":"Sin cartas que entregar (petición).")+'</div>')+'</section>';
 }
 function tradeView(){
   const a=total(0),b=total(1),diff=b.amount-a.amount;
-  return '<div class="section"><h2>Intercambio manual</h2><p class="small">Suma cartas a cada lado. Puedes modificar su valor por copia. No se restan cartas de tu colección ni se ejecuta ningún intercambio.</p>'+
-    '<input class="field" type="search" id="toolsSearch" placeholder="Buscar carta y versión…" value="'+text(h.q)+'">'+
+  return '<div class="section"><h2>Cartas del intercambio</h2><p class="small">Busca en todo el catálogo, incluso cartas que no tienes. Puedes dejar un lado vacío para regalar o pedir cartas. Al enviar, solo podrás entregar copias que realmente poseas.</p>'+
+    '<input class="field" type="search" id="toolsSearch" aria-label="Buscar en todo el catálogo de cartas y versiones" placeholder="Buscar en TODO el catálogo: nombre, código o versión…" value="'+text(h.q)+'">'+
     '<div class="tools-results" id="toolsSearchResults">'+searchResults(h.q,"trade")+'</div></div>'+
     '<div class="tools-cols">'+tradeSide(0)+tradeSide(1)+'</div>'+
     '<div class="section tools-total"><div><b>Diferencia (recibo − entrego)</b><h2>'+money(diff)+'</h2>'+
@@ -331,7 +331,7 @@ function tradePage(){
   '<nav class="trade-mode-tabs" aria-label="Gestión de intercambios">'+
   '<button type="button" class="secondary btn '+(h.tradeSection==="prepare"?"active":"")+'" id="tradeModePrepare" '+(h.tradeSection==="prepare"?'aria-current="page"':'')+'>Preparar intercambio</button>'+
   '<button type="button" class="secondary btn '+(h.tradeSection==="offers"?"active":"")+'" id="tradeModeOffers" '+(h.tradeSection==="offers"?'aria-current="page"':'')+'>Mis propuestas</button></nav>'+
-  (h.tradeSection==="prepare"?cloudMessage()+tradeView():(window.TradeOffers?.view?.()||""))+'</div>';
+  (h.tradeSection==="prepare"?cloudMessage()+tradeView()+(window.TradeOffers?.view?.("compose")||""):(window.TradeOffers?.view?.("list")||""))+'</div>';
 }
 function tradeItems(){
  if(!h.cloudReady||!h.owner||h.cloudConflict||h.pending||h.writing)return null;
@@ -435,7 +435,7 @@ window.OnePieceTools={tradePage,tradeItems,decksView,loadCloud,flushCloud,
  bindTrade:()=>{h.tab="trade";bind();
   document.querySelector("#tradeModePrepare")?.addEventListener("click",()=>{if(h.tradeSection!=="prepare"){h.tradeSection="prepare";renderShell()}});
   document.querySelector("#tradeModeOffers")?.addEventListener("click",()=>{if(h.tradeSection!=="offers"){h.tradeSection="offers";renderShell()}});
-  if(h.tradeSection==="offers")window.TradeOffers?.bind?.();
+  window.TradeOffers?.bind?.();
  },
  bindDecks:()=>{h.tab="decks";bind()}
 };

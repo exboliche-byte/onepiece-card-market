@@ -39,9 +39,10 @@ test("Mazos preview returns to its regular competitive search results",()=>{
  assert.equal(ctx.scroll.top,0);
  assert.equal(ctx.state.decks.length,1);
 });
-test("The deck completion link is styled as a card without underlines",()=>{
- assert.match(html,/id="openDeckCompletion" href="\/deck-completion" target="_blank"/);
- assert.match(html,/\.deck-actions a\.deck-action(?:,|:visited).*text-decoration:none/);
+test("Discover mazos is an in-app button, not a new-tab link",()=>{
+ assert.match(html,/id="openDeckCompletion" type="button"/);
+ assert.match(html,/#\("openDeckCompletion"\)\?\.addEventListener\("click"/);
+ assert.doesNotMatch(html,/href="\/deck-completion" target="_blank"/);
 });
 test("Preview origin is explicitly passed and retained for app history navigation",()=>{
  assert.match(hub,/openCompetitiveDeckPreview\(0,"deck-completion"\)/);

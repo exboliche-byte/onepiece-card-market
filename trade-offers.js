@@ -23,7 +23,7 @@ function cardRows(rows){
 function statusLabel(v){
  return ({pending:"Esperando aceptación",completed:"Completado",rejected:"Rechazado",cancelled:"Cancelado"})[v]||v;
 }
-function view(){
+function view(mode="all"){
  resetIfAccountChanged();
  if(!state.user)return '<div class="notice">Inicia sesión para enviar y recibir intercambios.</div>';
  let rows="";
@@ -36,8 +36,8 @@ function view(){
     '<div class="small">'+(mine?"Propuesta enviada":"Propuesta recibida")+' · '+html(statusLabel(v.status))+
     ' · '+new Date(v.created_at).toLocaleDateString("es-ES")+'</div></div>'+
     (v.status==="completed"?'<strong style="color:var(--ok)">✓ Realizado</strong>':'')+'</div>'+
-    '<p class="small">El creador ofreció:</p>'+cardRows(v.offered)+
-    '<p class="small">El destinatario ofrece:</p>'+cardRows(v.requested)+
+    '<p class="small">El creador entrega:</p>'+(v.offered?.length?cardRows(v.offered):'<div class="small">Nada (petición de cartas)</div>')+
+    '<p class="small">El destinatario entrega:</p>'+(v.requested?.length?cardRows(v.requested):'<div class="small">Nada (regalo de cartas)</div>')+
     (v.status==="pending"?
       '<div class="trade-offer-actions">'+(mine?
        '<span class="small">✓ Ya aceptaste al enviar. Falta la otra persona.</span>'+
@@ -45,21 +45,22 @@ function view(){
        (missing.length?'<p class="trade-insufficient">No tienes suficientes cartas: '+missing.map(x=>
          html(x.id)+' ('+qty(x.id)+'/'+Number(x.q||0)+')').join(", ")+'. No puedes aceptar.</p>':"")+
        (!state.collectionReady?'<p class="trade-insufficient">Cargando tu colección; no puedes aceptar todavía.</p>':"")+
-       '<button class="primary btn" data-trade-act="accept" data-id="'+html(v.id)+'"'+(!ready?' disabled title="Necesitas todas las copias de las versiones exactas"':"")+'>Aceptar e intercambiar</button>'+
+       '<button class="primary btn" data-trade-act="accept" data-id="'+html(v.id)+'"'+(!ready?' disabled title="Necesitas todas las copias de las versiones exactas"':"")+'>Aceptar propuesta</button>'+
        '<button class="danger btn" data-trade-act="reject" data-id="'+html(v.id)+'">Rechazar</button>')+'</div>':'')+
     '</article>';
  }
- return '<section class="section"><h2>Proponer un intercambio</h2>'+
-  '<p class="small">Busca a la otra persona por su <b>nombre de usuario</b> (el de su cuenta). El creador acepta al enviar la propuesta. La otra persona debe aceptarla también. Hasta entonces, ninguna carta cambia de dueño.</p>'+
+ const composer='<section class="section"><h2>Proponer un intercambio</h2>'+
+  '<p class="small">Busca a la otra persona por su <b>nombre de usuario</b>. Puedes regalar si solo entregas cartas, o pedir si solo las recibes. Ambos participantes deben aceptar. Las cantidades de tu colección se comprobarán antes de transferir nada.</p>'+
   '<div class="trade-user-search"><input id="tradePeer" class="field" maxlength="60" autocomplete="off" role="combobox" aria-autocomplete="list" aria-controls="tradePeerSuggestions" aria-expanded="'+(box.suggestions.length?"true":"false")+'" placeholder="Escribe el usuario (@...)" value="'+html(box.recipient)+'">'+
   '<div id="tradePeerSuggestions" class="trade-user-suggestions" role="listbox"></div></div>'+
   '<div class="trade-offer-actions"><button class="primary btn" id="tradeSendOffer"'+(box.saving?" disabled":"")+'>'+
-   (box.saving?"Enviando…":"Enviar y aceptar propuesta")+'</button></div>'+
+   (box.saving?"Enviando…":"Enviar propuesta")+'</button></div>'+
   '<p class="small">Solo se transfieren copias reales de la versión seleccionada, nunca equivalentes o sustituciones automáticas. Ambos deben conservar las copias necesarias hasta el momento de aceptar.</p></section>'+
-  '<div class="sectionhead"><h2>Mis propuestas</h2><button class="secondary btn" id="tradeRefresh">'+(box.loading?"Cargando…":"Actualizar")+'</button></div>'+
+ const proposals='<div class="sectionhead"><h2>Mis propuestas</h2><button class="secondary btn" id="tradeRefresh">'+(box.loading?"Cargando…":"Actualizar")+'</button></div>'+
   (box.error?'<div class="notice">'+html(box.error)+'</div>':"")+
   (box.loading?'<div class="notice">Consultando propuestas en Supabase…</div>':
    rows||'<div class="notice">No tienes propuestas todavía.</div>');
+ return mode==="compose"?composer:mode==="list"?proposals:composer+proposals;
 }
 async function load(force=false){
  resetIfAccountChanged();
@@ -118,7 +119,7 @@ function suggest(value){
 async function checkOwnedFresh(items){
  if(!state.user?.id||!state.sb)return {ok:false,why:"Inicia sesión."};
  const required=Array.isArray(items)?items:[];
- if(!required.length)return {ok:false,why:"El intercambio no tiene cartas que entregar."};
+ if(!required.length)return {ok:true}; // Receiving a gift requires no outgoing cards.
  const ids=required.map(x=>String(x.id||""));
  const r=await state.sb.from("collection_items").select("card_id,quantity")
   .eq("user_id",state.user.id).in("card_id",ids);
@@ -135,11 +136,11 @@ async function send(){
  if(!username)return notify("Introduce el nombre de usuario de la otra persona");
  await window.OnePieceTools?.flushCloud?.();
  const items=window.OnePieceTools?.tradeItems?.();
- if(!items?.[0]?.length||!items?.[1]?.length)return notify("Añade cartas a ambos lados y espera a que se guarde el borrador en Supabase");
+ if(!items||(!items[0]?.length&&!items[1]?.length))return notify("Añade al menos una carta para regalar, pedir o intercambiar; espera a que se guarde el borrador.");
  for(const x of items[0]){
   if(qty(x.id)<Number(x.q||0))return notify("No tienes suficientes copias de "+x.id);
  }
- const detail=items.map(a=>a.map(x=>x.q+" × "+x.id).join(", "));
+ const detail=items.map(a=>a.length?a.map(x=>x.q+" × "+x.id).join(", "):"Nada");
  if(!confirm("¿Proponer este intercambio a @"+username+" y aceptar tu parte?\n\nEntregas: "+detail[0]+"\nRecibes: "+detail[1]+"\n\nLas cartas solo se moverán si la otra persona acepta."))return;
  box.saving=true;box.recipient=username;renderShell();
  try{
