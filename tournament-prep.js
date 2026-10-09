@@ -159,7 +159,7 @@ async function globalData(force=false){
  if(st.loadingGlobal||(!force&&st.keyGlobal===key))return;
  st.keyGlobal=key;st.loadingGlobal=true;st.errorGlobal="";if(state.tab==="tournaments")renderShell();
  try{
-  const params=new URLSearchParams({days:String(days),format});
+  const params=new URLSearchParams({days:String(days),format,v:"2"});
   if(force)params.set("refresh","1");
   const r=await fetch("/api/meta-unified?"+params,{headers:{accept:"application/json"}}),raw=await r.text();
   let d;try{d=JSON.parse(raw)}catch{throw Error("El servidor no devolvió JSON válido (HTTP "+r.status+").")}
