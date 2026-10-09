@@ -65,11 +65,25 @@ test("photo scanner recognizes upside-down cards, optional OCR and exact print s
  assert.match(vision,/data\.limit\|\|8/);
  assert.match(html,/<script src="\/photo-scanner\.js"><\/script>/);
 });
-test("photo closes immediately and Back retains parent scanner",()=>{
- assert.match(photo,/const navigateBack=!fromHistory&&historyActive/);
- assert.match(photo,/stopDetection\(\);workerStop\(\)/);
- assert.match(photo,/photoBackPending=true;\s*history\.back\(\)/);
- assert.match(photo,/function consumePhotoBack\(\)/);
- assert.match(scanner,/OnePiecePhotoScanner\?\.consumePhotoBack\?\.\(\)/);
- assert.match(scanner,/OnePiecePhotoScanner\?\.close\(\{fromHistory:true\}\)/);
+test("photo mode shares scanner navigation and closes without an extra browser history entry",()=>{
+ assert.doesNotMatch(photo,/history\.pushState|photoBackPending|consumePhotoBack/);
+ assert.match(photo,/function close\(\)/);
+ assert.match(photo,/window\.dispatchEvent\(new Event\("onepiece:photo-closed"\)\)/);
+ assert.match(scanner,/OnePiecePhotoScanner\?\.close\(\)/);
+ assert.match(scanner,/history\.pushState\(\{\.\.\.event\.state,mialbumScanner:true\}/);
+});
+test("detector failure gives a usable single-card frame and selectable layouts",()=>{
+ assert.match(photo,/function layoutRegions\(/);
+ assert.match(photo,/regions=layoutRegions\(1\)/);
+ assert.match(photo,/id="photoLayout"/);
+ assert.match(photo,/id="photoLayoutApply"/);
+ assert.match(photo,/await analyzeRegions\(chosen\)/);
+ assert.match(photo,/const row=selectedRow\(regions\[i\],ranked\)/);
+ assert.match(photo,/await readCode\(regions\[i\]\)/);
+});
+test("normal scanner bottom controls share one flex dock instead of overlapping fixed rows",()=>{
+ assert.match(scanner,/class="scanBottomDock"/);
+ assert.match(scanner,/scanBottomDock \.scanActions/);
+ assert.match(scanner,/scanBottomDock \.scanTools/);
+ assert.match(scanner,/\.scanBottomDock\{position:absolute/);
 });
