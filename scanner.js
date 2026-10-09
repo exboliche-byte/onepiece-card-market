@@ -161,7 +161,7 @@ style.textContent=[
 "#scanPanel .scanOwnedLive{border:1px solid #5e855f;background:#102719;color:#d5ffdd;border-radius:9px;padding:8px 10px;font-size:14px;text-align:center;font-weight:850}",
 "#scanPanel .scanOwnedLive[hidden]{display:none}",
 "#scanPanel .scanCardPrice{margin:10px 0;padding:10px 12px;border:1px solid #796a37;border-radius:10px;background:#2b2514;color:#ffe18c;font-size:17px;font-weight:850;text-align:center}",
-"#scanPanel.locked .scanActions,#scanPanel.locked .scanTools{display:none}",
+"#scanPanel.locked .scanBottomDock{display:none}",
 "#scanPanel .scanDecision .scanChoiceButtons button{min-height:46px;touch-action:manipulation}",
 "#scanPanel .scanDecision[hidden]{display:none}#scanPanel .scanIdentity{display:flex;align-items:flex-start;gap:9px}#scanPanel .scanIdentity img{width:72px;aspect-ratio:.716;object-fit:contain;border-radius:5px}",
 "#scanPanel .scanIdentity strong{font-size:16px}#scanPanel .small{font-size:12px;color:#cad4e4}#scanPanel select,#scanPanel input[type=number],#scanPanel input[type=search]{color:#fff;background:#1d2b42;border:1px solid #68758b;border-radius:8px;padding:10px;font:inherit}",
@@ -170,7 +170,12 @@ style.textContent=[
 "#scanPanel .scanNameChoices{display:grid;gap:6px;max-height:48vh;overflow-y:auto;margin-top:10px}#scanPanel .scanNameChoices button{display:flex;align-items:center;text-align:left;gap:10px;width:100%}#scanPanel .scanNameChoices img{width:48px;aspect-ratio:.716;object-fit:cover;border-radius:4px}#scanPanel .scanNameChoices span{display:grid;gap:3px}",
 "#scanPanel .scanHelp{font-size:11px;color:#a8b6cb;text-align:center;flex:none}",
 "#scanPanel .scanBatchBar{display:grid;gap:5px;background:#112332;padding:6px;border-radius:7px;font-size:12px}#scanPanel .scanBatchBar[hidden]{display:none}#scanPanel #scanBatchHint{font-size:11px;color:#bad0e0}#scanPanel #scanBatchReview{background:#ffd447;color:#131313}#scanPanel .scanBatchList{display:grid;gap:8px;max-height:43vh;overflow:auto}#scanPanel .scanBatchItem{display:flex;gap:9px;background:#182337;padding:8px;border-radius:8px}#scanPanel .scanBatchItem>img{width:56px;height:77px;object-fit:contain}#scanPanel .scanBatchInfo{flex:1;min-width:0;display:grid;gap:5px}#scanPanel .scanBatchInfo small{color:#bed0e2}#scanPanel .scanBatchInfo select{padding:6px;font-size:12px}#scanPanel .scanBatchEdit{display:flex;align-items:center;justify-content:space-between;gap:8px}#scanPanel .scanBatchEdit input{width:60px;padding:6px}",
-"@media (min-width:760px){#scanPanel .scanActions button{max-width:240px}}"
+"#scanPanel .scanBottomDock{position:absolute;z-index:8;left:8px;right:8px;bottom:calc(env(safe-area-inset-bottom,0px) + 8px);display:flex;flex-direction:column;gap:6px;max-height:min(42vh,300px);overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin}",
+"#scanPanel .scanBottomDock .scanActions,#scanPanel .scanBottomDock .scanTools{position:static;inset:auto;width:100%;max-width:none;flex:none;margin:0;padding:6px;justify-content:center;align-items:center;gap:5px;background:#080b11d9}",
+"#scanPanel .scanBottomDock .scanActions button{flex:1 1 29%;min-width:0;min-height:38px;padding:7px 5px;font-size:12px}#scanPanel .scanBottomDock .scanActions button[hidden],#scanPanel .scanBottomDock .scanTools button[hidden]{display:none}",
+"#scanPanel .scanBottomDock .scanTools{flex-wrap:wrap}#scanPanel .scanBottomDock .scanTools label{flex:1 1 auto;min-width:0}#scanPanel .scanBottomDock .scanTools button{flex:0 0 auto}",
+"@media (min-width:760px){#scanPanel .scanBottomDock{max-width:690px;margin:auto;max-height:33vh}#scanPanel .scanBottomDock .scanActions button{max-width:210px}}"
+
 ].join("");
 document.head.appendChild(style);
 
@@ -849,13 +854,13 @@ async function open(){
     '<div id="scanIndex" class="small">Cargando índice visual…</div>'+
     '<div class="scanStage"><video muted playsinline autoplay></video><div class="scanGuide"></div>'+
     '<div class="scanCounter">Escaneo continuo</div><div class="scanDecision" id="scanDecision" hidden></div></div>'+
-    '<div class="scanTools"><button id="scanTorch" hidden>Linterna</button>'+
+    '<div class="scanBottomDock"><div class="scanTools"><button id="scanTorch" hidden>Linterna</button>'+
     '<label id="scanZoomWrap" hidden>Zoom <input id="scanZoom" type="range" min="1" max="2" step=".1"></label>'+
     '<label id="scanCameraWrap" hidden>Cámara <select id="scanCameraSelect" aria-label="Elegir lente de cámara"></select></label>'+
     '<button id="scanFlip">Cambiar cámara</button></div>'+
     '<div class="scanActions">'+
     '<button id="scanCandidates" hidden disabled>Ver posibles cartas</button><button id="scanRetry">Reiniciar motores</button><button id="scanResume">Continuar</button>'+
-    '<button id="scanManual">Buscar manualmente</button><button id="scanPhoto">📷 Escanear foto</button><button id="scanUndo" hidden>↶ Deshacer</button></div>'+
+    '<button id="scanManual">Buscar manualmente</button><button id="scanPhoto">📷 Escanear foto</button><button id="scanUndo" hidden>↶ Deshacer</button></div></div>'+
     '<div class="scanHelp">Llena el recuadro con la carta y evita reflejos. Confirma siempre la impresión.</div>'+
     '</div>';
   document.body.appendChild(p);
@@ -925,12 +930,13 @@ function close({fromHistory=false}={}){
 }
 // Captura el Atrás antes de que la navegación del álbum cambie de vista.
 window.addEventListener("popstate",event=>{
-  if(window.OnePiecePhotoScanner?.consumePhotoBack?.()){
-    event.stopImmediatePropagation();return;
-  }
   if(document.querySelector("#photoScanPanel")){
     event.stopImmediatePropagation();
-    window.OnePiecePhotoScanner?.close({fromHistory:true});
+    window.OnePiecePhotoScanner?.close();
+    // Back consumes the scanner history entry: restore it for the next Back.
+    if(scannerHistoryActive){
+      try{history.pushState({...event.state,mialbumScanner:true},"",location.href)}catch(error){console.warn("Historial escáner",error)}
+    }
     return;
   }
   if(!scannerHistoryActive||!panel())return;
