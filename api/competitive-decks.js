@@ -23,7 +23,8 @@ function cardIdOf(card){
   return set+"-"+number;
 }
 function normalizeLeader(v){
-  return String(v||"").trim().toUpperCase().replace(/_/g,"-");
+  const id=String(v||"").trim().toUpperCase().replace(/_/g,"-");
+  return id==="ALL"?"all":id;
 }
 async function apiGet(path){
   const controller=new AbortController();
@@ -104,7 +105,7 @@ function toResult(event,row,leader){
   const decklist=row?.decklist;
   if(!decklist||typeof decklist!=="object")return null;
   const leaderId=cardIdOf(decklist.leader);
-  if(leaderId!==leader)return null;
+  if(leader!=="all"&&leaderId!==leader)return null;
   const cards=deckCards(decklist);
   const mainCount=Object.values(cards).reduce((s,n)=>s+Number(n||0),0);
   if(mainCount<1)return null;
@@ -153,12 +154,12 @@ export default {
     try{
       const url=new URL(request.url);
       const leader=normalizeLeader(url.searchParams.get("leader"));
-      if(!/^(?:[A-Z]{1,5}\d{0,2}|P)-\d{3}$/.test(leader)){
+      if(leader!=="all"&&!/^(?:[A-Z]{1,5}\d{0,2}|P)-\d{3}$/.test(leader)){
         return json({error:"Líder no válido",results:[]},400,"no-store");
       }
       const days=clamp(int(url.searchParams.get("days"))||90,30,365);
       const minPlayers=clamp(int(url.searchParams.get("minPlayers"))||32,4,512);
-      const limit=clamp(int(url.searchParams.get("limit"))||20,1,30);
+      const limit=clamp(int(url.searchParams.get("limit"))||20,1,leader==="all"?120:30);
       const cutoff=Date.now()-days*86400000;
       const index=await tournamentIndex();
       const events=index
@@ -198,7 +199,13 @@ export default {
       }
 
       found.sort((a,b)=>b.score-a.score||a.placing-b.placing||b.players-a.players);
-      const results=found.slice(0,limit).map(({score,...r})=>r);
+      const perLeader=new Map();
+      const selected=leader==="all"?found.filter(r=>{
+        const n=perLeader.get(r.leaderId)||0;
+        if(n>=3)return false;
+        perLeader.set(r.leaderId,n+1);return true;
+      }):found;
+      const results=selected.slice(0,limit).map(({score,...r})=>r);
       return json({
         leader,
         source:"Limitless",
