@@ -112,7 +112,7 @@ function bindSearchAdd(){
  });
 }
 
-const opt={owner:"",busy:false,cancelled:false,controller:null,loaded:false,decks:[],partial:false,notes:[],budget:"20",prepared:null,result:null,error:"",status:""};
+const opt={owner:"",busy:false,cancelled:false,controller:null,loaded:false,decks:[],complete:false,progress:{},savedAt:0,restoreRequested:false,partial:false,notes:[],budget:"20",prepared:null,result:null,lastBudget:null,error:"",status:""};
 // Build one legality index for the full archive. Checking every card by repeatedly
 // scanning the complete catalog would freeze mobile devices on large histories.
 let legalityCache=null;
@@ -156,12 +156,12 @@ function refreshOptimizer(){
  if(!opt.loaded||!window.WantsDeckOptimizer)return;
  const app=window.WantsDeckOptimizer;
  const owned=JSON.stringify(state.owned||{});
- if(!opt.prepared||opt.owned!==owned){
+ if(!opt.prepared||opt.owned!==owned||opt.priceStamp!==String(state.priceDate||"")+"|"+state.cards.length){
   const prices=app.bestPrices(state.cards,c=>priceOf(c),c=>isJapaneseCatalogCard(c),c=>cardmarketUrl(c));
   opt.prepared=app.prepare(opt.decks,state.owned,prices,optimizerLegal);
-  opt.owned=owned;
+  opt.owned=owned;opt.priceStamp=String(state.priceDate||"")+"|"+state.cards.length;opt.result=null;
  }
- opt.result=app.optimize(opt.prepared,Number(opt.budget));
+ if(!opt.result||opt.lastBudget!==opt.budget){opt.result=app.optimize(opt.prepared,Number(opt.budget));opt.lastBudget=opt.budget}
 }
 function optimizerHtml(){
  const ready=opt.loaded&&opt.owner===state.user?.id, r=ready?opt.result:null;
@@ -195,63 +195,119 @@ function optimizerHtml(){
  return '<section class="wants-panel wants-optimizer"><div class="wants-heading"><h3>🧠 Compra inteligente</h3></div>'+
   '<p class="small">Compara tu colección con las listas históricas publicadas de Limitless y Yonko que siguen siendo legales en Standard europeo. Las distintas impresiones de una carta cuentan juntas y las compras sirven para varios mazos.</p>'+
   '<div class="wopt-filters"><label>Presupuesto en euros<input class="field" type="number" id="woptBudget" min="0" max="10000" step="1" value="'+h(opt.budget)+'"></label>'+
-  '<button class="primary btn" id="woptAnalyze" type="button" '+(opt.busy?'disabled':'')+'>'+ (opt.busy?'Consultando archivo…':ready?'↻ Actualizar archivo':'Analizar mazos legales')+'</button>'+(opt.busy?'<button type="button" id="woptCancel" class="secondary btn">Cancelar</button>':"")+
+  '<button class="primary btn" id="woptAnalyze" type="button" '+(opt.busy?'disabled':'')+'>'+ (opt.busy?'Consultando archivo…':ready?(opt.complete?'↻ Actualizar archivo':'↻ Continuar búsqueda'):'Analizar mazos legales')+'</button>'+(opt.busy?'<button type="button" id="woptCancel" class="secondary btn">Cancelar</button>':"")+
   (ready?'<button class="secondary btn" id="woptRecalc" type="button">Recalcular</button>':'')+'</div>'+
   (opt.busy?'<p class="notice" role="status">'+h(opt.status||"Consultando las fuentes públicas…")+'</p>':"")+
   (opt.error?'<p class="notice">'+h(opt.error)+'</p>':"")+
   (opt.notes.length?'<p class="small">'+h(opt.notes.join(" · "))+'</p>':"")+
-  (opt.partial?'<div class="notice">Archivo parcial: algunas páginas o fuentes no respondieron, tienen límites de consulta o no publican todas sus listas. Los resultados solo representan las listas realmente recuperadas.</div>':"")+
+  (ready&&opt.savedAt?'<p class="small">Archivo guardado en este dispositivo · '+new Date(opt.savedAt).toLocaleDateString("es-ES")+'. Tu colección y los precios se recalculan al abrir.</p>':"")+
   summary+'<p class="small">Cálculo orientativo con las impresiones más baratas que tienen precio válido. No se trata de un rastreo de todos los mazos del mundo: se revisan las listas recuperables de los archivos públicos, incluso si su torneo es antiguo. Un mazo con cartas sin precio no se contabiliza como compra gratuita.</p></section>';
+}
+async function restoreOptimizerArchive(){
+ if(!state.user?.id||!state.collectionReady||opt.busy||opt.loaded||opt.restoreRequested)return;
+ const owner=state.user.id;
+ opt.restoreRequested=true;
+ try{
+  const saved=await window.WantsArchiveCache?.load?.();
+  if(!saved||!Array.isArray(saved.decks)||!saved.decks.length||state.user?.id!==owner||opt.busy||opt.loaded)return;
+  opt.owner=owner;opt.decks=saved.decks;opt.savedAt=saved.savedAt||0;opt.progress=saved.progress||{};
+  if(Number.isFinite(Number(saved.budget)))opt.budget=String(Math.max(0,Math.min(10000,Number(saved.budget))));
+  opt.complete=!!saved.complete;opt.notes=saved.notes||[];opt.prepared=null;opt.lastBudget=null;opt.loaded=true;
+  await window.OnePieceLegality?.load?.();
+  refreshOptimizer();
+  if(state.tab==="wants"&&state.user?.id===owner)renderShell();
+ }catch(error){console.warn("Wants archive cache",error)}
+}
+async function cacheOptimizerArchive(decks){
+ opt.decks=[...decks.values()];
+ opt.prepared=null;opt.lastBudget=null;
+ const stored=await window.WantsArchiveCache?.save?.({decks:opt.decks,progress:opt.progress,notes:opt.notes,complete:opt.complete,budget:opt.budget});
+ if(stored?.savedAt)opt.savedAt=stored.savedAt;
 }
 async function loadOptimizerArchive(){
  if(!needLogin()||opt.busy)return;
  const owner=state.user.id;
- opt.owner=owner;opt.busy=true;opt.cancelled=false;opt.controller=new AbortController();opt.error="";opt.notes=[];opt.partial=false;opt.status="Actualizando la legalidad…";
- renderShell();
- const deckMap=new Map(),sources=[
-  {name:"Limitless",max:25,url:page=>"/api/competitive-decks?archive=1&leader=all&minPlayers=4&page="+page},
-  {name:"Yonko",max:60,url:page=>"/api/yonko-decks?archive=1&format=en&leader=all&page="+page}
+ const sources=[
+  {name:"Limitless",max:25,concurrency:2,url:page=>"/api/competitive-decks?archive=1&leader=all&minPlayers=4&page="+page},
+  {name:"Yonko",max:60,concurrency:3,url:page=>"/api/yonko-decks?archive=1&format=en&leader=all&page="+page}
  ];
+ const resume=opt.loaded&&!opt.complete;
+ const deckMap=new Map();
+ if(resume)for(const d of opt.decks)deckMap.set((d.source||"")+"::"+(d.id||JSON.stringify(d.cards)),d);
+ if(!resume){opt.progress={};opt.notes=[]}
+ opt.owner=owner;opt.busy=true;opt.cancelled=false;opt.controller=new AbortController();opt.error="";opt.status="Actualizando legalidad…";
+ renderShell();
  try{
   await window.OnePieceLegality?.load?.();
   for(const source of sources){
    if(opt.cancelled)break;
-   let count=0,finished=false;
-   for(let page=1;page<=source.max;page++){
-    if(opt.cancelled)break;
+   let progress=opt.progress[source.name]||{nextPage:1,done:false};
+   if(progress.done)continue;
+   let page=Math.max(1,Number(progress.nextPage)||1),total=0;
+   while(page<=source.max&&!opt.cancelled){
     if(state.user?.id!==owner)throw Error("La cuenta ha cambiado durante el análisis.");
-    opt.status=source.name+": revisando página "+page+" · "+deckMap.size+" listas recuperadas";
+    const pages=Array.from({length:Math.min(source.concurrency,source.max-page+1)},(_,i)=>page+i);
+    opt.status=source.name+": páginas "+pages[0]+"–"+pages.at(-1)+" · "+deckMap.size+" listas";
     if(state.tab==="wants")document.querySelector(".wants-optimizer [role=status]")?.replaceChildren(document.createTextNode(opt.status));
-    try{
-     const response=await fetch(source.url(page),{headers:{accept:"application/json"},signal:opt.controller.signal});
-     const result=await response.json();
-     if(!response.ok)throw Error(result.error||"HTTP "+response.status);
+    const responses=await Promise.all(pages.map(async p=>{
+     try{
+      const r=await fetch(source.url(p),{headers:{accept:"application/json"},signal:opt.controller.signal});
+      const result=await r.json();
+      if(!r.ok)throw Error(result.error||"HTTP "+r.status);
+      return {page:p,result};
+     }catch(error){return {page:p,error}}
+    }));
+    let stop=false,failed=false;
+    for(const entry of responses){
+     if(entry.error){
+      if(!opt.cancelled)opt.notes.push(source.name+": "+String(entry.error.message||entry.error).slice(0,100));
+      failed=true;stop=true;break;
+     }
+     const result=entry.result;
      for(const d of Array.isArray(result.results)?result.results:[]){
-      if(d&&d.leaderId&&d.cards&&d.format!=="jp"){
-       const key=(d.source||source.name)+":"+(d.id||JSON.stringify(d.cards));
+      if(d?.leaderId&&d.cards&&d.format!=="jp"){
+       const key=(d.source||source.name)+"::"+(d.id||JSON.stringify(d.cards));
        if(!deckMap.has(key))deckMap.set(key,d);
       }
      }
-     count++;
-     if(result.partial||result.rateLimited||result.indexMayBeIncomplete||result.indexLimit===500&&page===source.max)opt.partial=true;
-     if(result.rateLimited){opt.notes.push(source.name+": límite de consultas");break}
-     if(!result.hasMore){finished=true;break}
-    }catch(error){opt.partial=true;opt.notes.push(opt.cancelled?"Análisis detenido por el usuario":source.name+": "+String(error.message||error).slice(0,95));break}
+     total++;
+     progress={nextPage:entry.page+1,done:!result.hasMore};
+     opt.progress[source.name]=progress;
+     if(result.rateLimited){opt.notes.push(source.name+": límite de consultas");stop=true;break}
+     if(!result.hasMore){stop=true;break}
+    }
+    // Retain successful progress even when a later page failed.
+    await cacheOptimizerArchive(deckMap);
+    // First useful recommendations appear immediately; later pages keep adding lists.
+    if(!opt.loaded&&deckMap.size&&state.user?.id===owner){
+     opt.loaded=true;opt.owned="";refreshOptimizer();
+     if(state.tab==="wants")renderShell();
+    }
+    if(failed||stop)break;
+    page=progress.nextPage;
    }
-   if(!finished)opt.partial=true;
-   opt.notes.push(source.name+": "+count+" página(s) consultada(s)");
+   if(page>source.max){progress={nextPage:source.max+1,done:false};opt.progress[source.name]=progress}
+   opt.notes=opt.notes.filter(note=>!note.startsWith(source.name+": ")||!/página\(s\) consultada\(s\)/.test(note));
+   opt.notes.push(source.name+": "+total+" nuevas página(s)");
+   await cacheOptimizerArchive(deckMap);
+   if(opt.cancelled)break;
   }
   if(state.user?.id!==owner)return;
-  opt.decks=[...deckMap.values()];opt.owned="";opt.prepared=null;opt.loaded=true;
-  refreshOptimizer();
-  if(!opt.decks.length)opt.error="No se han podido recuperar mazos de las fuentes públicas.";
- }catch(error){opt.error=String(error.message||error);opt.partial=true}
+  opt.complete=sources.every(s=>opt.progress[s.name]?.done);
+  if(deckMap.size){
+   await cacheOptimizerArchive(deckMap);
+   opt.owned="";opt.loaded=true;refreshOptimizer();
+  }else if(!opt.loaded)opt.error="No se han podido recuperar mazos de las fuentes públicas.";
+  if(opt.cancelled)opt.notes.push("Búsqueda pausada; puedes continuar después.");
+ }catch(error){opt.error=String(error.message||error)}
  finally{opt.busy=false;opt.controller=null;opt.status="";if(state.user?.id===owner&&state.tab==="wants")renderShell()}
 }
 function updateOptimizerBudget(){
  const field=document.querySelector("#woptBudget");
  opt.budget=String(Math.min(10000,Math.max(0,Number(field?.value)||0)));
- refreshOptimizer();renderShell();
+ refreshOptimizer();
+ if(opt.decks.length)void window.WantsArchiveCache?.save?.({decks:opt.decks,progress:opt.progress,notes:opt.notes,complete:opt.complete,budget:opt.budget});
+ renderShell();
 }
 async function addOptimizedToWants(){
  if(!needLogin()||opt.busy)return;
@@ -296,7 +352,7 @@ function view(){
  if(!state.user?.id||state.user.id!==ws.owner)
   return '<div class="wrap wants-page"><div class="notice">Cargando las wants de tu cuenta…</div></div>';
  const l=active(),rows=listEntries(l);
- if(opt.owner!==state.user.id){opt.owner=state.user.id;opt.decks=[];opt.loaded=false;opt.prepared=null;opt.result=null;opt.error="";opt.notes=[];opt.partial=false}
+ if(opt.owner!==state.user.id){opt.owner=state.user.id;opt.decks=[];opt.loaded=false;opt.prepared=null;opt.result=null;opt.lastBudget=null;opt.error="";opt.notes=[];opt.restoreRequested=false;opt.progress={};opt.complete=false;opt.savedAt=0}
  if(opt.loaded)refreshOptimizer();
  const priced=rows.filter(x=>x.c&&priceOf(x.c)!==null);
  const total=priced.reduce((sum,x)=>sum+x.q*priceOf(x.c),0);
@@ -393,6 +449,7 @@ async function showAdd(cardId,count=1){
  };
 }
 function bind(){
+ if(state.user?.id&&state.collectionReady&&!opt.busy&&!opt.loaded&&!opt.restoreRequested)void restoreOptimizerArchive();
  document.querySelector("#woptAnalyze")?.addEventListener("click",()=>void loadOptimizerArchive());
  document.querySelector("#woptCancel")?.addEventListener("click",()=>{opt.cancelled=true;opt.controller?.abort();});
  document.querySelector("#woptRecalc")?.addEventListener("click",updateOptimizerBudget);
@@ -440,7 +497,7 @@ function bind(){
  }
  if(!ws.loaded&&!ws.loading&&!ws.error)void load();
 }
-window.MyWants={view,bind,load,add:showAdd,consume,consumeBatch,overview,sendListToCardmarket,loadOptimizerArchive};
+window.MyWants={view,bind,load,add:showAdd,consume,consumeBatch,overview,sendListToCardmarket,loadOptimizerArchive,restoreOptimizerArchive};
 const style=document.createElement("style");
 style.textContent=".wants-page{max-width:1080px;padding-bottom:110px}.wants-panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:14px}.wants-heading{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;margin-bottom:13px}.wants-heading h3{margin:0}.wants-list-switch{display:flex;flex-wrap:wrap;gap:8px}.wants-list-switch button{border-radius:10px;border:1px solid var(--line);background:var(--panel2);color:var(--text);padding:10px 14px;font-weight:700}.wants-list-switch button.active{border-color:var(--accent);color:var(--accent)}.wants-list-actions{display:flex;gap:7px}.wants-totals{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:12px 0}.wants-totals>div{background:var(--panel2);border:1px solid var(--line);padding:11px;border-radius:11px}.wants-totals b{font-size:clamp(16px,3vw,25px);display:block}.wants-totals small,.wants-card-info small,.wants-search-row small{display:block;color:var(--muted);font-size:11px}.wants-search-label{display:grid;gap:6px;margin-top:13px}.wants-search-grid{max-height:340px;overflow:auto;margin-top:9px}.wants-search-row{display:flex;align-items:center;gap:10px;padding:7px;border-bottom:1px solid var(--line)}.wants-search-row>div{flex:1;min-width:0}.wants-search-art{height:66px;width:46px;object-fit:cover;border-radius:5px;flex:none}.wants-cards{display:grid;gap:8px}.wants-card{display:flex;gap:12px;align-items:center;background:var(--panel2);border:1px solid var(--line);border-radius:11px;padding:10px;min-width:0}.wants-card-art{width:65px;height:91px;border-radius:5px;object-fit:cover;flex:none}.wants-card-info{flex:1;min-width:0}.wants-card-info strong,.wants-card-info span,.wants-card-info a{display:block;margin:3px 0}.wants-card-info a{font-size:12px;color:var(--accent)}.wants-card-controls{display:grid;grid-template-columns:repeat(3,auto);gap:5px;align-items:center;text-align:center}.wants-card-controls .wants-remove{grid-column:1/-1}.wants-add-modal .modal{max-width:430px;display:grid;gap:13px}.wants-add-modal label{display:grid;gap:6px}.wants-modal-card{display:flex;gap:11px;align-items:center}.wants-modal-card small{display:block;color:var(--muted)}@media(max-width:590px){.wants-totals{grid-template-columns:repeat(2,minmax(0,1fr))}.wants-card{flex-wrap:wrap}.wants-card-art{width:52px;height:73px}.wants-card-controls{margin-left:auto}}";
 style.textContent+=".wants-list-directory{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:11px}.wants-list-choice{display:flex;align-items:center;gap:12px;width:100%;border:1px solid var(--line);background:var(--panel2);color:var(--text);border-radius:13px;padding:15px;text-align:left}.wants-list-choice:hover{border-color:var(--accent)}.wants-list-label{flex:1;min-width:0}.wants-list-label strong,.wants-list-label small{display:block}.wants-list-label strong{font-size:16px}.wants-list-label small{font-size:11px;color:var(--muted);margin-top:5px}.wants-list-icon{font-size:26px}.wants-back{margin:0 0 12px}.wants-list-details{margin-top:0}.wants-market-action{margin:10px 0}.wants-market-action button{max-width:100%}";
