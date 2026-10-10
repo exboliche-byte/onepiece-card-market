@@ -76,13 +76,15 @@ await step("Account view is available",async()=>{
  if(!/Cuenta|Iniciar sesión/i.test(txt))throw Error("No account content");
  return {visible:true}
 });
-await step("Mobile navigation has Tournaments and More contains expansions",async()=>{
+await step("Mobile navigation exposes Tournaments, scanner and More expansions",async()=>{
  await page.setViewportSize({width:390,height:844});
  await page.waitForTimeout(450);
  const mobile=page.locator(".mobile-nav");
  if(!await mobile.isVisible())throw Error("Mobile navigation invisible");
  const tourn=mobile.locator('button[data-tab="tournaments"]');
  if(!await tourn.isVisible())throw Error("Tournaments missing from bottom bar");
+ const scan=mobile.locator('button[data-scan-open]');
+ if(!await scan.isVisible())throw Error("Scanner missing from bottom bar");
  await mobile.locator("#mobileMoreToggle").click();
  const sets=mobile.locator('#mobileMorePanel button[data-tab="album"]');
  if(!await sets.isVisible())throw Error("Expansions missing under More");
