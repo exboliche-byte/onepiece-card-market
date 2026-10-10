@@ -388715,189 +388715,6 @@
     "syncCarryForward": true
   },
   {
-    "id": "OP02-013_p4",
-    "number": "OP02-013",
-    "name": "Portgas.D.Ace",
-    "rarity": "SR",
-    "cardClass": "CHARACTER",
-    "cost": "7",
-    "life": null,
-    "attribute": [
-      "Special"
-    ],
-    "power": "7000",
-    "counter": null,
-    "color": [
-      "Red"
-    ],
-    "feature": [
-      "Whitebeard Pirates"
-    ],
-    "trigger": null,
-    "blockIcon": "1",
-    "effect": "[On Play] Give up to 2 of your opponent's Characters −3000 power during this turn. Then, if your Leader's type includes \"Whitebeard Pirates\", this Character gains [Rush] during this turn. (This card can attack on the turn in which it is played.)",
-    "imageUrl": "https://asia-en.onepiece-cardgame.com/images/cardlist/card/OP02-013_p5.png",
-    "isParallel": true,
-    "languages": [
-      "English",
-      "Thai"
-    ],
-    "foreignData": [
-      {
-        "language": "Thai",
-        "name": "Portgas.D.Ace",
-        "effect": "[เมื่อลงสนาม] ในเทิร์นนี้, คาแรกเตอร์ของคู่แข่ง จำนวนไม่เกิน 2 ใบ, จะมีพาวเวอร์ -3000. จากนั้น, ถ้าลีดเดอร์ของเรา ระบุคำว่า < กลุ่มโจรสลัดหนวดขาว > รวมอยู่ในคุณสมบัติด้วย, ในเทิร์นนี้, คาแรกเตอร์นี้จะได้รับ [จู่โจมฉับพลัน]. (การ์ดใบนี้สามารถโจมตีในเทิร์นที่เพิ่งลงสนามได้).",
-        "trigger": null,
-        "attribute": [
-          "พิเศษ"
-        ],
-        "feature": [
-          "กลุ่มโจรสลัดหนวดขาว"
-        ]
-      }
-    ],
-    "set": "OTHER-PRODUCT-CARD",
-    "source_set": "OTHER-PRODUCT-CARD",
-    "origin_set": "OP-02",
-    "set_name": "Japanese 2nd Anniversary Set",
-    "pack_name": "Japanese 2nd Anniversary Set",
-    "category": "Character",
-    "colors": [
-      "Red"
-    ],
-    "attributes": [
-      "Special"
-    ],
-    "types": [
-      "Whitebeard Pirates"
-    ],
-    "image": "https://limitlesstcg.nyc3.cdn.digitaloceanspaces.com/one-piece/OP02/OP02-013_p4_EN.webp",
-    "catalogSource": "Limitless exact English print verified by image filename"
-  },
-  {
-    "id": "OP04-083_p4",
-    "number": "OP04-083",
-    "name": "Sabo",
-    "rarity": "SR",
-    "cardClass": "CHARACTER",
-    "cost": "5",
-    "life": null,
-    "attribute": [
-      "Special"
-    ],
-    "power": "6000",
-    "counter": "1000",
-    "color": [
-      "Black"
-    ],
-    "feature": [
-      "Dressrosa",
-      "Revolutionary Army"
-    ],
-    "trigger": null,
-    "blockIcon": "1",
-    "effect": "[Blocker] (After your opponent declares an attack, you may rest this card to make it the new target of the attack.) [On Play] None of your Characters can be K.O.'d by effects until the start of your next turn. Then, draw 2 cards and trash 2 cards from your hand.",
-    "imageUrl": "https://asia-en.onepiece-cardgame.com/images/cardlist/card/OP04-083_p5.png",
-    "isParallel": true,
-    "languages": [
-      "English",
-      "Thai"
-    ],
-    "foreignData": [
-      {
-        "language": "Thai",
-        "name": "Sabo",
-        "effect": "[บล็อกเกอร์] (ขณะที่คู่แข่งโจมตี, จะสามารถ เรสต์ การ์ดใบนี้, และเปลี่ยนเป้าหมายการโจมตีมาที่การ์ดใบนี้) [เมื่อลงสนาม] จนกระทั่งถึงช่วงเริ่มต้นเทิร์นของเราในครั้งถัดไป, คาแรกเตอร์ ของฝ่ายเราทั้งหมด, จะไม่ถูก KO จากความสามารถใดๆ. จากนั้น, จั่วการ์ด จำนวน 2 ใบ, และทิ้งการ์ดบนมือของเรา จำนวน 2 ใบ.",
-        "trigger": null,
-        "attribute": [
-          "พิเศษ"
-        ],
-        "feature": [
-          "เดรสโรซ่า",
-          "กองทัพปฏิวัติ"
-        ]
-      }
-    ],
-    "set": "OTHER-PRODUCT-CARD",
-    "source_set": "OTHER-PRODUCT-CARD",
-    "origin_set": "OP-04",
-    "set_name": "Japanese 2nd Anniversary Set",
-    "pack_name": "Japanese 2nd Anniversary Set",
-    "category": "Character",
-    "colors": [
-      "Black"
-    ],
-    "attributes": [
-      "Special"
-    ],
-    "types": [
-      "Dressrosa",
-      "Revolutionary Army"
-    ],
-    "image": "https://limitlesstcg.nyc3.cdn.digitaloceanspaces.com/one-piece/OP04/OP04-083_p4_EN.webp",
-    "catalogSource": "Limitless exact English print verified by image filename"
-  },
-  {
-    "id": "OP06-118_p3",
-    "number": "OP06-118",
-    "name": "Roronoa Zoro",
-    "rarity": "SEC",
-    "cardClass": "CHARACTER",
-    "cost": "9",
-    "life": null,
-    "attribute": [
-      "Slash"
-    ],
-    "power": "9000",
-    "counter": null,
-    "color": [
-      "Green"
-    ],
-    "feature": [
-      "Straw Hat Crew"
-    ],
-    "trigger": null,
-    "blockIcon": "2",
-    "effect": "[When Attacking] [Once Per Turn] ➀ (You may rest the specified number of DON!! cards in your cost area.): Set this Character as active. [Activate: Main] [Once Per Turn] ➁ (You may rest the specified number of DON!! cards in your cost area.): Set this Character as active.",
-    "imageUrl": "https://asia-en.onepiece-cardgame.com/images/cardlist/card/OP06-118_p4.png",
-    "isParallel": true,
-    "languages": [
-      "English",
-      "Thai"
-    ],
-    "foreignData": [
-      {
-        "language": "Thai",
-        "name": "Roronoa Zoro",
-        "effect": "[เมื่อโจมตี] [เทิร์นละ 1 ครั้ง] (1) (สามารถ เรสต์ ด้ง!! ในคอสต์แอเรียตามจำนวนที่ระบุ) : ทำการ แอ็คทีฟ คาแรกเตอร์นี้. [ใช้งาน : เมน] [เทิร์นละ 1 ครั้ง] (2) (สามารถ เรสต์ ด้ง!! ในคอสต์แอเรียตามจำนวนที่ระบุ) : ทำการ แอ็คทีฟ คาแรกเตอร์นี้.",
-        "trigger": null,
-        "attribute": [
-          "ฟัน"
-        ],
-        "feature": [
-          "กลุ่มหมวกฟาง"
-        ]
-      }
-    ],
-    "set": "OTHER-PRODUCT-CARD",
-    "source_set": "OTHER-PRODUCT-CARD",
-    "origin_set": "OP-06",
-    "set_name": "Japanese 2nd Anniversary Set",
-    "pack_name": "Japanese 2nd Anniversary Set",
-    "category": "Character",
-    "colors": [
-      "Green"
-    ],
-    "attributes": [
-      "Slash"
-    ],
-    "types": [
-      "Straw Hat Crew"
-    ],
-    "image": "https://limitlesstcg.nyc3.cdn.digitaloceanspaces.com/one-piece/OP06/OP06-118_p3_EN.webp",
-    "catalogSource": "Limitless exact English print verified by image filename"
-  },
-  {
     "id": "OP01-079_p1",
     "number": "OP01-079",
     "name": "Ms.All Sunday",
@@ -389250,6 +389067,189 @@
       "Rocks Pirates"
     ],
     "image": "https://limitlesstcg.nyc3.cdn.digitaloceanspaces.com/one-piece/OP17/OP17-040_p1_EN.webp",
+    "catalogSource": "Limitless exact English print verified by image filename"
+  },
+  {
+    "id": "OP02-013_p4",
+    "number": "OP02-013",
+    "name": "Portgas.D.Ace",
+    "rarity": "SR",
+    "cardClass": "CHARACTER",
+    "cost": "7",
+    "life": null,
+    "attribute": [
+      "Special"
+    ],
+    "power": "7000",
+    "counter": null,
+    "color": [
+      "Red"
+    ],
+    "feature": [
+      "Whitebeard Pirates"
+    ],
+    "trigger": null,
+    "blockIcon": "1",
+    "effect": "[On Play] Give up to 2 of your opponent's Characters −3000 power during this turn. Then, if your Leader's type includes \"Whitebeard Pirates\", this Character gains [Rush] during this turn. (This card can attack on the turn in which it is played.)",
+    "imageUrl": "https://asia-en.onepiece-cardgame.com/images/cardlist/card/OP02-013_p5.png",
+    "isParallel": true,
+    "languages": [
+      "English",
+      "Thai"
+    ],
+    "foreignData": [
+      {
+        "language": "Thai",
+        "name": "Portgas.D.Ace",
+        "effect": "[เมื่อลงสนาม] ในเทิร์นนี้, คาแรกเตอร์ของคู่แข่ง จำนวนไม่เกิน 2 ใบ, จะมีพาวเวอร์ -3000. จากนั้น, ถ้าลีดเดอร์ของเรา ระบุคำว่า < กลุ่มโจรสลัดหนวดขาว > รวมอยู่ในคุณสมบัติด้วย, ในเทิร์นนี้, คาแรกเตอร์นี้จะได้รับ [จู่โจมฉับพลัน]. (การ์ดใบนี้สามารถโจมตีในเทิร์นที่เพิ่งลงสนามได้).",
+        "trigger": null,
+        "attribute": [
+          "พิเศษ"
+        ],
+        "feature": [
+          "กลุ่มโจรสลัดหนวดขาว"
+        ]
+      }
+    ],
+    "set": "OTHER-PRODUCT-CARD",
+    "source_set": "OTHER-PRODUCT-CARD",
+    "origin_set": "OP-02",
+    "set_name": "Japanese 2nd Anniversary Set",
+    "pack_name": "Japanese 2nd Anniversary Set",
+    "category": "Character",
+    "colors": [
+      "Red"
+    ],
+    "attributes": [
+      "Special"
+    ],
+    "types": [
+      "Whitebeard Pirates"
+    ],
+    "image": "https://limitlesstcg.nyc3.cdn.digitaloceanspaces.com/one-piece/OP02/OP02-013_p4_EN.webp",
+    "catalogSource": "Limitless exact English print verified by image filename"
+  },
+  {
+    "id": "OP04-083_p4",
+    "number": "OP04-083",
+    "name": "Sabo",
+    "rarity": "SR",
+    "cardClass": "CHARACTER",
+    "cost": "5",
+    "life": null,
+    "attribute": [
+      "Special"
+    ],
+    "power": "6000",
+    "counter": "1000",
+    "color": [
+      "Black"
+    ],
+    "feature": [
+      "Dressrosa",
+      "Revolutionary Army"
+    ],
+    "trigger": null,
+    "blockIcon": "1",
+    "effect": "[Blocker] (After your opponent declares an attack, you may rest this card to make it the new target of the attack.) [On Play] None of your Characters can be K.O.'d by effects until the start of your next turn. Then, draw 2 cards and trash 2 cards from your hand.",
+    "imageUrl": "https://asia-en.onepiece-cardgame.com/images/cardlist/card/OP04-083_p5.png",
+    "isParallel": true,
+    "languages": [
+      "English",
+      "Thai"
+    ],
+    "foreignData": [
+      {
+        "language": "Thai",
+        "name": "Sabo",
+        "effect": "[บล็อกเกอร์] (ขณะที่คู่แข่งโจมตี, จะสามารถ เรสต์ การ์ดใบนี้, และเปลี่ยนเป้าหมายการโจมตีมาที่การ์ดใบนี้) [เมื่อลงสนาม] จนกระทั่งถึงช่วงเริ่มต้นเทิร์นของเราในครั้งถัดไป, คาแรกเตอร์ ของฝ่ายเราทั้งหมด, จะไม่ถูก KO จากความสามารถใดๆ. จากนั้น, จั่วการ์ด จำนวน 2 ใบ, และทิ้งการ์ดบนมือของเรา จำนวน 2 ใบ.",
+        "trigger": null,
+        "attribute": [
+          "พิเศษ"
+        ],
+        "feature": [
+          "เดรสโรซ่า",
+          "กองทัพปฏิวัติ"
+        ]
+      }
+    ],
+    "set": "OTHER-PRODUCT-CARD",
+    "source_set": "OTHER-PRODUCT-CARD",
+    "origin_set": "OP-04",
+    "set_name": "Japanese 2nd Anniversary Set",
+    "pack_name": "Japanese 2nd Anniversary Set",
+    "category": "Character",
+    "colors": [
+      "Black"
+    ],
+    "attributes": [
+      "Special"
+    ],
+    "types": [
+      "Dressrosa",
+      "Revolutionary Army"
+    ],
+    "image": "https://limitlesstcg.nyc3.cdn.digitaloceanspaces.com/one-piece/OP04/OP04-083_p4_EN.webp",
+    "catalogSource": "Limitless exact English print verified by image filename"
+  },
+  {
+    "id": "OP06-118_p3",
+    "number": "OP06-118",
+    "name": "Roronoa Zoro",
+    "rarity": "SEC",
+    "cardClass": "CHARACTER",
+    "cost": "9",
+    "life": null,
+    "attribute": [
+      "Slash"
+    ],
+    "power": "9000",
+    "counter": null,
+    "color": [
+      "Green"
+    ],
+    "feature": [
+      "Straw Hat Crew"
+    ],
+    "trigger": null,
+    "blockIcon": "2",
+    "effect": "[When Attacking] [Once Per Turn] ➀ (You may rest the specified number of DON!! cards in your cost area.): Set this Character as active. [Activate: Main] [Once Per Turn] ➁ (You may rest the specified number of DON!! cards in your cost area.): Set this Character as active.",
+    "imageUrl": "https://asia-en.onepiece-cardgame.com/images/cardlist/card/OP06-118_p4.png",
+    "isParallel": true,
+    "languages": [
+      "English",
+      "Thai"
+    ],
+    "foreignData": [
+      {
+        "language": "Thai",
+        "name": "Roronoa Zoro",
+        "effect": "[เมื่อโจมตี] [เทิร์นละ 1 ครั้ง] (1) (สามารถ เรสต์ ด้ง!! ในคอสต์แอเรียตามจำนวนที่ระบุ) : ทำการ แอ็คทีฟ คาแรกเตอร์นี้. [ใช้งาน : เมน] [เทิร์นละ 1 ครั้ง] (2) (สามารถ เรสต์ ด้ง!! ในคอสต์แอเรียตามจำนวนที่ระบุ) : ทำการ แอ็คทีฟ คาแรกเตอร์นี้.",
+        "trigger": null,
+        "attribute": [
+          "ฟัน"
+        ],
+        "feature": [
+          "กลุ่มหมวกฟาง"
+        ]
+      }
+    ],
+    "set": "OTHER-PRODUCT-CARD",
+    "source_set": "OTHER-PRODUCT-CARD",
+    "origin_set": "OP-06",
+    "set_name": "Japanese 2nd Anniversary Set",
+    "pack_name": "Japanese 2nd Anniversary Set",
+    "category": "Character",
+    "colors": [
+      "Green"
+    ],
+    "attributes": [
+      "Slash"
+    ],
+    "types": [
+      "Straw Hat Crew"
+    ],
+    "image": "https://limitlesstcg.nyc3.cdn.digitaloceanspaces.com/one-piece/OP06/OP06-118_p3_EN.webp",
     "catalogSource": "Limitless exact English print verified by image filename"
   }
 ]

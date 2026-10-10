@@ -328240,276 +328240,6 @@
       "source": "Limitless/Cardmarket exact-print mapping",
       "sourceUrl": "https://www.cardmarket.com/es/OnePiece/Data"
     },
-    "OP02-013_p4": {
-      "eur": null,
-      "trend": null,
-      "low": null,
-      "avg": null,
-      "avg1": null,
-      "avg7": null,
-      "avg30": null,
-      "cardmarketId": null,
-      "expansionId": null,
-      "expansion": "Japanese 2nd Anniversary Set",
-      "printSet": "OTHER-PRODUCT-CARD",
-      "variantKind": "parallel",
-      "version": 4,
-      "url": null,
-      "collections": [
-        {
-          "expansion": "Paramount War",
-          "expansionId": 5263,
-          "setCode": "OP02",
-          "cardmarketId": 700493,
-          "version": 1,
-          "eur": 63.98,
-          "url": "https://www.cardmarket.com/es/OnePiece/Products?idProduct=700493"
-        },
-        {
-          "expansion": "Paramount War",
-          "expansionId": 5263,
-          "setCode": "OP02",
-          "cardmarketId": 700821,
-          "version": 2,
-          "eur": 2.76,
-          "url": "https://www.cardmarket.com/es/OnePiece/Products?idProduct=700821"
-        },
-        {
-          "expansion": "Paramount War",
-          "expansionId": 5263,
-          "setCode": "OP02",
-          "cardmarketId": 700823,
-          "version": 3,
-          "eur": 1691.81,
-          "url": "https://www.cardmarket.com/es/OnePiece/Products?idProduct=700823"
-        },
-        {
-          "expansion": "Two Legends",
-          "expansionId": 5610,
-          "setCode": "OP08",
-          "cardmarketId": 787812,
-          "version": 1,
-          "eur": 221.64,
-          "url": "https://www.cardmarket.com/es/OnePiece/Products?idProduct=787812"
-        },
-        {
-          "expansion": "The Best",
-          "expansionId": 5805,
-          "setCode": "PRB01",
-          "cardmarketId": 799216,
-          "version": 1,
-          "eur": 1676.8,
-          "url": "https://www.cardmarket.com/es/OnePiece/Products?idProduct=799216"
-        },
-        {
-          "expansion": "Chinese New Year Red Envelope - Roronoa Zoro",
-          "expansionId": 5510,
-          "setCode": "",
-          "cardmarketId": 804369,
-          "version": 1,
-          "eur": 49.01,
-          "url": "https://www.cardmarket.com/es/OnePiece/Products?idProduct=804369"
-        },
-        {
-          "expansion": "Unknown OP01",
-          "expansionId": 6498,
-          "setCode": "",
-          "cardmarketId": 873852,
-          "version": 1,
-          "eur": 51.92,
-          "url": "https://www.cardmarket.com/es/OnePiece/Products?idProduct=873852"
-        }
-      ],
-      "launchPrice": 120.09,
-      "launchPriceDate": "2026-10-08T02:52:04+0200",
-      "variantOf": "OP02-013",
-      "stalePrice": false,
-      "source": "Ambiguous print mapping withheld",
-      "sourceUrl": "https://www.cardmarket.com/es/OnePiece/Data"
-    },
-    "OP04-083_p4": {
-      "eur": null,
-      "trend": null,
-      "low": null,
-      "avg": null,
-      "avg1": null,
-      "avg7": null,
-      "avg30": null,
-      "cardmarketId": null,
-      "expansionId": null,
-      "expansion": "Japanese 2nd Anniversary Set",
-      "printSet": "OTHER-PRODUCT-CARD",
-      "variantKind": "parallel",
-      "version": 4,
-      "url": null,
-      "collections": [
-        {
-          "expansion": "Chinese New Year Red Envelope - Roronoa Zoro",
-          "expansionId": 5510,
-          "setCode": "",
-          "cardmarketId": 722790,
-          "version": 1,
-          "eur": 63.8,
-          "url": "https://www.cardmarket.com/es/OnePiece/Products?idProduct=722790"
-        },
-        {
-          "expansion": "Kingdoms of Intrigue",
-          "expansionId": 5365,
-          "setCode": "OP04",
-          "cardmarketId": 732800,
-          "version": 1,
-          "eur": 0.5,
-          "url": "https://www.cardmarket.com/es/OnePiece/Products?idProduct=732800"
-        },
-        {
-          "expansion": "Kingdoms of Intrigue",
-          "expansionId": 5365,
-          "setCode": "OP04",
-          "cardmarketId": 732801,
-          "version": 2,
-          "eur": 15.37,
-          "url": "https://www.cardmarket.com/es/OnePiece/Products?idProduct=732801"
-        },
-        {
-          "expansion": "Kingdoms of Intrigue",
-          "expansionId": 5365,
-          "setCode": "OP04",
-          "cardmarketId": 732802,
-          "version": 3,
-          "eur": 745.54,
-          "url": "https://www.cardmarket.com/es/OnePiece/Products?idProduct=732802"
-        },
-        {
-          "expansion": "DON!! Card Pack Vol.1",
-          "expansionId": 5262,
-          "setCode": "",
-          "cardmarketId": 746250,
-          "version": 1,
-          "eur": 140.58,
-          "url": "https://www.cardmarket.com/es/OnePiece/Products?idProduct=746250"
-        },
-        {
-          "expansion": "The Best",
-          "expansionId": 5805,
-          "setCode": "PRB01",
-          "cardmarketId": 799283,
-          "version": 1,
-          "eur": 1052.42,
-          "url": "https://www.cardmarket.com/es/OnePiece/Products?idProduct=799283"
-        },
-        {
-          "expansion": "Chinese New Year Red Envelope - Roronoa Zoro",
-          "expansionId": 5510,
-          "setCode": "",
-          "cardmarketId": 804371,
-          "version": 2,
-          "eur": 44.7,
-          "url": "https://www.cardmarket.com/es/OnePiece/Products?idProduct=804371"
-        },
-        {
-          "expansion": "The Best Vol.2",
-          "expansionId": 6242,
-          "setCode": "PRB02",
-          "cardmarketId": 852341,
-          "version": 1,
-          "eur": 0.58,
-          "url": "https://www.cardmarket.com/es/OnePiece/Products?idProduct=852341"
-        }
-      ],
-      "launchPrice": 50.33,
-      "launchPriceDate": "2026-10-08T02:52:04+0200",
-      "variantOf": "OP04-083",
-      "stalePrice": false,
-      "source": "Ambiguous print mapping withheld",
-      "sourceUrl": "https://www.cardmarket.com/es/OnePiece/Data"
-    },
-    "OP06-118_p3": {
-      "eur": null,
-      "trend": null,
-      "low": null,
-      "avg": null,
-      "avg1": null,
-      "avg7": null,
-      "avg30": null,
-      "cardmarketId": null,
-      "expansionId": null,
-      "expansion": "Japanese 2nd Anniversary Set",
-      "printSet": "OTHER-PRODUCT-CARD",
-      "variantKind": "parallel",
-      "version": 3,
-      "url": null,
-      "collections": [
-        {
-          "expansion": "Wings of the Captain",
-          "expansionId": 5524,
-          "setCode": "OP06",
-          "cardmarketId": 760624,
-          "version": 1,
-          "eur": 4.57,
-          "url": "https://www.cardmarket.com/es/OnePiece/Products?idProduct=760624"
-        },
-        {
-          "expansion": "Wings of the Captain",
-          "expansionId": 5524,
-          "setCode": "OP06",
-          "cardmarketId": 760625,
-          "version": 2,
-          "eur": 86.83,
-          "url": "https://www.cardmarket.com/es/OnePiece/Products?idProduct=760625"
-        },
-        {
-          "expansion": "Wings of the Captain",
-          "expansionId": 5524,
-          "setCode": "OP06",
-          "cardmarketId": 760626,
-          "version": 3,
-          "eur": 3006.46,
-          "url": "https://www.cardmarket.com/es/OnePiece/Products?idProduct=760626"
-        },
-        {
-          "expansion": "Chinese New Year Red Envelope - Roronoa Zoro",
-          "expansionId": 5510,
-          "setCode": "",
-          "cardmarketId": 804377,
-          "version": 1,
-          "eur": 61.54,
-          "url": "https://www.cardmarket.com/es/OnePiece/Products?idProduct=804377"
-        },
-        {
-          "expansion": "A Fist of Divine Speed",
-          "expansionId": 6033,
-          "setCode": "OP11",
-          "cardmarketId": 830578,
-          "version": 1,
-          "eur": 929.36,
-          "url": "https://www.cardmarket.com/es/OnePiece/Products?idProduct=830578"
-        },
-        {
-          "expansion": "The Best Vol.2",
-          "expansionId": 6242,
-          "setCode": "PRB02",
-          "cardmarketId": 852388,
-          "version": 1,
-          "eur": 3.63,
-          "url": "https://www.cardmarket.com/es/OnePiece/Products?idProduct=852388"
-        },
-        {
-          "expansion": "Learn Together Deck Set 01",
-          "expansionId": 6338,
-          "setCode": "",
-          "cardmarketId": 852800,
-          "version": 1,
-          "eur": 3.13,
-          "url": "https://www.cardmarket.com/es/OnePiece/Products?idProduct=852800"
-        }
-      ],
-      "launchPrice": 211.91,
-      "launchPriceDate": "2026-10-08T02:52:04+0200",
-      "variantOf": "OP06-118",
-      "stalePrice": false,
-      "source": "Ambiguous print mapping withheld",
-      "sourceUrl": "https://www.cardmarket.com/es/OnePiece/Data"
-    },
     "OP01-079_p1": {
       "eur": 4.34,
       "trend": null,
@@ -328781,6 +328511,276 @@
       "variantOf": "OP17-040",
       "stalePrice": false,
       "source": "Limitless/Cardmarket exact-print mapping",
+      "sourceUrl": "https://www.cardmarket.com/es/OnePiece/Data"
+    },
+    "OP02-013_p4": {
+      "eur": null,
+      "trend": null,
+      "low": null,
+      "avg": null,
+      "avg1": null,
+      "avg7": null,
+      "avg30": null,
+      "cardmarketId": null,
+      "expansionId": null,
+      "expansion": "Japanese 2nd Anniversary Set",
+      "printSet": "OTHER-PRODUCT-CARD",
+      "variantKind": "parallel",
+      "version": 4,
+      "url": null,
+      "collections": [
+        {
+          "expansion": "Paramount War",
+          "expansionId": 5263,
+          "setCode": "OP02",
+          "cardmarketId": 700493,
+          "version": 1,
+          "eur": 63.98,
+          "url": "https://www.cardmarket.com/es/OnePiece/Products?idProduct=700493"
+        },
+        {
+          "expansion": "Paramount War",
+          "expansionId": 5263,
+          "setCode": "OP02",
+          "cardmarketId": 700821,
+          "version": 2,
+          "eur": 2.76,
+          "url": "https://www.cardmarket.com/es/OnePiece/Products?idProduct=700821"
+        },
+        {
+          "expansion": "Paramount War",
+          "expansionId": 5263,
+          "setCode": "OP02",
+          "cardmarketId": 700823,
+          "version": 3,
+          "eur": 1691.81,
+          "url": "https://www.cardmarket.com/es/OnePiece/Products?idProduct=700823"
+        },
+        {
+          "expansion": "Two Legends",
+          "expansionId": 5610,
+          "setCode": "OP08",
+          "cardmarketId": 787812,
+          "version": 1,
+          "eur": 221.64,
+          "url": "https://www.cardmarket.com/es/OnePiece/Products?idProduct=787812"
+        },
+        {
+          "expansion": "The Best",
+          "expansionId": 5805,
+          "setCode": "PRB01",
+          "cardmarketId": 799216,
+          "version": 1,
+          "eur": 1676.8,
+          "url": "https://www.cardmarket.com/es/OnePiece/Products?idProduct=799216"
+        },
+        {
+          "expansion": "Chinese New Year Red Envelope - Roronoa Zoro",
+          "expansionId": 5510,
+          "setCode": "",
+          "cardmarketId": 804369,
+          "version": 1,
+          "eur": 49.01,
+          "url": "https://www.cardmarket.com/es/OnePiece/Products?idProduct=804369"
+        },
+        {
+          "expansion": "Unknown OP01",
+          "expansionId": 6498,
+          "setCode": "",
+          "cardmarketId": 873852,
+          "version": 1,
+          "eur": 51.92,
+          "url": "https://www.cardmarket.com/es/OnePiece/Products?idProduct=873852"
+        }
+      ],
+      "launchPrice": 120.09,
+      "launchPriceDate": "2026-10-08T02:52:04+0200",
+      "variantOf": "OP02-013",
+      "stalePrice": false,
+      "source": "Ambiguous print mapping withheld",
+      "sourceUrl": "https://www.cardmarket.com/es/OnePiece/Data"
+    },
+    "OP04-083_p4": {
+      "eur": null,
+      "trend": null,
+      "low": null,
+      "avg": null,
+      "avg1": null,
+      "avg7": null,
+      "avg30": null,
+      "cardmarketId": null,
+      "expansionId": null,
+      "expansion": "Japanese 2nd Anniversary Set",
+      "printSet": "OTHER-PRODUCT-CARD",
+      "variantKind": "parallel",
+      "version": 4,
+      "url": null,
+      "collections": [
+        {
+          "expansion": "Chinese New Year Red Envelope - Roronoa Zoro",
+          "expansionId": 5510,
+          "setCode": "",
+          "cardmarketId": 722790,
+          "version": 1,
+          "eur": 63.8,
+          "url": "https://www.cardmarket.com/es/OnePiece/Products?idProduct=722790"
+        },
+        {
+          "expansion": "Kingdoms of Intrigue",
+          "expansionId": 5365,
+          "setCode": "OP04",
+          "cardmarketId": 732800,
+          "version": 1,
+          "eur": 0.5,
+          "url": "https://www.cardmarket.com/es/OnePiece/Products?idProduct=732800"
+        },
+        {
+          "expansion": "Kingdoms of Intrigue",
+          "expansionId": 5365,
+          "setCode": "OP04",
+          "cardmarketId": 732801,
+          "version": 2,
+          "eur": 15.37,
+          "url": "https://www.cardmarket.com/es/OnePiece/Products?idProduct=732801"
+        },
+        {
+          "expansion": "Kingdoms of Intrigue",
+          "expansionId": 5365,
+          "setCode": "OP04",
+          "cardmarketId": 732802,
+          "version": 3,
+          "eur": 745.54,
+          "url": "https://www.cardmarket.com/es/OnePiece/Products?idProduct=732802"
+        },
+        {
+          "expansion": "DON!! Card Pack Vol.1",
+          "expansionId": 5262,
+          "setCode": "",
+          "cardmarketId": 746250,
+          "version": 1,
+          "eur": 140.58,
+          "url": "https://www.cardmarket.com/es/OnePiece/Products?idProduct=746250"
+        },
+        {
+          "expansion": "The Best",
+          "expansionId": 5805,
+          "setCode": "PRB01",
+          "cardmarketId": 799283,
+          "version": 1,
+          "eur": 1052.42,
+          "url": "https://www.cardmarket.com/es/OnePiece/Products?idProduct=799283"
+        },
+        {
+          "expansion": "Chinese New Year Red Envelope - Roronoa Zoro",
+          "expansionId": 5510,
+          "setCode": "",
+          "cardmarketId": 804371,
+          "version": 2,
+          "eur": 44.7,
+          "url": "https://www.cardmarket.com/es/OnePiece/Products?idProduct=804371"
+        },
+        {
+          "expansion": "The Best Vol.2",
+          "expansionId": 6242,
+          "setCode": "PRB02",
+          "cardmarketId": 852341,
+          "version": 1,
+          "eur": 0.58,
+          "url": "https://www.cardmarket.com/es/OnePiece/Products?idProduct=852341"
+        }
+      ],
+      "launchPrice": 50.33,
+      "launchPriceDate": "2026-10-08T02:52:04+0200",
+      "variantOf": "OP04-083",
+      "stalePrice": false,
+      "source": "Ambiguous print mapping withheld",
+      "sourceUrl": "https://www.cardmarket.com/es/OnePiece/Data"
+    },
+    "OP06-118_p3": {
+      "eur": null,
+      "trend": null,
+      "low": null,
+      "avg": null,
+      "avg1": null,
+      "avg7": null,
+      "avg30": null,
+      "cardmarketId": null,
+      "expansionId": null,
+      "expansion": "Japanese 2nd Anniversary Set",
+      "printSet": "OTHER-PRODUCT-CARD",
+      "variantKind": "parallel",
+      "version": 3,
+      "url": null,
+      "collections": [
+        {
+          "expansion": "Wings of the Captain",
+          "expansionId": 5524,
+          "setCode": "OP06",
+          "cardmarketId": 760624,
+          "version": 1,
+          "eur": 4.57,
+          "url": "https://www.cardmarket.com/es/OnePiece/Products?idProduct=760624"
+        },
+        {
+          "expansion": "Wings of the Captain",
+          "expansionId": 5524,
+          "setCode": "OP06",
+          "cardmarketId": 760625,
+          "version": 2,
+          "eur": 86.83,
+          "url": "https://www.cardmarket.com/es/OnePiece/Products?idProduct=760625"
+        },
+        {
+          "expansion": "Wings of the Captain",
+          "expansionId": 5524,
+          "setCode": "OP06",
+          "cardmarketId": 760626,
+          "version": 3,
+          "eur": 3006.46,
+          "url": "https://www.cardmarket.com/es/OnePiece/Products?idProduct=760626"
+        },
+        {
+          "expansion": "Chinese New Year Red Envelope - Roronoa Zoro",
+          "expansionId": 5510,
+          "setCode": "",
+          "cardmarketId": 804377,
+          "version": 1,
+          "eur": 61.54,
+          "url": "https://www.cardmarket.com/es/OnePiece/Products?idProduct=804377"
+        },
+        {
+          "expansion": "A Fist of Divine Speed",
+          "expansionId": 6033,
+          "setCode": "OP11",
+          "cardmarketId": 830578,
+          "version": 1,
+          "eur": 929.36,
+          "url": "https://www.cardmarket.com/es/OnePiece/Products?idProduct=830578"
+        },
+        {
+          "expansion": "The Best Vol.2",
+          "expansionId": 6242,
+          "setCode": "PRB02",
+          "cardmarketId": 852388,
+          "version": 1,
+          "eur": 3.63,
+          "url": "https://www.cardmarket.com/es/OnePiece/Products?idProduct=852388"
+        },
+        {
+          "expansion": "Learn Together Deck Set 01",
+          "expansionId": 6338,
+          "setCode": "",
+          "cardmarketId": 852800,
+          "version": 1,
+          "eur": 3.13,
+          "url": "https://www.cardmarket.com/es/OnePiece/Products?idProduct=852800"
+        }
+      ],
+      "launchPrice": 211.91,
+      "launchPriceDate": "2026-10-08T02:52:04+0200",
+      "variantOf": "OP06-118",
+      "stalePrice": false,
+      "source": "Ambiguous print mapping withheld",
       "sourceUrl": "https://www.cardmarket.com/es/OnePiece/Data"
     }
   },
