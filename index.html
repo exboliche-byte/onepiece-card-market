@@ -11,7 +11,6 @@
 <link rel="stylesheet" href="/deck-lab.css">
 <link rel="stylesheet" href="/deck-physical.css">
 <link rel="stylesheet" href="/search-clear.css">
-<link rel="stylesheet" href="/uiux.css">
 <title>MiAlbumOnePiece</title>
 <style>
 :root{--bg:#080a10;--panel:#101521;--panel2:#171d2b;--line:#2b3548;--text:#f7f9fc;--muted:#98a4b8;--accent:#ffd447;--ok:#71e0b3;--danger:#ff7282;--blue:#74b8ff}
@@ -228,6 +227,7 @@ button:focus-visible,a:focus-visible,summary:focus-visible,input:focus-visible,s
 /* Collection is for owned cards; Wants has its own navigation destination. */
 .collection-tools{grid-template-columns:repeat(3,minmax(0,1fr))}
 </style>
+<link rel="stylesheet" href="/uiux.css">
 </head>
 <body>
 <div id="app"></div>
@@ -246,7 +246,7 @@ const PAGE=60;
 const state={
   cards:[],packs:[],groups:[],groupByKey:new Map(),prices:{},priceDate:null,importedCards:{},
   collection:{},decks:[],sharedDeck:null,publicCollection:null,tournaments:[],tournamentId:null,tournamentDraft:null,tournamentRoundDraft:null,wishlist:{},user:null,sb:null,
-  tab:"catalog",set:"",query:"",detail:null,deckId:null,collectionStatsOpen:false,collectionArchivedOpen:false,boxesOpen:false,deckCompositionSort:"id",deckCompositionDir:"asc",
+  tab:"home",set:"",query:"",detail:null,deckId:null,collectionStatsOpen:false,collectionArchivedOpen:false,boxesOpen:false,deckCompositionSort:"id",deckCompositionDir:"asc",
   proxyQuery:"",proxySelection:{},
   catalog:{set:"Todas",category:"Todos",color:"Todos",rarity:"Todos",type:"Todos",attribute:"Todos",ownership:"Todas",sort:"id",dir:"asc",page:1,grouped:true,minCost:"",maxCost:"",minPower:"",maxPower:"",minPrice:"",maxPrice:"",query:"",filtersOpen:false},
   owned:{},collectionReady:false,collection:{query:"",set:"Todas",category:"Todos",color:"Todos",rarity:"Todos",type:"Todos",attribute:"Todos",quantity:"Todas",playset:"Todas",sort:"id",dir:"asc",page:1,filtersOpen:false},
@@ -2766,17 +2766,16 @@ function nav(){
     sideGroups.map(([heading,ids])=>'<div class="side-group"><div class="side-group-title">'+heading+'</div>'+
       ids.map(id=>id==="scanner"?scanButton:tabButton(items.find(item=>item[0]===id),true)).join("")+'</div>').join("")+
     '</nav></aside>';
-  // Móvil: Catálogo, Colección, Escanear, Torneos y Mazos siempre visibles; menú Más adicional.
-  // El menú lateral de ordenador conserva su orden original.
-  const mobileMain=["catalog","collection","scanner","tournaments","decks"];
+  // Móvil: cinco accesos visibles en el orden solicitado; el resto va en Más.
+  // La navegación de escritorio mantiene todas las secciones.
+  const mobileMain=["home","collection","catalog","tournaments"];
   const mobileMore=items.filter(([id])=>!mobileMain.includes(id));
   const moreActive=mobileMore.some(([id])=>id===state.tab);
-  const moreGroups=[["INICIO",["home"]],["EXPLORAR",["album","meta"]],["MIS CARTAS",["wants"]],["COMUNIDAD",["trades"]],["HERRAMIENTAS",["proxies"]],["CUENTA",["account"]]];
+  const moreGroups=[["JUGAR",["decks"]],["HERRAMIENTAS",["scanner","proxies"]],["EXPLORAR",["album","meta"]],["MIS CARTAS",["wants"]],["COMUNIDAD",["trades"]],["CUENTA",["account"]]];
   const moreHtml=moreGroups.map(([heading,ids])=>'<div class="mobile-more-group"><div class="mobile-more-heading">'+heading+'</div>'+
     ids.map(id=>id==="scanner"?'<button type="button" data-scan-open aria-label="Abrir escáner de cartas">'+navIcon("scanner")+'<span>Escáner</span></button>':
       tabButton(items.find(([k])=>k===id),false)).join("")+'</div>').join("");
-  const mobileScanButton='<button type="button" class="nav-scan" data-scan-open aria-label="Escanear una carta">'+navIcon("scanner")+'<span>Escanear</span></button>';
-  const mobile='<nav class="nav mobile-nav" aria-label="Secciones principales">'+mobileMain.map(id=>id==="scanner"?mobileScanButton:tabButton(items.find(([key])=>key===id),false)).join("")+'<button type="button" id="mobileMoreToggle" class="'+(moreActive?"active":"")+'" aria-label="Más opciones" aria-expanded="false" aria-controls="mobileMorePanel">'+navIcon("more")+'<span>Más</span></button><div id="mobileMorePanel" class="mobile-more" hidden>'+moreHtml+'</div></nav>';
+  const mobile='<nav class="nav mobile-nav" aria-label="Secciones principales">'+mobileMain.map(id=>tabButton(items.find(([key])=>key===id),false)).join("")+'<button type="button" id="mobileMoreToggle" class="'+(moreActive?"active":"")+'" aria-label="Más opciones" aria-expanded="false" aria-controls="mobileMorePanel">'+navIcon("more")+'<span>Más</span></button><div id="mobileMorePanel" class="mobile-more" hidden>'+moreHtml+'</div></nav>';
   return side+mobile;
 }
 function deckCompletionView(){
@@ -3011,7 +3010,11 @@ function bindShell(){
     button.setAttribute("aria-expanded",String(!panel.hidden));
   });
   document.querySelectorAll("[data-scan-open]").forEach(button=>{
-    button.addEventListener("click",()=>window.openOnePieceScanner?.());
+    button.addEventListener("click",()=>{
+      const menu=$("#mobileMorePanel"),toggle=$("#mobileMoreToggle");
+      if(menu&&!menu.hidden){menu.hidden=true;toggle?.setAttribute("aria-expanded","false")}
+      window.openOnePieceScanner?.();
+    });
   });
   document.querySelectorAll("[data-tab]").forEach(b=>b.onclick=()=>{
     const next=b.dataset.tab;
