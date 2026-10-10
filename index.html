@@ -1850,7 +1850,20 @@ function deckCompositionGroups(d){
     if(criterion==="price")return c?priceOf(c):null;
     return g.code;
   };
+  const costCategoryRank=g=>{
+    const category=String(source(g)?.category||"").toLowerCase();
+    if(category==="character")return 0;
+    if(category==="event")return 1;
+    if(category==="stage")return 2;
+    return 3;
+  };
   return [...groups.values()].sort((a,b)=>{
+    // Por coste: personajes primero, después eventos y por último stages.
+    // El ascendente/descendente se aplica al coste DENTRO de cada tipo.
+    if(criterion==="cost"){
+      const categoryDiff=costCategoryRank(a)-costCategoryRank(b);
+      if(categoryDiff)return categoryDiff;
+    }
     const x=attribute(a),y=attribute(b),missingX=x===null||x===undefined||x==="",missingY=y===null||y===undefined||y==="";
     if(missingX||missingY){if(missingX!==missingY)return missingX?1:-1}
     else {
