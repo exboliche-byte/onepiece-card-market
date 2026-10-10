@@ -68,7 +68,8 @@
   ],
   "git": {
     "deploymentEnabled": {
-      "feature/deck-tools-pwa-20261009": false
+      "feature/deck-tools-pwa-20261009": false,
+      "fix/technical-audit-2026-10-10": false
     }
   },
   "functions": {
