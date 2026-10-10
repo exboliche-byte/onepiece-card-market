@@ -102,11 +102,12 @@ function optimize(prepared,budget){
    if(leaders.size>=200)break;
    if(!leaders.has(x.r.leader)){shortlist.push(x);leaders.add(x.r.leader)}
   }
+  const alreadyLeaders=new Set([...currentlyUnlocked].map(row=>row.leader));
   let choice=null;
   for(const x of shortlist){
    const next=merged(selected,x.added),won=rows.filter(r=>!currentlyUnlocked.has(r)&&covered(r,next));
    if(!won.length)continue;
-   const newLeaders=new Set(won.filter(r=>![...currentlyUnlocked].some(v=>v.leader===r.leader)).map(r=>r.leader)).size;
+   const newLeaders=new Set(won.filter(r=>!alreadyLeaders.has(r.leader)).map(r=>r.leader)).size;
    const score=(won.length+newLeaders*1.4)/(x.cost+0.5);
    if(!choice||score>choice.score+0.000001||(Math.abs(score-choice.score)<0.000001&&x.cost<choice.cost))
     choice={...x,score};
