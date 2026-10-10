@@ -70,7 +70,7 @@ function setBatch(enabled){
 function batchCapture(c){
  const code=idBase(c.id),base=scannerBaseCard(code);
  if(!base||batchHeld===code||Date.now()-batchLastAt<650)return;
- const row=batchQueue.get(code)||{code,printId:cardByCode(code).length===1?base.id:"",count:0};
+ const row=batchQueue.get(code)||{code,printId:base.id,count:0};
  row.count=Math.min(99,row.count+1);batchQueue.set(code,row);
  batchHeld=code;batchLastAt=Date.now();batchBlank=0;recentVisualMatches=[];
  batchUI();try{navigator.vibrate?.(35)}catch{}
@@ -120,12 +120,12 @@ function batchRender(){
  area.hidden=false;
  const rows=[...batchQueue.values()];
  area.innerHTML='<h3>Escaneo continuo · '+batchTotal()+' cartas</h3>'+
- '<p class="small">Aún no se ha guardado nada. Revisa la impresión exacta de cada carta. Las impresiones ambiguas requieren elegir la versión antes de guardar.</p>'+
+ '<p class="small">Aún no se ha guardado nada. Revisa la impresión exacta de cada carta. Las detectadas se presentan como base, no como paralela adivinada.</p>'+
  '<div class="scanBatchList">'+rows.map(row=>{
  const variants=cardByCode(row.code),c=variants.find(v=>v.id===row.printId)||scannerBaseCard(row.code);
  return '<div class="scanBatchItem" data-batch-code="'+esc(row.code)+'">'+(c?cardImg(c,"scanCandidateImage"):'')+
  '<div class="scanBatchInfo"><b>'+esc(c?.name||row.code)+'</b><small>'+esc(row.code)+'</small>'+
- '<select class="scanBatchVariant" aria-label="Impresión de '+esc(row.code)+'"><option value="">Confirma la impresión…</option>'+variants.map(v=>
+ '<select class="scanBatchVariant" aria-label="Impresión de '+esc(row.code)+'">'+variants.map(v=>
  '<option value="'+esc(v.id)+'"'+(v.id===row.printId?' selected':'')+'>'+esc(v.id)+' · '+esc(variantKindOf(v))+' · '+esc(printSetOf(v))+'</option>').join("")+'</select>'+
  '<div class="scanBatchCardMeta"><span class="scanBatchOwned">'+esc(batchOwnedText(c))+'</span>'+
  '<span class="scanBatchPrice">'+esc(batchUnitPriceText(c,!!c&&priceOf(c)===null))+'</span></div>'+
@@ -174,7 +174,7 @@ async function batchSave(){
  }
  batchSaving=false;batchUI();
  if(!running||!panel())return;
- if(errors){batchRender();status("Revisa y confirma la impresión y las cantidades de "+errors+" grupo(s) pendientes.");return}
+ if(errors){batchRender();status("Error guardando "+errors+" grupo(s). Siguen pendientes; revisa las cantidades.");return}
  resume();status("Guardadas "+saved+" cartas de tu lote.");
 }
 
@@ -222,25 +222,9 @@ style.textContent=[
 document.head.appendChild(style);
 
 function cardByCode(code){return state.cards.filter(c=>idBase(c.id)===code)}
-// Cache the card lookup across video frames; rebuild when catalog changes.
-let scannerKnownCacheCards=null,scannerKnownCache=null;
-function scannerKnownCards(){
- if(scannerKnownCacheCards!==state.cards){
-   scannerKnownCacheCards=state.cards;
-   scannerKnownCache=new Map(state.cards.map(c=>[c.id,c]));
- }
- return scannerKnownCache;
-}
-// Never guess an exact print when visual alternatives have near-equal scores.
-// The suggested printing remains editable and still requires explicit saving.
-function scannerVisualSuggestion(ranked,code){
- const versions=ranked.filter(x=>idBase(x.id)===code).sort((a,b)=>a.score-b.score);
- if(versions.length<2)return "";
- const [first,second]=versions;
- return first.score<=70&&first.art<=80&&second.score-first.score>=20?first.id:"";
-}
-// Fallback presentation only: never infer that the base print is the scanned print.
-// Ambiguous visual matches must require choosing a printing before saving.
+// El escáner siempre presenta la impresión BASE si existe, incluso cuando
+// la huella visual pertenece a una paralela. La identidad exacta del catálogo
+// y la colección no se modifica; el usuario aún puede cambiar la impresión.
 function scannerBaseCard(id){
   const code=idBase(id);
   return state.cards.find(c=>c.id===code)
@@ -405,42 +389,56 @@ function scanVisual(){
   }
 }
 function handleVisualResults(ranked){
- if(!running||locked)return;
- const known=scannerKnownCards();
- // Keep exact printing IDs and their scores. Group only for temporal stability,
- // because all printings of one logical card share the printed card number.
- visualResults=ranked.filter(item=>known.has(item.id)).slice(0,8);
- const button=$("#scanCandidates");
- if(button){
-  button.hidden=!visualResults.length;button.disabled=!visualResults.length;
-  if(visualResults.length)button.textContent="Ver "+Math.min(5,visualResults.length)+" posibles impresiones";
- }
- const best=visualResults[0];
- const id=best&&best.score<=104&&best.art<=110?idBase(best.id):null;
- recentVisualMatches.push(id);
- if(recentVisualMatches.length>10)recentVisualMatches.shift();
- if(batchEnabled){
-  if(!id){
-   if(++batchBlank>=5&&Date.now()-batchLastAt>=800){batchHeld="";batchBlank=0;recentVisualMatches=[]}
+  if(!running||locked)return;
+  const known=new Map(state.cards.map(c=>[c.id,c]));
+  // Varias paralelas pueden aparecer entre las primeras coincidencias:
+  // mostrar una sola opción por carta y usar siempre su impresión base.
+  const seenBases=new Set();
+  visualResults=ranked.flatMap(match=>{
+    const candidate=known.get(match.id);
+    if(!candidate)return [];
+    const base=known.get(idBase(candidate.id))||scannerBaseCard(candidate.id)||candidate;
+    if(seenBases.has(base.id))return [];
+    seenBases.add(base.id);
+    return [{...match,id:base.id}];
+  }).slice(0,8);
+  const button=$("#scanCandidates");
+  if(button){
+    button.hidden=!visualResults.length;button.disabled=!visualResults.length;
+    if(visualResults.length)button.textContent="Ver "+Math.min(5,visualResults.length)+" posibles cartas";
+  }
+  const best=visualResults[0];
+  // Diez capturas consecutivas forman una ventana deslizante.
+  // Las coincidencias válidas NO necesitan aparecer seguidas.
+  const id=best&&best.score<=104&&best.art<=110?best.id:null;
+  recentVisualMatches.push(id);
+  if(recentVisualMatches.length>10)recentVisualMatches.shift();
+  // El modo de lote nunca congela la cámara ni escribe en la colección.
+  // Se rearma tras retirar la carta durante cinco fotogramas sin lectura.
+  if(batchEnabled){
+   if(!id){
+    if(++batchBlank>=5&&Date.now()-batchLastAt>=800){batchHeld="";batchBlank=0;recentVisualMatches=[]}
+    return;
+   }
+   batchBlank=0;
+   if(id!==batchHeld&&recentVisualMatches.filter(x=>x===id).length>=3&&
+       best.score<=92&&best.art<=101)batchCapture(known.get(id));
    return;
   }
-  batchBlank=0;
-  if(id!==batchHeld&&recentVisualMatches.filter(x=>x===id).length>=3&&
-      best.score<=92&&best.art<=101)batchCapture(scannerBaseCard(id));
-  return;
- }
- if(!id){
-  if(attempts%4===0)status("Buscando ilustración. Alinea los cuatro bordes y evita reflejos.");
-  return;
- }
- const found=recentVisualMatches.filter(value=>value===id).length;
- if(found>=3){
-  const card=known.get(best.id)||scannerBaseCard(id);
-  if(!card)return;
-  shot=snapshot(true);
-  show({card,code:id,variants:cardByCode(id),selectedId:scannerVisualSuggestion(visualResults,id),
-    source:"Coincidencia visual (3 de las últimas 10 capturas)",confidence:"visual"});
- }else status("Posible "+id+" · "+found+"/3 coincidencias en las últimas 10 capturas");
+  if(!id){
+    if(attempts%4===0)status("Buscando ilustración. Alinea los cuatro bordes y evita reflejos.");
+    return;
+  }
+  const found=recentVisualMatches.filter(value=>value===id).length;
+  if(found>=3){
+    const card=known.get(id),code=idBase(id);
+    if(!card)return;
+    shot=snapshot(true);
+    show({card,code,variants:cardByCode(code),
+      source:"Coincidencia visual (3 de las últimas 10 capturas)",confidence:"visual"});
+  }else{
+    status("Posible "+id+" · "+found+"/3 coincidencias en las últimas 10 capturas");
+  }
 }
 async function scanOCR(){
   if(!running||locked||batchEnabled||!recognizerReady||!recognizer||ocrPending)return;
@@ -507,7 +505,7 @@ function showVisualChoices(heading="Posibles cartas según la ilustración"){
     if(!chosen)return;
     releaseFreeze();
     show({card:chosen,code:idBase(chosen.id),variants:cardByCode(idBase(chosen.id)),
-      selectedId:chosen.id,source:"Elegida de los resultados visuales",confidence:"manual"});
+      selectedId:scannerBaseCard(chosen.id)?.id||chosen.id,source:"Elegida de los resultados visuales",confidence:"manual"});
   });
   $("#scanBackVisual").onclick=resume;
   status("Selecciona la impresión que se corresponde con tu carta.");
@@ -612,14 +610,11 @@ function showNameChoices(hit){
 function show(hit){
   if(!running||!hit?.card)return;
   
-  // A visual suggestion is not a confirmed selection. Only preserve a
-  // confidently identified or explicitly chosen print, otherwise force review.
-  const candidates=hit.variants||cardByCode(hit.code||idBase(hit.card.id));
-  const preferredId=hit.selectedId||(hit.source==="Búsqueda manual"?hit.card.id:"");
-  const preferred=candidates.find(c=>c.id===preferredId);
-  const base=scannerBaseCard(hit.code||hit.card.id)||hit.card;
-  hit={...hit,card:preferred||base,
-    selectedId:preferred?.id||(candidates.length===1?candidates[0].id:"")};
+  // La búsqueda manual respeta la versión elegida expresamente;
+  // todos los reconocimientos automáticos y candidatos visuales van a BASE.
+  const isManualSearch=hit.source==="Búsqueda manual";
+  const base=isManualSearch?hit.card:(scannerBaseCard(hit.code||hit.card.id)||hit.card);
+  hit={...hit,card:base,selectedId:isManualSearch?(hit.selectedId||hit.card.id):base.id};
   locked=true;cancelAnimationFrame(scanTimer);
   const p=panel();p?.classList.add("locked");
   const videoStill=document.createElement("img");
