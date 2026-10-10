@@ -15,15 +15,17 @@ await step("Homepage and real catalog rendered",async()=>{
  if(!response||response.status()>=400)throw Error("HTTP "+response?.status());
  await page.locator(".ui-home h1").first().waitFor({timeout:65000});
  await page.locator('.desktop-side [data-tab="catalog"]').first().click();
- await page.locator("#catalogResults article.card").first().waitFor({timeout:65000});
- const count=await page.locator("#catalogResults article.card").count();
+ await page.locator("#catalogResults article.catalog-compact-card").first().waitFor({timeout:65000});
+ const count=await page.locator("#catalogResults article.catalog-compact-card").count();
  if(count<10)throw Error("Too few catalog cards: "+count);
+ const first=await page.locator("#catalogResults article.catalog-compact-card").first().innerHTML();
+ if(!first.includes("catalog-compact-name")||first.includes("cardimg"))throw Error("Compact catalog layout missing");
  return {status:response.status(),cardsOnPage:count,title:await page.title()}
 });
 await step("Search by exact card ID and render price",async()=>{
  await page.locator("#catalogSearch").fill("OP13-043");
  await page.waitForTimeout(900);
- const tiles=page.locator("#catalogResults article.card");
+ const tiles=page.locator("#catalogResults article.catalog-compact-card");
  await tiles.first().waitFor({timeout:15000});
  const body=await tiles.first().innerText();
  if(!/OP13-043|Otama/i.test(body))throw Error("Wrong first card after search: "+body.slice(0,100));
@@ -32,8 +34,8 @@ await step("Search by exact card ID and render price",async()=>{
 await step("Sort catalogue by price",async()=>{
  await page.locator("#catalogSearch").fill("");
  await page.locator("#catSort").selectOption("price");
- await page.locator("#catalogResults article.card").first().waitFor({timeout:30000});
- return {tiles:await page.locator("#catalogResults article.card").count()}
+ await page.locator("#catalogResults article.catalog-compact-card").first().waitFor({timeout:30000});
+ return {tiles:await page.locator("#catalogResults article.catalog-compact-card").count()}
 });
 await step("Open a card detail with versions",async()=>{
  await page.locator("#catalogSearch").fill("OP13-043");
