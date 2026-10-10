@@ -1,7 +1,7 @@
 /* Seguimiento optativo de copias físicas. Nunca altera collection_items ni deck_cards. */
 (function(){
 "use strict";
-const p={userId:null,ready:false,loading:null,enabled:false,allocations:{},revision:0,exists:false,busy:false,error:"",modal:null,selected:null,preview:false,pending:false};
+const p={userId:null,ready:false,loading:null,enabled:false,allocations:{},deckModifiedAt:{},revision:0,exists:false,busy:false,error:"",modal:null,selected:null,preview:false,pending:false};
 const integer=n=>Math.max(0,Math.floor(Number(n)||0));
 const identity=id=>String(id||"");
 const decks=()=>state.decks.filter(d=>!d.draftCompetitive);
@@ -13,7 +13,7 @@ function account(){
  const id=state.user?.id||null;
  if(p.userId===id)return;
  if(p.modal)p.modal.remove();
- Object.assign(p,{userId:id,ready:false,loading:null,enabled:false,allocations:{},revision:0,exists:false,busy:false,error:"",modal:null,selected:null,preview:false,pending:false});
+ Object.assign(p,{userId:id,ready:false,loading:null,enabled:false,allocations:{},deckModifiedAt:{},revision:0,exists:false,busy:false,error:"",modal:null,selected:null,preview:false,pending:false});
 }
 function sanitize(raw){
  const result={};
@@ -24,6 +24,36 @@ function sanitize(raw){
   if(entries.length)result[deckId]=Object.fromEntries(entries);
  }
  return result;
+}
+
+function sanitizeDeckDates(raw){
+ const dates={};
+ if(!raw||typeof raw!=="object"||Array.isArray(raw))return dates;
+ for(const [id,value] of Object.entries(raw)){
+  if(!/^[a-f0-9-]{36}$/i.test(id)||typeof value!=="string")continue;
+  const ms=Date.parse(value);
+  if(Number.isFinite(ms))dates[id]=new Date(ms).toISOString();
+ }
+ return dates;
+}
+function timeValue(value){
+ const parsed=typeof value==="string"?Date.parse(value):NaN;
+ return Number.isFinite(parsed)?parsed:0;
+}
+function modifiedAt(deck){
+ return Math.max(timeValue(deck?.updatedAt||deck?.updated_at),p.ready?timeValue(p.deckModifiedAt[deck?.id]):0);
+}
+function sortDecks(items){
+ account();
+ return [...(items||[])].sort((a,b)=>modifiedAt(b)-modifiedAt(a)||
+  String(a.name||"").localeCompare(String(b.name||""),"es")||
+  String(a.id||"").localeCompare(String(b.id||""),"es"));
+}
+function sameCopies(a,b){
+ const first=a||{},second=b||{};
+ const ids=new Set([...Object.keys(first),...Object.keys(second)]);
+ for(const id of ids)if(integer(first[id])!==integer(second[id]))return false;
+ return true;
 }
 function clone(){return JSON.parse(JSON.stringify(p.allocations));}
 function put(where,deckId,id,delta){
@@ -97,12 +127,13 @@ async function load(force=false){
  p.loading=(async()=>{
   try{
    const res=await client.from("deck_physical_locations")
-    .select("enabled,allocations,revision").eq("user_id",uid).maybeSingle();
+    .select("enabled,allocations,deck_modified_at,revision").eq("user_id",uid).maybeSingle();
    if(res.error)throw res.error;
    if(p.userId!==uid)return false;
    p.exists=!!res.data;
    p.enabled=res.data?.enabled===true;
    p.allocations=sanitize(res.data?.allocations);
+   p.deckModifiedAt=sanitizeDeckDates(res.data?.deck_modified_at);
    p.revision=Number(res.data?.revision)||0;
    p.error="";p.ready=true;
    if(state.tab==="decks")renderShell();
@@ -119,16 +150,25 @@ async function save(raw,enabled=p.enabled){
  if(!p.ready||!p.userId||!state.sb||p.busy)return false;
  const uid=p.userId,revision=p.revision,client=state.sb;
  const allocations=sanitize(activeAlloc(raw));
+ // Only decks whose physical locations actually changed get a new timestamp.
+ // Switching tracking on or off does not modify a deck.
+ const validIds=new Set(decks().map(deck=>deck.id));
+ const deckModifiedAt=Object.fromEntries(Object.entries(p.deckModifiedAt)
+  .filter(([id])=>validIds.has(id)));
+ const now=new Date().toISOString();
+ for(const id of validIds){
+  if(!sameCopies(p.allocations[id],allocations[id]))deckModifiedAt[id]=now;
+ }
  p.busy=true;
  try{
   let res;
   if(p.exists){
    res=await client.from("deck_physical_locations")
-    .update({allocations,enabled,revision:revision+1,updated_at:new Date().toISOString()})
+    .update({allocations,deck_modified_at:deckModifiedAt,enabled,revision:revision+1,updated_at:new Date().toISOString()})
     .eq("user_id",uid).eq("revision",revision).select("revision").maybeSingle();
   }else{
    res=await client.from("deck_physical_locations")
-    .insert({user_id:uid,allocations,enabled,revision:1}).select("revision").maybeSingle();
+    .insert({user_id:uid,allocations,deck_modified_at:deckModifiedAt,enabled,revision:1}).select("revision").maybeSingle();
   }
   if(p.userId!==uid)return false;
   if(res.error){
@@ -140,7 +180,8 @@ async function save(raw,enabled=p.enabled){
    notify("Las ubicaciones han cambiado en otro dispositivo. Revísalas antes de repetir.");
    return false;
   }
-  p.allocations=allocations;p.enabled=enabled;p.exists=true;p.revision=Number(res.data.revision);
+  p.allocations=allocations;p.deckModifiedAt=deckModifiedAt;
+  p.enabled=enabled;p.exists=true;p.revision=Number(res.data.revision);
   p.error="";
   renderShell();
   return true;
@@ -313,7 +354,7 @@ function cardPhoto(id){
 function draw(){
  if(!p.modal)return;
  const modal=p.modal;
- const saved=decks(),selected=getDeck(p.selected);
+ const saved=sortDecks(decks()),selected=getDeck(p.selected);
  if(p.selected&&!selected){p.selected=null;p.preview=false}
  let html='<div class="physical-dialog"><div class="sectionhead"><h2>📍 Copias físicas</h2><button type="button" class="close" data-physical-close aria-label="Cerrar">×</button></div>';
  if(p.error)html+='<div class="notice physical-warning">'+escape(p.error)+'</div>';
@@ -471,6 +512,6 @@ async function clearDeleted(){
  if(Object.keys(p.allocations).length)await save({});
 }
 window.addEventListener('keydown',e=>{if(e.key==='Escape'&&p.modal){close();e.stopPropagation()}});
-window.DeckPhysical={bind,open,load,statusMark,pendingButton,activeTrackingButton,forgetDeleted,clearDeleted,
- _testing:{sanitize,requirements,stats,plan,orderedMovements,pendingCards,discrepancies,usedByPrinting}};
+window.DeckPhysical={bind,open,load,statusMark,pendingButton,activeTrackingButton,sortDecks,forgetDeleted,clearDeleted,
+ _testing:{sanitize,sanitizeDeckDates,requirements,stats,plan,orderedMovements,pendingCards,discrepancies,usedByPrinting}};
 })();
