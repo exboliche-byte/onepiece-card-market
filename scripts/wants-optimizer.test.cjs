@@ -1,8 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {createRequire} from "node:module";
-const require=createRequire(import.meta.url);
-const {prepare,optimize,bestPrices,printed}=require("../wants-optimizer.cjs");
+import fs from "node:fs";
+import vm from "node:vm";
+const module={exports:{}};
+vm.runInNewContext(fs.readFileSync(new URL("../wants-optimizer.js",import.meta.url),"utf8"),{module,window:{}});
+const {prepare,optimize,bestPrices,printed}=module.exports;
 const d=(leader,cards)=>({leaderId:leader,cards,players:32});
 const filler={"OP17-001":4,"OP17-002":4,"OP17-003":4,"OP17-004":4,"OP17-005":4,"OP17-006":4,"OP17-007":4,"OP17-008":4,"OP17-009":4,"OP17-010":4,"OP17-011":4,"OP17-012":4,"OP17-013":2};
 test("all prints and reprints contribute owned copies exactly once",()=>{
