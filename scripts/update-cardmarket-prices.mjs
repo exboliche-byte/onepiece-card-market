@@ -4,6 +4,8 @@ import marketPriceParser from "./parse-market-price.cjs";
 const {parseLimitlessPrice}=marketPriceParser;
 import ambiguityResolver from "./resolve-ambiguous-prices.cjs";
 const {resolveAmbiguousPrintLinks}=ambiguityResolver;
+import retainedPriceSafety from "./exact-price-history.cjs";
+const {trustedPreviousPrice}=retainedPriceSafety;
 const {registerCatalogExpansionNames,registerProductExpansionNames}=expansionAliases;
 
 const PRODUCT_URL = "https://downloads.s3.cardmarket.com/productCatalog/productList/products_singles_18.json";
@@ -1065,12 +1067,19 @@ async function main() {
       guide.sell,
       guide.SELL
     ) : null;
-    const previousEur = !prior.stalePrice && !/Automatic exact-print market summary fallback/i.test(String(prior.source||"")) ? priceNumber(prior.eur) : null;
     const exactLimitless = !!(limitlessPrint?.url || limitlessPrint?.eur != null);
+    // Preserve a historical EUR value only if the previously verified source
+    // is the same exact Cardmarket product or the same exact verified URL.
+    // An ID-only match is not evidence that the previous price belongs here.
+    const samePriorExactUrl = !!limitlessPrint?.url &&
+      String(prior?.url||"").replace("/en/OnePiece/","/es/OnePiece/") === String(limitlessPrint.url).replace("/en/OnePiece/","/es/OnePiece/");
+    const previousEur = trustedPreviousPrice(prior, {
+      productId: exactLimitless ? null : product?.idProduct,
+      exactUrl: exactLimitless ? limitlessPrint?.url : null
+    });
     // Source printing from the catalogue is authoritative; the Limitless
     // expansion title may describe the original card rather than its reprint.
     const exactPrintSet = currentPrintSet;
-    const samePriorExactUrl = !limitlessPrint?.url || String(prior?.url||"").replace("/en/OnePiece/","/es/OnePiece/") === String(limitlessPrint.url).replace("/en/OnePiece/","/es/OnePiece/");
     const eur = exactLimitless
       ? (priceNumber(limitlessPrint?.eur) ?? oracleEur ?? (samePriorExactUrl ? previousEur : null))
       : (cardmarketEur ?? oracleEur ?? previousEur);
