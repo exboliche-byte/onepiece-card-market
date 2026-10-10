@@ -152,13 +152,15 @@ export default {
  async fetch(request){
   const u=new URL(request.url),leader=code(u.searchParams.get("leader")||"all"),card=code(u.searchParams.get("card"));
   const format=u.searchParams.get("format")==="jp"?"jp":"en";
-  const days=clamp(u.searchParams.get("days"),30,365,90),page=clamp(u.searchParams.get("page"),1,60,1);
-  const limit=clamp(u.searchParams.get("limit"),1,200,120);
+  const archive=u.searchParams.get("archive")==="1";
+  const days=archive?36500:clamp(u.searchParams.get("days"),30,365,90),page=clamp(u.searchParams.get("page"),1,60,1);
+  const limit=archive?1000:clamp(u.searchParams.get("limit"),1,200,120);
   if(leader!=="ALL"&&!/^(?:(?:OP|ST|EB|PRB)\d{2}|P)-\d{3}$/.test(leader)||
      card&&!/^(?:(?:OP|ST|EB|PRB)\d{2}|P)-\d{3}$/.test(card))
    return json({error:"Código de líder o carta inválido",results:[]},400);
   try{
    const sets=format==="jp"?["jp-op17","jp-op16","jp-op15"]:
+    archive?[...Array.from({length:17},(_,i)=>"op"+String(17-i).padStart(2,"0")),"eb04","eb03","eb02","eb01"]:
     days<=90?["op17","op16"]:["op17","op16","op15","eb03"];
    const indexResults=await Promise.all(sets.map(async set=>{
     try{return parseIndex(await fetchPublic("/yonko/sets/"+set,INDEX_TTL,indexes),format)}
@@ -166,7 +168,7 @@ export default {
    }));
    const now=Date.now(),cutoff=now-days*86400000;
    const available=unique(indexResults.flat()).filter(e=>!e.date||
-    Date.parse(e.date)>=cutoff&&Date.parse(e.date)<=now+86400000);
+    (archive||Date.parse(e.date)>=cutoff)&&Date.parse(e.date)<=now+86400000);
    if(!available.length)throw Error("No se pudo leer el índice público de Yonko.");
    const selection=pickEvents(available,leader,page===1?0:(page-1)*MAX_EVENTS_PER_SEARCH);
    const {data,errors}=await fetchBatch(selection.chosen);
@@ -184,7 +186,9 @@ export default {
    return json({source:"Yonko / One Piece Top Decks",format,results:results.slice(0,limit),
     availableMatches:results.length,scannedEvents:selection.chosen.length-errors,
     availableEvents:selection.allCount,page,hasMore:page*MAX_EVENTS_PER_SEARCH<selection.allCount,
-    partial:errors>0,errors});
+    partial:errors>0||results.length>limit,errors,archive,
+    hasMore:page*MAX_EVENTS_PER_SEARCH<selection.allCount,
+    indexSets:sets.length});
   }catch(e){return json({error:"No se pudo acceder a las listas públicas de Yonko: "+String(e.message||"Error"),
    source:"Yonko / One Piece Top Decks",results:[]},502)}
  }
