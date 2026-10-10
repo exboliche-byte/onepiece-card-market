@@ -2763,12 +2763,12 @@ function nav(){
     sideGroups.map(([heading,ids])=>'<div class="side-group"><div class="side-group-title">'+heading+'</div>'+
       ids.map(id=>id==="scanner"?scanButton:tabButton(items.find(item=>item[0]===id),true)).join("")+'</div>').join("")+
     '</nav></aside>';
-  // En móvil, Torneos ocupa el acceso directo que antes tenía Expansiones.
+  // Móvil: Catálogo, Colección, Escanear, Torneos y Mazos siempre visibles; menú Más adicional.
   // El menú lateral de ordenador conserva su orden original.
-  const mobileMain=["catalog","collection","scanner","decks"];
+  const mobileMain=["catalog","collection","scanner","tournaments","decks"];
   const mobileMore=items.filter(([id])=>!mobileMain.includes(id));
   const moreActive=mobileMore.some(([id])=>id===state.tab);
-  const moreGroups=[["INICIO",["home"]],["EXPLORAR",["album","meta"]],["JUGAR",["tournaments"]],["MIS CARTAS",["wants"]],["COMUNIDAD",["trades"]],["HERRAMIENTAS",["proxies","scanner"]],["CUENTA",["account"]]];
+  const moreGroups=[["INICIO",["home"]],["EXPLORAR",["album","meta"]],["MIS CARTAS",["wants"]],["COMUNIDAD",["trades"]],["HERRAMIENTAS",["proxies","scanner"]],["CUENTA",["account"]]];
   const moreHtml=moreGroups.map(([heading,ids])=>'<div class="mobile-more-group"><div class="mobile-more-heading">'+heading+'</div>'+
     ids.map(id=>id==="scanner"?'<button type="button" data-scan-open aria-label="Abrir escáner de cartas">'+navIcon("scanner")+'<span>Escáner</span></button>':
       tabButton(items.find(([k])=>k===id),false)).join("")+'</div>').join("");
