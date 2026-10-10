@@ -11,6 +11,7 @@
 <link rel="stylesheet" href="/deck-lab.css">
 <link rel="stylesheet" href="/deck-physical.css">
 <link rel="stylesheet" href="/search-clear.css">
+<link rel="stylesheet" href="/uiux.css">
 <title>MiAlbumOnePiece</title>
 <style>
 :root{--bg:#080a10;--panel:#101521;--panel2:#171d2b;--line:#2b3548;--text:#f7f9fc;--muted:#98a4b8;--accent:#ffd447;--ok:#71e0b3;--danger:#ff7282;--blue:#74b8ff}
@@ -1114,6 +1115,7 @@ function catalogFilterPanel(){
       filterLabel("Categoría",'<select id="catCategory" class="field"><option value="Todos" '+(f.category==="Todos"?"selected":"")+'>Todas</option>'+option(values("category"),f.category)+'</select>')+
       filterLabel("Color",'<select id="catColor" class="field"><option value="Todos" '+(f.color==="Todos"?"selected":"")+'>Todos</option>'+option(values("colors"),f.color)+'</select>')+
       filterLabel("Rareza",'<select id="catRarity" class="field"><option value="Todos" '+(f.rarity==="Todos"?"selected":"")+'>Todas</option>'+option(values("rarity"),f.rarity)+'</select>')+
+    '</div><details class="ui-advanced-filters" open><summary>Más filtros · tipo, atributo, coste, poder y precio</summary><div class="filter-grid">'+
       filterLabel("Tipo",'<select id="catType" class="field"><option value="Todos" '+(f.type==="Todos"?"selected":"")+'>Todos</option>'+option(values("types"),f.type)+'</select>')+
       filterLabel("Atributo",'<select id="catAttribute" class="field"><option value="Todos" '+(f.attribute==="Todos"?"selected":"")+'>Todos</option>'+option(values("attributes"),f.attribute)+'</select>')+
       filterLabel("Colección",'<select id="catOwnership" class="field"><option value="Todas" '+(f.ownership==="Todas"?"selected":"")+'>Todas</option><option value="Tengo" '+(f.ownership==="Tengo"?"selected":"")+' >En mi colección</option><option value="Me faltan" '+(f.ownership==="Me faltan"?"selected":"")+'>Me faltan copias</option></select>')+
@@ -1123,8 +1125,8 @@ function catalogFilterPanel(){
       filterLabel("Poder máximo",'<input id="catMaxPower" class="field" type="number" min="0" inputmode="numeric" placeholder="Sin máximo" value="'+esc(f.maxPower)+'">')+
       filterLabel("Precio mínimo",'<input id="catMinPrice" class="field" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Sin mínimo" value="'+esc(f.minPrice)+'">')+
       filterLabel("Precio máximo",'<input id="catMaxPrice" class="field" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Sin máximo" value="'+esc(f.maxPrice)+'">')+
-    '</div>'+
-    '<div class="filter-actions"><span class="active-filters-note">Los cambios se aplican automáticamente</span><button class="secondary btn" id="closeCatalogFilters" type="button">Cerrar filtros</button></div>'+
+    '</div></details>'+ 
+    '<div class="filter-actions"<span class="active-filters-note">Los cambios se aplican automáticamente</span><button class="secondary btn" id="closeCatalogFilters" type="button">Cerrar filtros</button></div>'+
   '</div>';
 }
 function catalogToolbar(){
@@ -1136,7 +1138,7 @@ function catalogToolbar(){
       filterLabel("Ordenar por",'<select id="catSort" class="field"><option value="id" '+(f.sort==="id"?"selected":"")+'>Número de carta</option><option value="name" '+(f.sort==="name"?"selected":"")+'>Nombre</option><option value="set" '+(f.sort==="set"?"selected":"")+'>Expansión</option><option value="rarity" '+(f.sort==="rarity"?"selected":"")+'>Rareza</option><option value="cost" '+(f.sort==="cost"?"selected":"")+'>Coste</option><option value="power" '+(f.sort==="power"?"selected":"")+'>Poder</option><option value="price" '+(f.sort==="price"?"selected":"")+'>Precio</option><option value="quantity" '+(f.sort==="quantity"?"selected":"")+'>Cantidad que tengo</option></select>')+
       filterLabel("Orden",'<select id="catDir" class="field"><option value="asc" '+(f.dir==="asc"?"selected":"")+'>Ascendente</option><option value="desc" '+(f.dir==="desc"?"selected":"")+'>Descendente</option></select>')+
     '</div>'+
-    '<button class="secondary btn filter-toggle" id="catalogFilterToggle" type="button" aria-expanded="'+(f.filtersOpen?"true":"false")+'">🔽 FILTRO'+(n?' ('+n+')':'')+'</button>'+
+    '<button class="secondary btn filter-toggle" id="catalogFilterToggle" type="button" aria-expanded="'+(f.filtersOpen?"true":"false")+'">Filtros'+(n?' ('+n+')':'')+'</button>'+
   '</div>'+catalogFilterPanel()+filterChipBar("catalog")+
   '<div class="row" style="margin-bottom:10px"><span class="hint">Versiones agrupadas · '+state.cards.length.toLocaleString("es-ES")+' cartas en el catálogo.</span></div>';
 }
@@ -1187,12 +1189,13 @@ function collectionFilterPanel(){
       filterLabel("Categoría",'<select id="colCategory" class="field"><option value="Todos" '+(f.category==="Todos"?"selected":"")+'>Todas</option>'+option(values("category"),f.category)+'</select>')+
       filterLabel("Color",'<select id="colColor" class="field"><option value="Todos" '+(f.color==="Todos"?"selected":"")+'>Todos</option>'+option(values("colors"),f.color)+'</select>')+
       filterLabel("Rareza",'<select id="colRarity" class="field"><option value="Todos" '+(f.rarity==="Todos"?"selected":"")+'>Todas</option>'+option(values("rarity"),f.rarity)+'</select>')+
+    '</div><details class="ui-advanced-filters" open><summary>Más filtros · tipo, atributo, cantidad y playset</summary><div class="filter-grid">'+
       filterLabel("Tipo",'<select id="colType" class="field"><option value="Todos" '+(f.type==="Todos"?"selected":"")+'>Todos</option>'+option(values("types"),f.type)+'</select>')+
       filterLabel("Atributo",'<select id="colAttribute" class="field"><option value="Todos" '+(f.attribute==="Todos"?"selected":"")+'>Todos</option>'+option(values("attributes"),f.attribute)+'</select>')+
       filterLabel("Cantidad",'<select id="colQty" class="field">'+option(["Todas","1","2","3","4+"],f.quantity)+'</select>')+
       filterLabel("Playset",'<select id="colPlayset" class="field">'+option(["Todas","Completo","Incompleto"],f.playset)+'</select>')+
-    '</div>'+
-    '<div class="filter-actions"><span class="active-filters-note">'+collectionActiveFilterCount().toLocaleString("es-ES")+' filtro(s) activo(s)</span><button class="secondary btn" id="closeCollectionFilters" type="button">Cerrar filtros</button></div>'+
+    '</div></details>'+ 
+    '<div class="filter-actions"<span class="active-filters-note">'+collectionActiveFilterCount().toLocaleString("es-ES")+' filtro(s) activo(s)</span><button class="secondary btn" id="closeCollectionFilters" type="button">Cerrar filtros</button></div>'+
   '</div>';
 }
 function collectionToolbar(){
@@ -1203,7 +1206,7 @@ function collectionToolbar(){
       filterLabel("Ordenar por",'<select id="colSort" class="field"><option value="id" '+(f.sort==="id"?"selected":"")+'>Número de carta</option><option value="name" '+(f.sort==="name"?"selected":"")+'>Nombre</option><option value="rarity" '+(f.sort==="rarity"?"selected":"")+'>Rareza</option><option value="quantity" '+(f.sort==="quantity"?"selected":"")+'>Cantidad que tengo</option><option value="price" '+(f.sort==="price"?"selected":"")+'>Precio</option><option value="power" '+(f.sort==="power"?"selected":"")+'>Poder</option><option value="cost" '+(f.sort==="cost"?"selected":"")+'>Coste</option></select>')+
       filterLabel("Orden",'<select id="colDir" class="field"><option value="asc" '+(f.dir==="asc"?"selected":"")+'>Ascendente</option><option value="desc" '+(f.dir==="desc"?"selected":"")+'>Descendente</option></select>')+
     '</div>'+
-    '<button class="secondary btn filter-toggle" id="collectionFilterToggle" type="button" aria-expanded="'+(f.filtersOpen?"true":"false")+'">🔽 FILTRO'+(n?' ('+n+')':'')+'</button>'+
+    '<button class="secondary btn filter-toggle" id="collectionFilterToggle" type="button" aria-expanded="'+(f.filtersOpen?"true":"false")+'">Filtros'+(n?' ('+n+')':'')+'</button>'+
   '</div>'+collectionFilterPanel()+filterChipBar("collection");
 }
 
@@ -2581,14 +2584,14 @@ function accountView(){
   const recovery=state.authRecovery?'<div class="section"><h2>Crear nueva contraseña</h2><p class="muted">Escribe la nueva contraseña para terminar la recuperación.</p><input id="newPassword" class="field" type="password" placeholder="Nueva contraseña (mín. 6 caracteres)" autocomplete="new-password"><input id="newPassword2" class="field" type="password" style="margin-top:8px" placeholder="Confirmar nueva contraseña" autocomplete="new-password"><button class="primary btn" id="saveRecoveredPassword" type="button" style="margin-top:8px">Guardar nueva contraseña</button></div>':"";
   const header='<div class="wrap"><div class="hero"><h1>Cuenta</h1></div>'+status+recovery;
   if(!state.user){
-    const signIn='<input id="authLogin" class="field" type="text" placeholder="Usuario o email" autocomplete="username" autocapitalize="off" spellcheck="false">'+
-      '<input id="authPassword" class="field" type="password" style="margin-top:8px" placeholder="Contraseña" autocomplete="current-password">'+
+    const signIn='<label class="ui-auth-label" for="authLogin">Usuario o correo electrónico</label><input id="authLogin" class="field" type="text" placeholder="Usuario o email" autocomplete="username" autocapitalize="off" spellcheck="false">'+
+      '<label class="ui-auth-label" for="authPassword">Contraseña</label><input id="authPassword" class="field" type="password" style="margin-top:8px" placeholder="Contraseña" autocomplete="current-password">'+
       '<button class="linkbtn" id="forgotPassword" type="button" style="margin-top:10px">He olvidado la contraseña</button>'+
       '<div class="inline-actions" style="margin-top:10px"><button class="primary btn" id="login" type="button" '+(state.authBusy?'disabled':'')+'>Entrar</button></div>';
-    const signup='<input id="registerUser" class="field" type="text" placeholder="Usuario" autocomplete="username" autocapitalize="off" spellcheck="false">'+
-      '<input id="registerEmail" class="field" type="email" style="margin-top:8px" placeholder="Email de recuperación" autocomplete="email">'+
-      '<input id="registerPassword" class="field" type="password" style="margin-top:8px" placeholder="Contraseña (mín. 6 caracteres)" autocomplete="new-password">'+
-      '<input id="registerPassword2" class="field" type="password" style="margin-top:8px" placeholder="Confirmar contraseña" autocomplete="new-password">'+
+    const signup='<label class="ui-auth-label" for="registerUser">Nombre de usuario</label><input id="registerUser" class="field" type="text" placeholder="Usuario" autocomplete="username" autocapitalize="off" spellcheck="false">'+
+      '<label class="ui-auth-label" for="registerEmail">Email de recuperación</label><input id="registerEmail" class="field" type="email" style="margin-top:8px" placeholder="Email de recuperación" autocomplete="email">'+
+      '<label class="ui-auth-label" for="registerPassword">Contraseña</label><input id="registerPassword" class="field" type="password" style="margin-top:8px" placeholder="Contraseña (mín. 6 caracteres)" autocomplete="new-password">'+
+      '<label class="ui-auth-label" for="registerPassword2">Repite la contraseña</label><input id="registerPassword2" class="field" type="password" style="margin-top:8px" placeholder="Confirmar contraseña" autocomplete="new-password">'+
       '<button class="secondary btn" id="register" type="button" style="margin-top:10px" '+(state.authBusy?'disabled':'')+'>Crear cuenta</button>'+
       '<p class="muted">El email se utilizará para recuperar la contraseña.</p>';
     return header+accountPanel("login","Iniciar sesión",signIn,"",true)+
@@ -2801,6 +2804,7 @@ function renderShell(){
   document.body.dataset.currentTab=state.tab;
   $("#app").innerHTML='<div class="app'+(sidebarCollapsed?' sidebar-collapsed':'')+'"><header class="top"><button type="button" class="brand brand-home" data-tab="home" aria-label="Ir a Inicio"><b>ONE PIECE</b><span>MiAlbumOnePiece</span></button>'+account+'</header>'+main+nav()+(state.detail?detailView(state.detail):"")+(state.auth?authModal():"")+(state.newDeck?newDeckModal():"")+'</div>';
   bindShell();
+  document.querySelectorAll("input[placeholder]:not([aria-label]),textarea[placeholder]:not([aria-label])").forEach(field=>{field.setAttribute("aria-label",field.placeholder.replace(/^🔎\s*/,""))});
   if(keepFocus){
     const field=document.getElementById(keepFocus.id);
     if(field){
