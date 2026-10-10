@@ -596,8 +596,8 @@ function loadLocal(){
   try{state.wishlist=JSON.parse(localStorage.getItem("mialbumonepiece_wishlist")||"{}")}catch{}
   try{state.importedCards=JSON.parse(localStorage.getItem("mialbumonepiece_imported_cards")||"{}")}catch{state.importedCards={}}
 }
-function notify(msg){state.toast=msg;renderToast();setTimeout(()=>{if(state.toast===msg){state.toast="";renderToast()}},1800)}
-function renderToast(){const old=$(".toast");if(old)old.remove();if(state.toast){const d=document.createElement("div");d.className="toast";d.textContent=state.toast;document.body.appendChild(d)}}
+function notify(msg,kind=""){const raw=String(msg||"");const warning=kind==="error"||(!kind&&/^(?:error|no se|fall[oó]|sin conexi[oó]n|no tienes permiso)/i.test(raw));state.toast={text:raw,warning};renderToast();const saved=state.toast;setTimeout(()=>{if(state.toast===saved){state.toast=null;renderToast()}},warning?5500:3600)}
+function renderToast(){const old=$(".toast");if(old)old.remove();if(state.toast){const d=document.createElement("div");d.className="toast";d.setAttribute("role",state.toast.warning?"alert":"status");d.setAttribute("aria-live",state.toast.warning?"assertive":"polite");d.textContent=state.toast.text;document.body.appendChild(d)}}
 function collectionPriceOf(c){return priceOf(c)}
 async function ensureCollectionPrices({refresh=false}={}){
   const ownedIds=state.cards.filter(c=>qty(c.id)>0).map(c=>c.id);
@@ -1057,8 +1057,8 @@ function groupedTile(g){
     '<div class="cardbody"><div class="name">'+esc(c.name)+'</div><div class="small">'+esc(c.id)+'</div><div class="small">'+esc(c.category||"")+' · '+g.versions.length+' versión(es)</div>'+
     '<div class="chips">'+g.sets.slice(0,5).map(x=>'<span class="chip">'+esc(x)+'</span>').join("")+(g.sets.length>5?'<span class="chip">+'+(g.sets.length-5)+'</span>':"")+'</div>'+
     '<div class="row"><span>'+priceLabel+'</span><span class="small">'+q+' copias</span></div>'+
-    (state.user&&state.collectionReady?'<div class="quick"><button class="secondary" data-qty="'+esc(c.id)+'" data-d="-1">−</button><div class="qty">'+q+'</div><button class="primary" data-qty="'+esc(c.id)+'" data-d="1">+</button></div>':'')+
-    '<div class="card-action-row"><button type="button" class="secondary btn card-action-main" data-group="'+esc(c.id)+'">Ver versiones</button>'+
+    (state.user&&state.collectionReady?'<div class="grouped-quantity" aria-label="Cantidad total y cantidad de la impresión mostrada">Total: <b>'+q+'</b> · Esta versión: <b>'+qty(c.id)+'</b></div>':'')+
+    '<div class="card-action-row"><button type="button" class="secondary btn card-action-main" data-group="'+esc(c.id)+'">Gestionar versiones</button>'+
     (state.user&&state.collectionReady?'<button type="button" class="secondary btn card-action-want" aria-label="Añadir a mis wants" title="Añadir a mis wants" data-want="'+esc(c.id)+'" data-want-count="1">💛</button>':"")+
     '</div></div></article>';
 }
@@ -2549,7 +2549,8 @@ function detailView(c){
       '<div class="chips">'+(c.colors||[]).map(x=>'<span class="chip">'+esc(x)+'</span>').join("")+'</div>'+
       '<p style="white-space:pre-wrap">'+esc(c.effect||"Sin efecto disponible")+'</p>'+
       '<div class="small">Coste '+esc(c.cost??"—")+' · Poder '+esc(c.power??"—")+' · Counter '+esc(c.counter??"—")+'</div>'+
-      '<div class="row" style="margin-top:10px"><b>Mi colección: '+q+'</b><b>'+(priceOf(c)!==null?money(priceOf(c)):"Precio —")+'</b></div>'+
+      '<div class="row" style="margin-top:10px"><b>Esta impresión: '+q+'</b><b>'+(priceOf(c)!==null?money(priceOf(c)):"Precio —")+'</b></div>'+
+      (state.user&&state.collectionReady?'<div class="print-quantity-panel"><span class="small">Modificar exclusivamente '+esc(c.id)+' · Total entre versiones: '+logicalQty(c)+'</span><div class="quick"><button class="secondary" type="button" data-qty="'+esc(c.id)+'" data-d="-1" aria-label="Quitar una copia de '+esc(c.id)+'">−</button><div class="qty" aria-label="'+q+' copias de esta versión">'+q+'</div><button class="primary" type="button" data-qty="'+esc(c.id)+'" data-d="1" aria-label="Añadir una copia de '+esc(c.id)+'">+</button></div></div>':"")+
       '<div class="small" style="margin-top:5px">Precio de salida (referencia): '+(priceMeta(c)?.launchPrice!==null&&priceMeta(c)?.launchPrice!==undefined?money(priceMeta(c).launchPrice):"—")+'</div>'+
       (deckMode?(c.category==="Leader"?'<div class="quick"><button class="secondary" data-removeleader="'+esc(c.id)+'">−</button><div class="qty">'+(state.decks.find(d=>d.id===state.deckId)?.leader===c.id?1:0)+'</div><button class="primary" data-setleader="'+esc(c.id)+'">+</button></div>':'<div class="quick"><button class="secondary" data-deckqty="'+esc(c.id)+'" data-d="-1">−</button><div class="qty">'+Number(state.decks.find(d=>d.id===state.deckId)?.cards?.[c.id]||0)+'</div><button class="primary" data-adddeck="'+esc(c.id)+'">+</button></div>'):(state.user&&state.collectionReady?'<div class="quick"><button class="secondary" data-qty="'+esc(c.id)+'" data-d="-1">−</button><div class="qty">'+q+'</div><button class="primary" data-qty="'+esc(c.id)+'" data-d="1">+</button></div>':'<p class="small">Inicia sesión para gestionar esta carta</p>'))+
       (state.user?'<button type="button" class="secondary btn" style="width:100%;margin-top:8px" aria-label="Añadir a mis wants" title="Añadir a mis wants" data-want="'+esc(c.id)+'" data-want-count="1">💛</button>':"")+
@@ -2706,6 +2707,7 @@ function renderProxyPicked(){
 
 function navIcon(id){
   const icons={
+    home:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 11 9-8 9 8M5 10v11h14V10M9 21v-7h6v7"/></svg>',
     wants:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.7 5.2a5.3 5.3 0 0 0-7.5 0L12 6.4l-1.2-1.2a5.3 5.3 0 0 0-7.5 7.5L12 21l8.7-8.3a5.3 5.3 0 0 0 0-7.5z"/></svg>',
     catalog:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5h16v13H4z"/><path d="M8 5.5v13M16 5.5v13M4 10h16M4 14h16"/></svg>',
     collection:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7.5h14v12H5z"/><path d="M7 4.5h10M8.5 2.5h7"/><path d="M9 12h6M9 15.5h4"/></svg>',
@@ -2736,10 +2738,11 @@ document.addEventListener("keydown",e=>{
   if(menu&&!menu.hidden){menu.hidden=true;toggle?.setAttribute("aria-expanded","false");toggle?.focus()}
 });
 function nav(){
-  const items=[["catalog","Catálogo"],["collection","Colección"],["wants","Wants"],["album","Expansiones"],["decks","Mazos"],["tournaments","Torneos"],["meta","Meta"],["trades","Intercambios"],["proxies","Proxies"],["account","Cuenta"]];
+  const items=[["home","Inicio"],["catalog","Catálogo"],["collection","Colección"],["wants","Wants"],["album","Expansiones"],["decks","Mazos"],["tournaments","Torneos"],["meta","Meta"],["trades","Intercambios"],["proxies","Proxies"],["account","Cuenta"]];
   const tabButton=([id,label],side)=>'<button type="button" class="'+((state.tab===id||(id==="decks"&&state.tab==="deck-completion"))?"active":"")+'" data-tab="'+id+'" aria-label="'+label+'"'+((state.tab===id||(id==="decks"&&state.tab==="deck-completion"))?' aria-current="page"':'')+'>'+navIcon(id)+'<span'+(side?' class="side-label"':'')+'>'+label+'</span></button>';
   const scanButton='<button type="button" data-scan-open aria-label="Abrir escáner de cartas">'+navIcon("scanner")+'<span class="side-label">Escáner</span></button>';
   const sideGroups=[
+    ["INICIO",["home"]],
     ["EXPLORAR",["catalog","album","meta"]],
     ["MIS CARTAS",["collection","wants"]],
     ["JUGAR",["decks","tournaments"]],
@@ -2753,14 +2756,15 @@ function nav(){
     '</nav></aside>';
   // En móvil, Torneos ocupa el acceso directo que antes tenía Expansiones.
   // El menú lateral de ordenador conserva su orden original.
-  const mobileMain=["catalog","collection","tournaments","decks"];
+  const mobileMain=["catalog","collection","scanner","decks"];
   const mobileMore=items.filter(([id])=>!mobileMain.includes(id));
   const moreActive=mobileMore.some(([id])=>id===state.tab);
-  const moreGroups=[["EXPLORAR",["album","meta"]],["MIS CARTAS",["wants"]],["COMUNIDAD",["trades"]],["HERRAMIENTAS",["proxies","scanner"]],["CUENTA",["account"]]];
+  const moreGroups=[["INICIO",["home"]],["EXPLORAR",["album","meta"]],["JUGAR",["tournaments"]],["MIS CARTAS",["wants"]],["COMUNIDAD",["trades"]],["HERRAMIENTAS",["proxies","scanner"]],["CUENTA",["account"]]];
   const moreHtml=moreGroups.map(([heading,ids])=>'<div class="mobile-more-group"><div class="mobile-more-heading">'+heading+'</div>'+
     ids.map(id=>id==="scanner"?'<button type="button" data-scan-open aria-label="Abrir escáner de cartas">'+navIcon("scanner")+'<span>Escáner</span></button>':
       tabButton(items.find(([k])=>k===id),false)).join("")+'</div>').join("");
-  const mobile='<nav class="nav mobile-nav" aria-label="Secciones principales">'+items.filter(([id])=>mobileMain.includes(id)).sort((a,b)=>mobileMain.indexOf(a[0])-mobileMain.indexOf(b[0])).map(item=>tabButton(item,false)).join("")+'<button type="button" id="mobileMoreToggle" class="'+(moreActive?"active":"")+'" aria-label="Más opciones" aria-expanded="false" aria-controls="mobileMorePanel">'+navIcon("more")+'<span>Más</span></button><div id="mobileMorePanel" class="mobile-more" hidden>'+moreHtml+'</div></nav>';
+  const mobileScanButton='<button type="button" class="nav-scan" data-scan-open aria-label="Escanear una carta">'+navIcon("scanner")+'<span>Escanear</span></button>';
+  const mobile='<nav class="nav mobile-nav" aria-label="Secciones principales">'+mobileMain.map(id=>id==="scanner"?mobileScanButton:tabButton(items.find(([key])=>key===id),false)).join("")+'<button type="button" id="mobileMoreToggle" class="'+(moreActive?"active":"")+'" aria-label="Más opciones" aria-expanded="false" aria-controls="mobileMorePanel">'+navIcon("more")+'<span>Más</span></button><div id="mobileMorePanel" class="mobile-more" hidden>'+moreHtml+'</div></nav>';
   return side+mobile;
 }
 function deckCompletionView(){
@@ -2786,7 +2790,7 @@ function renderShell(){
   let main=state.shared?sharedDeckView():(state.tab==="home"?homeView():state.tab==="catalog"?catalogView():state.tab==="collection"?collectionView():state.tab==="wants"?wantsView():state.tab==="album"?albumView():state.tab==="decks"?decksView():state.tab==="deck-completion"?deckCompletionView():state.tab==="tournaments"?(window.tournamentsView?.()||""):state.tab==="meta"?(window.metaView?.()||""):state.tab==="trades"?(window.OnePieceTools?.tradePage?.()||""):state.tab==="proxies"?proxyView():accountView());
   const account='<button class="account" id="accountBtn">'+(state.user?esc(accountDisplayName()||"Cuenta"):"Cuenta")+'</button>';
   document.body.dataset.currentTab=state.tab;
-  $("#app").innerHTML='<div class="app'+(sidebarCollapsed?' sidebar-collapsed':'')+'"><header class="top"><div class="brand"><b>ONE PIECE</b><span>MiAlbumOnePiece</span></div>'+account+'</header>'+main+nav()+(state.detail?detailView(state.detail):"")+(state.auth?authModal():"")+(state.newDeck?newDeckModal():"")+'</div>';
+  $("#app").innerHTML='<div class="app'+(sidebarCollapsed?' sidebar-collapsed':'')+'"><header class="top"><button type="button" class="brand brand-home" data-tab="home" aria-label="Ir a Inicio"><b>ONE PIECE</b><span>MiAlbumOnePiece</span></button>'+account+'</header>'+main+nav()+(state.detail?detailView(state.detail):"")+(state.auth?authModal():"")+(state.newDeck?newDeckModal():"")+'</div>';
   bindShell();
   if(keepFocus){
     const field=document.getElementById(keepFocus.id);
