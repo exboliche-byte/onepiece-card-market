@@ -56,6 +56,8 @@ async function load(){
 }
 async function save(input){
  const data={schema:1,savedAt:Date.now(),
+  progress:input?.progress&&typeof input.progress==="object"?input.progress:{},
+  complete:input?.complete===true,
   notes:Array.isArray(input?.notes)?input.notes.map(String).slice(0,12):[],
   decks:(Array.isArray(input?.decks)?input.decks:[]).map(compact).filter(Boolean)};
  if(!data.decks.length)return null;

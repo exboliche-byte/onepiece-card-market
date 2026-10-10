@@ -10,7 +10,7 @@ function setup(){
  return {api:scope.module.exports,store};
 }
 test("reuses historical deck results after a new page load, without any user collection data",async()=>{
- const a=setup(),cards={"OP17-001":4},input={decks:[{leaderId:"OP17-099",cards,id:"deck1",name:"Public",source:"Limitless",player:"Private",record:{wins:12},sourceUrl:"https://example.com"}],notes:["Limitless: 2 páginas"]};
+ const a=setup(),cards={"OP17-001":4},input={decks:[{leaderId:"OP17-099",cards,id:"deck1",name:"Public",source:"Limitless",player:"Private",record:{wins:12},sourceUrl:"https://example.com"}],notes:["Limitless: 2 páginas"],progress:{Limitless:{nextPage:3,done:false}},complete:false};
  const saved=await a.api.save(input);
  assert.ok(saved?.savedAt>0);
  assert.equal(saved.decks[0].player,undefined);
@@ -20,6 +20,8 @@ test("reuses historical deck results after a new page load, without any user col
  assert.equal(loaded.decks[0].leaderId,"OP17-099");
  assert.equal(loaded.decks[0].cards["OP17-001"],4);
  assert.equal(loaded.notes[0],"Limitless: 2 páginas");
+ assert.equal(loaded.progress.Limitless.nextPage,3);
+ assert.equal(loaded.complete,false);
 });
 test("an unavailable cache never prevents the UI from calculating new results",async()=>{
  const a=setup();
