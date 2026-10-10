@@ -85,7 +85,7 @@ function optimize(prepared,budget){
  const cap=Number.isFinite(input)?Math.min(10000,Math.max(0,input)):0;
  const rows=prepared?.decks||[],prices=prepared?.prices||new Map();
  const candidates=rows.filter(r=>!r.missingPrice),selected=new Map(),baseline=rows.filter(r=>covered(r,selected));
- const currentlyUnlocked=new Set(baseline),initialLeaders=new Set(baseline.map(r=>r.leader));
+ const currentlyUnlocked=new Set(baseline);
  let spent=0;
  // Recompute marginal cost after each purchase. Buying a copy once unlocks
  // every alternative deck that can reuse it, without buying it twice.
@@ -106,7 +106,7 @@ function optimize(prepared,budget){
   for(const x of shortlist){
    const next=merged(selected,x.added),won=rows.filter(r=>!currentlyUnlocked.has(r)&&covered(r,next));
    if(!won.length)continue;
-   const newLeaders=new Set(won.filter(r=>!initialLeaders.has(r.leader)).map(r=>r.leader)).size;
+   const newLeaders=new Set(won.filter(r=>![...currentlyUnlocked].some(v=>v.leader===r.leader)).map(r=>r.leader)).size;
    const score=(won.length+newLeaders*1.4)/(x.cost+0.5);
    if(!choice||score>choice.score+0.000001||(Math.abs(score-choice.score)<0.000001&&x.cost<choice.cost))
     choice={...x,score};

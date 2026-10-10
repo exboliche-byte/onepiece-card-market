@@ -38,3 +38,23 @@ test("unknown prices cannot be treated as zero or selected to fit the budget",()
  const r=optimize(pre,500);
  assert.equal(r.spent,0);assert.equal(r.unlocked,0);assert.equal(r.purchases.length,0);
 });
+
+test("Wants overview contains a budget optimizer without changing existing account lists",async()=>{
+ const scope={
+  window:{},document:{createElement:()=>({}),head:{appendChild(){}},querySelector:()=>null,querySelectorAll:()=>[]},
+  state:{tab:"catalog",user:{id:"owner"},collectionReady:true,owned:{},cards:[],sb:{
+   from:()=>({select(){return this},eq(){return this},order(){return this},async limit(){return {data:[],error:null}}})
+  }},
+  money:n=>n===null?"—":String(n)+" €",esc:String,norm:String,
+  renderShell(){},notify(){},console,crypto:globalThis.crypto
+ };
+ vm.runInNewContext(fs.readFileSync(new URL("../wants-optimizer.js",import.meta.url),"utf8"),scope);
+ vm.runInNewContext(fs.readFileSync(new URL("../wants.js",import.meta.url),"utf8"),scope);
+ await scope.window.MyWants.load();
+ const html=scope.window.MyWants.view();
+ assert.match(html,/Compra inteligente/);
+ assert.match(html,/woptBudget/);
+ assert.match(html,/woptAnalyze/);
+ assert.match(html,/Elige una lista/);
+ assert.doesNotMatch(html,/Datos públicos de otra cuenta/);
+});
