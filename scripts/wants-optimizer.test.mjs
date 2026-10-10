@@ -94,3 +94,48 @@ test("Wants lists show leader image, complete deck composition and a load-more c
  assert.match(markup,/1 restantes/);
  assert.doesNotMatch(markup,/Other event/);
 });
+
+test("one recommendation per leader even if multiple legal builds become playable",()=>{
+ const other={...filler,"OP17-013":1,"OP17-014":1};
+ const prices=bestPrices([...Object.keys(filler),"OP17-014","OP17-098","OP17-099"].map(id=>({id,name:id})),()=>1,()=>false,()=>null);
+ const owned={...Object.fromEntries(Object.keys(filler).map(id=>[id,filler[id]])),"OP17-013":1};
+ const prepared=prepare([d("OP17-099",filler),d("OP17-099",other),d("OP17-098",filler)],owned,prices,()=>true);
+ const r=optimize(prepared,4);
+ assert.equal(r.unlocked,2,"each distinct leader is counted just once");
+ assert.equal(new Set(r.results.map(x=>x.leaderId)).size,r.results.length);
+ assert.equal(r.leaders,2);
+ assert.equal(r.purchases.reduce((s,x)=>s+x.qty,0),3);
+});
+test("existing built leaders are excluded before optimizer buys anything",()=>{
+ const prices=bestPrices([...Object.keys(filler),"OP17-099","OP17-098"].map(id=>({id,name:id})),()=>1,()=>false,()=>null);
+ const owned=Object.fromEntries(Object.entries(filler).map(([id,q])=>[id,q]));
+ const alreadyMounted=prepare([d("OP17-099",filler),d("OP17-098",filler)],owned,prices,()=>true,new Set(["OP17-099"]));
+ const r=optimize(alreadyMounted,10);
+ assert.equal(alreadyMounted.stats.alreadyBuilt,1);
+ assert.equal(alreadyMounted.stats.legal,1);
+ assert.equal(r.baseline,0);
+ assert.equal(r.results.length,1);
+ assert.equal(r.results[0].leaderId,"OP17-098");
+ assert.equal(r.purchases.length,1);
+});
+test("existing complete saved decks and physically-mounted saved decks are recognized by leader",()=>{
+ const source=fs.readFileSync(new URL("../wants.js",import.meta.url),"utf8");
+ const from=source.indexOf("function mountedWantsLeaderCodes(){"),to=source.indexOf("function refreshOptimizer(){",from);
+ assert.ok(from>=0&&to>from);
+ const complete={leader:"OP17-099",cards:filler,id:"deck1"};
+ const incomplete={leader:"OP17-098",cards:{"OP17-001":4},id:"deck2"};
+ const physicallyUnmounted={leader:"OP17-097",cards:filler,id:"deck3"};
+ const state={decks:[complete,incomplete,physicallyUnmounted,{...complete,draftCompetitive:true}]};
+ const window={WantsDeckOptimizer:{printed},DeckPhysical:{isMounted:d=>d.id==="deck3"?false:null}};
+ const collect=vm.runInNewContext(source.slice(from,to)+";mountedWantsLeaderCodes",{state,window,Set,Object,Number});
+ assert.deepEqual(Array.from(collect()).sort(),["OP17-099"]);
+ window.DeckPhysical.isMounted=d=>d.id==="deck3"?true:null;
+ assert.deepEqual(Array.from(collect()).sort(),["OP17-097","OP17-099"]);
+});
+test("Wants purchase card picture uses exact priced variant, and click opens its detail",()=>{
+ const source=fs.readFileSync(new URL("../wants.js",import.meta.url),"utf8");
+ assert.match(source,/card\(p\.id\)\?'<button class="wopt-purchase-photo"/);
+ assert.match(source,/cardImg\(card\(p\.id\),"wopt-purchase-art"\)/);
+ assert.match(source,/\.wopt-purchase-photo\[data-detail\]/);
+ assert.match(source,/openCardDetail\(b\.dataset\.detail\)/);
+});

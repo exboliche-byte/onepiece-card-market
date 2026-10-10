@@ -325,3 +325,12 @@ test("sorting a saved deck by cost keeps characters before events before stages 
  state.deckCompositionDir="desc";
  assert.deepEqual(Array.from(groups(deck),g=>g.code),["C5","C2","E3","S0"]);
 });
+
+test("public mounted-state helper only marks genuinely assembled decks when tracking is active",async()=>{
+ const {api,saboDeck,koalaDeck}=setup(7);
+ assert.equal(api.isMounted(saboDeck),null,"unknown before tracker load");
+ assert.equal(await api.load(),true);
+ assert.equal(api.isMounted(saboDeck),true);
+ assert.equal(api.isMounted(koalaDeck),false);
+ assert.equal(api.isMounted({...saboDeck,draftCompetitive:true}),false);
+});
