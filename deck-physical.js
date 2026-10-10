@@ -100,6 +100,12 @@ function stats(deck,raw=p.allocations){
  const status=required===0?"vacío":assigned===required&&!extra?"montado":assigned===0?"desmontado":"incompleto";
  return {required,assigned,extra,status};
 }
+// null means physical tracking is unavailable; callers may use saved decklists then.
+function isMounted(deck){
+ account();
+ if(!p.ready||!p.enabled)return null;
+ return !deck?.draftCompetitive&&stats(deck).status==="montado";
+}
 function statusMark(deck,clickable=true){
  account();
  if(!p.ready||!p.enabled||!state.collectionReady||!deck||deck.draftCompetitive)return "";
@@ -549,6 +555,6 @@ async function clearDeleted(){
  if(Object.keys(p.allocations).length)await save({});
 }
 window.addEventListener('keydown',e=>{if(e.key==='Escape'&&p.modal){close();e.stopPropagation()}});
-window.DeckPhysical={bind,open,load,statusMark,pendingButton,activeTrackingButton,sortDecks,forgetDeleted,clearDeleted,
+window.DeckPhysical={bind,open,load,statusMark,isMounted,pendingButton,activeTrackingButton,sortDecks,forgetDeleted,clearDeleted,
  _testing:{sanitize,sanitizeDeckDates,requirements,stats,surplusRecipients,plan,orderedMovements,pendingCards,discrepancies,usedByPrinting}};
 })();

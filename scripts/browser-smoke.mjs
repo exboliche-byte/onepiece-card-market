@@ -20,7 +20,7 @@ await step("Homepage and real catalog rendered",async()=>{
  if(count<10)throw Error("Too few catalog cards: "+count);
  const first=await page.locator("#catalogResults article.catalog-compact-card").first().innerHTML();
  if(!first.includes("catalog-compact-name")||!first.includes("catalog-compact-art"))throw Error("Catalog tile content missing");
- if(await page.locator("#catalogResults article.catalog-compact-card img.catalog-compact-art").count()<10)throw Error("Catalog images did not render");
+ if(await page.locator("#catalogResults article.catalog-compact-card img.catalog-compact-art").count()!==count)throw Error("Every catalog card must have exactly one image");
  return {status:response.status(),cardsOnPage:count,title:await page.title()}
 });
 await step("Search by exact card ID and render price",async()=>{

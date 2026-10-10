@@ -31,12 +31,14 @@ function bestPrices(cards,priceOf,isJapanese,cardmarketUrl){
  }
  return result;
 }
-function prepare(decks,owned,prices,isLegal){
+function prepare(decks,owned,prices,isLegal,alreadyBuilt=[]){
  const have=ownedTotals(owned),rows=[],seen=new Set();
- let illegal=0,unpriced=0,duplicates=0;
+ const excluded=new Set(Array.from(alreadyBuilt,printed).filter(Boolean));
+ let illegal=0,unpriced=0,duplicates=0,alreadyBuiltCount=0;
  for(const d of decks||[]){
   const cards=d?.cards,leader=printed(d?.leaderId);
   if(d?.format==="jp"||!leader||!cards||typeof cards!=="object"||Array.isArray(cards)){illegal++;continue}
+  if(excluded.has(leader)){alreadyBuiltCount++;continue}
   const amounts=new Map();let total=0,malformed=false;
   for(const [raw,n] of Object.entries(cards)){
    const code=printed(raw),q=quantity(n);
@@ -61,7 +63,7 @@ function prepare(decks,owned,prices,isLegal){
   if(missingPrice)unpriced++;
   rows.push({deck:d,leader,needed,copies,cost,missingPrice,quality:Number(d.players)||0});
  }
- return {decks:rows,prices,stats:{received:(decks||[]).length,legal:rows.length,illegal,duplicates,unpriced}};
+ return {decks:rows,prices,stats:{received:(decks||[]).length,legal:rows.length,illegal,duplicates,unpriced,alreadyBuilt:alreadyBuiltCount}};
 }
 function covered(row,selected){
  for(const [code,n] of row.needed)if((selected.get(code)||0)<n)return false;
@@ -80,11 +82,23 @@ function merged(selected,added){
  for(const [code,n] of added)next.set(code,(next.get(code)||0)+n);
  return next;
 }
+// Keep the cheapest currently-completable composition for each leader.
+function bestPerLeader(rows){
+ const byLeader=new Map();
+ for(const row of rows){
+  const previous=byLeader.get(row.leader);
+  if(!previous||row.cost<previous.cost||
+   (row.cost===previous.cost&&row.quality>previous.quality))byLeader.set(row.leader,row);
+ }
+ return [...byLeader.values()];
+}
 function optimize(prepared,budget){
  const input=Number(budget);
  const cap=Number.isFinite(input)?Math.min(10000,Math.max(0,input)):0;
  const rows=prepared?.decks||[],prices=prepared?.prices||new Map();
- const candidates=rows.filter(r=>!r.missingPrice),selected=new Map(),baseline=rows.filter(r=>covered(r,selected));
+ const selected=new Map(),baseline=rows.filter(r=>covered(r,selected));
+ const baselineLeaders=new Set(baseline.map(r=>r.leader));
+ const candidates=rows.filter(r=>!r.missingPrice&&!baselineLeaders.has(r.leader));
  const currentlyUnlocked=new Set(baseline);
  let spent=0;
  // Recompute marginal cost after each purchase. Buying a copy once unlocks
@@ -106,9 +120,9 @@ function optimize(prepared,budget){
   let choice=null;
   for(const x of shortlist){
    const next=merged(selected,x.added),won=rows.filter(r=>!currentlyUnlocked.has(r)&&covered(r,next));
-   if(!won.length)continue;
    const newLeaders=new Set(won.filter(r=>!alreadyLeaders.has(r.leader)).map(r=>r.leader)).size;
-   const score=(won.length+newLeaders*1.4)/(x.cost+0.5);
+   if(!newLeaders)continue;
+   const score=(newLeaders+newLeaders*1.4)/(x.cost+0.5);
    if(!choice||score>choice.score+0.000001||(Math.abs(score-choice.score)<0.000001&&x.cost<choice.cost))
     choice={...x,score};
   }
@@ -119,10 +133,10 @@ function optimize(prepared,budget){
  }
  const purchases=[...selected].map(([code,qty])=>({...prices.get(code),qty,total:Math.round(qty*prices.get(code).price*100)/100}))
   .sort((a,b)=>b.total-a.total||a.code.localeCompare(b.code));
- const newlyUnlocked=[...currentlyUnlocked].filter(r=>!baseline.includes(r));
- const leaders=new Set(newlyUnlocked.map(r=>r.leader));
- return {budget:cap,spent,purchases,baseline:baseline.length,baselineDecks:baseline.map(r=>r.deck),unlocked:newlyUnlocked.length,
-  leaders:leaders.size,results:newlyUnlocked.map(r=>r.deck),stillUnpriced:prepared.stats.unpriced,
+ const newlyUnlocked=bestPerLeader([...currentlyUnlocked].filter(r=>!baseline.includes(r)&&!baselineLeaders.has(r.leader)));
+ const alreadyOwned=bestPerLeader(baseline);
+ return {budget:cap,spent,purchases,baseline:alreadyOwned.length,baselineDecks:alreadyOwned.map(r=>r.deck),unlocked:newlyUnlocked.length,
+  leaders:newlyUnlocked.length,results:newlyUnlocked.map(r=>r.deck),stillUnpriced:prepared.stats.unpriced,
   totalLegal:rows.length};
 }
 return {printed,ownedTotals,bestPrices,prepare,optimize};

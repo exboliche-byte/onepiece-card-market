@@ -112,7 +112,7 @@ function bindSearchAdd(){
  });
 }
 
-const opt={owner:"",busy:false,cancelled:false,controller:null,loaded:false,decks:[],complete:false,progress:{},savedAt:0,restoreRequested:false,partial:false,notes:[],budget:"20",prepared:null,result:null,lastBudget:null,showBuildable:12,showOwned:6,error:"",status:""};
+const opt={owner:"",busy:false,cancelled:false,controller:null,loaded:false,decks:[],complete:false,progress:{},savedAt:0,restoreRequested:false,partial:false,notes:[],budget:"20",prepared:null,result:null,lastBudget:null,showBuildable:12,showOwned:6,physicalRequested:false,error:"",status:""};
 // Build one legality index for the full archive. Checking every card by repeatedly
 // scanning the complete catalog would freeze mobile devices on large histories.
 let legalityCache=null;
@@ -152,14 +152,30 @@ function optimizerLegal(deck){
  }
  return !cache.pairs.some(pair=>pair.every(id=>included.has(id)));
 }
+// A stored complete deck is considered built when physical tracking is off.
+function mountedWantsLeaderCodes(){
+ const printed=window.WantsDeckOptimizer.printed;
+ const codes=new Set();
+ for(const d of state.decks||[]){
+  if(!d?.leader||d.draftCompetitive)continue;
+  const total=Object.values(d.cards||{}).reduce((n,q)=>n+(Number(q)>0?Number(q):0),0);
+  if(total!==50)continue;
+  const physical=window.DeckPhysical?.isMounted?.(d);
+  if(physical===false)continue; // Tracking enabled: only physically assembled decks.
+  const code=printed(d.leader);
+  if(code)codes.add(code);
+ }
+ return codes;
+}
 function refreshOptimizer(){
  if(!opt.loaded||!window.WantsDeckOptimizer)return;
  const app=window.WantsDeckOptimizer;
  const owned=JSON.stringify(state.owned||{});
- if(!opt.prepared||opt.owned!==owned||opt.priceStamp!==String(state.priceDate||"")+"|"+state.cards.length){
+ const mounted=mountedWantsLeaderCodes(),mountedStamp=[...mounted].sort().join("|");
+ if(!opt.prepared||opt.owned!==owned||opt.mountedStamp!==mountedStamp||opt.priceStamp!==String(state.priceDate||"")+"|"+state.cards.length){
   const prices=app.bestPrices(state.cards,c=>priceOf(c),c=>isJapaneseCatalogCard(c),c=>cardmarketUrl(c));
-  opt.prepared=app.prepare(opt.decks,state.owned,prices,optimizerLegal);
-  opt.owned=owned;opt.priceStamp=String(state.priceDate||"")+"|"+state.cards.length;opt.result=null;
+  opt.prepared=app.prepare(opt.decks,state.owned,prices,optimizerLegal,mounted);
+  opt.owned=owned;opt.mountedStamp=mountedStamp;opt.priceStamp=String(state.priceDate||"")+"|"+state.cards.length;opt.result=null;
  }
  if(!opt.result||opt.lastBudget!==opt.budget){opt.result=app.optimize(opt.prepared,Number(opt.budget));opt.lastBudget=opt.budget}
 }
@@ -202,7 +218,7 @@ function optimizerDeckSection(decks,owned=false){
  if(!decks.length)return "";
  const limit=owned?opt.showOwned:opt.showBuildable;
  return '<div class="wopt-buildable-section"><h4>'+(owned?'Mazos que ya puedes montar con tu colección':'Mazos que puedes montar con esta compra')+'</h4>'+
-  '<p class="small">'+decks.length+' listas legales concretas · Puedes abrir cada una para ver sus 50 cartas y el líder. Se incluyen distintas construcciones de un mismo líder.</p>'+
+  '<p class="small">'+decks.length+' mazos legales, un líder distinto por recomendación. Puedes abrir cada mazo para ver sus 50 cartas.</p>'+
   '<div class="wopt-buildable-grid">'+optimizerDeckList(decks,limit)+'</div>'+
   (decks.length>limit?'<button type="button" class="secondary btn wopt-more-decks" data-wopt-more="'+(owned?'owned':'buildable')+'">Mostrar más mazos ('+(decks.length-limit)+' restantes)</button>':"")+'</div>';
 }
@@ -215,7 +231,8 @@ function optimizerHtml(){
   const buildable=r?.results||[],ownedDecks=r?.baselineDecks||[];
   summary='<div class="wopt-summary"><b>'+stats.legal+' mazos legales distintos analizados</b>'+
    '<span>'+stats.received+' listas recibidas · '+stats.duplicates+' composiciones repetidas descartadas'+
-   ' · '+stats.unpriced+' legales con faltantes sin precio</span></div>'+
+   ' · '+stats.unpriced+' legales con faltantes sin precio'+
+   (stats.alreadyBuilt?' · '+stats.alreadyBuilt+' listas de líderes ya montados descartadas':'')+'</span></div>'+
    '<div class="wants-totals wopt-totals">'+
    '<div><b>'+currency(r.spent)+'</b><small>Compra propuesta</small></div>'+
    '<div><b>'+r.unlocked+'</b><small>Mazos adicionales completables</small></div>'+
@@ -223,7 +240,9 @@ function optimizerHtml(){
    (r.purchases.length?'<div class="wopt-purchase-heading"><h4>Compra optimizada</h4>'+
    '<button class="primary btn" type="button" id="woptAddWants">💛 Añadir compras a Wants</button>'+
    '<button class="secondary btn" type="button" id="woptCardmarket">🛒 Enviar a Cardmarket</button></div>'+
-   '<div class="wopt-purchases">'+r.purchases.map(p=>'<div class="wopt-purchase"><span><b>×'+p.qty+' '+h(p.name)+'</b>'+
+   '<div class="wopt-purchases">'+r.purchases.map(p=>'<div class="wopt-purchase">'+
+    (card(p.id)?'<button class="wopt-purchase-photo" type="button" data-detail="'+h(p.id)+'" aria-label="Ver carta '+h(p.name)+'">'+cardImg(card(p.id),"wopt-purchase-art")+'</button>':'')+
+    '<span><b>×'+p.qty+' '+h(p.name)+'</b>'+
     '<small>'+h(p.code)+' · '+h(p.id)+' · '+currency(p.price)+' / copia</small></span>'+
     '<b>'+currency(p.total)+'</b>'+(p.url?'<a href="'+h(p.url)+'" target="_blank" rel="noopener noreferrer">Cardmarket ↗</a>':'')+'</div>').join("")+'</div>':
    '<p class="small">No se ha encontrado una compra completa dentro del presupuesto y con todos los precios conocidos. Puedes aumentarlo o revisar los precios que faltan.</p>')+
@@ -390,7 +409,7 @@ function view(){
  if(!state.user?.id||state.user.id!==ws.owner)
   return '<div class="wrap wants-page"><div class="notice">Cargando las wants de tu cuenta…</div></div>';
  const l=active(),rows=listEntries(l);
- if(opt.owner!==state.user.id){opt.owner=state.user.id;opt.decks=[];opt.loaded=false;opt.prepared=null;opt.result=null;opt.lastBudget=null;opt.error="";opt.notes=[];opt.restoreRequested=false;opt.progress={};opt.complete=false;opt.savedAt=0}
+ if(opt.owner!==state.user.id){opt.owner=state.user.id;opt.decks=[];opt.loaded=false;opt.prepared=null;opt.result=null;opt.lastBudget=null;opt.error="";opt.notes=[];opt.restoreRequested=false;opt.progress={};opt.complete=false;opt.savedAt=0;opt.physicalRequested=false}
  if(opt.loaded)refreshOptimizer();
  const priced=rows.filter(x=>x.c&&priceOf(x.c)!==null);
  const total=priced.reduce((sum,x)=>sum+x.q*priceOf(x.c),0);
@@ -488,11 +507,20 @@ async function showAdd(cardId,count=1){
 }
 function bind(){
  if(state.user?.id&&state.collectionReady&&!opt.busy&&!opt.loaded&&!opt.restoreRequested)void restoreOptimizerArchive();
+ if(state.user?.id&&state.collectionReady&&!opt.physicalRequested&&window.DeckPhysical?.load){
+  opt.physicalRequested=true;
+  const owner=state.user.id;
+  void window.DeckPhysical.load().then(()=>{
+   if(state.user?.id!==owner||state.tab!=="wants"||!opt.loaded)return;
+   opt.prepared=null;refreshOptimizer();renderShell();
+  }).catch(()=>{});
+ }
  document.querySelector("#woptAnalyze")?.addEventListener("click",()=>void loadOptimizerArchive());
  document.querySelector("#woptCancel")?.addEventListener("click",()=>{opt.cancelled=true;opt.controller?.abort();});
  document.querySelector("#woptRecalc")?.addEventListener("click",updateOptimizerBudget);
  document.querySelector("#woptBudget")?.addEventListener("change",updateOptimizerBudget);
  document.querySelector("#woptAddWants")?.addEventListener("click",()=>void addOptimizedToWants());
+ document.querySelectorAll(".wopt-purchase-photo[data-detail]").forEach(b=>b.onclick=()=>openCardDetail(b.dataset.detail));
  document.querySelectorAll("[data-wopt-more]").forEach(b=>b.onclick=()=>{if(b.dataset.woptMore==="owned")opt.showOwned+=12;else opt.showBuildable+=12;renderShell()});
  document.querySelector("#woptCardmarket")?.addEventListener("click",()=>void exportOptimizerToCardmarket());
  document.querySelector("#wantsBackToLists")?.addEventListener("click",()=>{overview();renderShell()});
@@ -541,6 +569,6 @@ const style=document.createElement("style");
 style.textContent=".wants-page{max-width:1080px;padding-bottom:110px}.wants-panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:14px}.wants-heading{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;margin-bottom:13px}.wants-heading h3{margin:0}.wants-list-switch{display:flex;flex-wrap:wrap;gap:8px}.wants-list-switch button{border-radius:10px;border:1px solid var(--line);background:var(--panel2);color:var(--text);padding:10px 14px;font-weight:700}.wants-list-switch button.active{border-color:var(--accent);color:var(--accent)}.wants-list-actions{display:flex;gap:7px}.wants-totals{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:12px 0}.wants-totals>div{background:var(--panel2);border:1px solid var(--line);padding:11px;border-radius:11px}.wants-totals b{font-size:clamp(16px,3vw,25px);display:block}.wants-totals small,.wants-card-info small,.wants-search-row small{display:block;color:var(--muted);font-size:11px}.wants-search-label{display:grid;gap:6px;margin-top:13px}.wants-search-grid{max-height:340px;overflow:auto;margin-top:9px}.wants-search-row{display:flex;align-items:center;gap:10px;padding:7px;border-bottom:1px solid var(--line)}.wants-search-row>div{flex:1;min-width:0}.wants-search-art{height:66px;width:46px;object-fit:cover;border-radius:5px;flex:none}.wants-cards{display:grid;gap:8px}.wants-card{display:flex;gap:12px;align-items:center;background:var(--panel2);border:1px solid var(--line);border-radius:11px;padding:10px;min-width:0}.wants-card-art{width:65px;height:91px;border-radius:5px;object-fit:cover;flex:none}.wants-card-info{flex:1;min-width:0}.wants-card-info strong,.wants-card-info span,.wants-card-info a{display:block;margin:3px 0}.wants-card-info a{font-size:12px;color:var(--accent)}.wants-card-controls{display:grid;grid-template-columns:repeat(3,auto);gap:5px;align-items:center;text-align:center}.wants-card-controls .wants-remove{grid-column:1/-1}.wants-add-modal .modal{max-width:430px;display:grid;gap:13px}.wants-add-modal label{display:grid;gap:6px}.wants-modal-card{display:flex;gap:11px;align-items:center}.wants-modal-card small{display:block;color:var(--muted)}@media(max-width:590px){.wants-totals{grid-template-columns:repeat(2,minmax(0,1fr))}.wants-card{flex-wrap:wrap}.wants-card-art{width:52px;height:73px}.wants-card-controls{margin-left:auto}}";
 style.textContent+=".wants-list-directory{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:11px}.wants-list-choice{display:flex;align-items:center;gap:12px;width:100%;border:1px solid var(--line);background:var(--panel2);color:var(--text);border-radius:13px;padding:15px;text-align:left}.wants-list-choice:hover{border-color:var(--accent)}.wants-list-label{flex:1;min-width:0}.wants-list-label strong,.wants-list-label small{display:block}.wants-list-label strong{font-size:16px}.wants-list-label small{font-size:11px;color:var(--muted);margin-top:5px}.wants-list-icon{font-size:26px}.wants-back{margin:0 0 12px}.wants-list-details{margin-top:0}.wants-market-action{margin:10px 0}.wants-market-action button{max-width:100%}";
 style.textContent+=".wopt-filters{display:flex;align-items:end;gap:8px;flex-wrap:wrap;margin:12px 0}.wopt-filters label{display:grid;gap:5px;min-width:135px;max-width:185px;font-size:12px}.wopt-summary{display:grid;gap:4px;margin:12px 0}.wopt-summary span{font-size:12px;color:var(--muted)}.wopt-purchase-heading{display:flex;flex-wrap:wrap;gap:7px;align-items:center;margin:12px 0}.wopt-purchase-heading h4{margin:0 auto 0 0}.wopt-purchases,.wopt-decks{display:grid;gap:6px;margin:10px 0}.wopt-purchase{display:flex;flex-wrap:wrap;gap:8px;justify-content:space-between;align-items:center;border:1px solid var(--line);border-radius:9px;padding:9px;background:var(--panel2)}.wopt-purchase span{min-width:0;flex:1}.wopt-purchase small,.wopt-deck small{display:block;font-size:11px;color:var(--muted);margin-top:3px}.wopt-purchase a,.wopt-deck a{font-size:12px;color:var(--accent)}.wopt-decks{grid-template-columns:repeat(auto-fit,minmax(170px,1fr))}.wopt-deck{border:1px solid var(--line);background:var(--panel2);border-radius:10px;padding:10px}.wopt-deck b{display:block}.wopt-totals{grid-template-columns:repeat(3,minmax(0,1fr))}@media(max-width:590px){.wopt-totals{grid-template-columns:repeat(2,minmax(0,1fr))}.wopt-filters{align-items:stretch}.wopt-filters label{max-width:100%}}";
-style.textContent+=".wopt-buildable-section{margin:15px 0}.wopt-buildable-section h4{font-size:15px;margin:0 0 5px}.wopt-buildable-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,290px),1fr));gap:8px;margin:10px 0}.wopt-buildable-deck{border:1px solid var(--line);border-radius:11px;background:var(--panel2);min-width:0;overflow:hidden}.wopt-buildable-heading{display:flex;align-items:center;gap:9px;padding:9px;cursor:pointer;list-style:none}.wopt-buildable-heading::-webkit-details-marker{display:none}.wopt-buildable-leader{width:55px;height:77px;object-fit:contain;border-radius:5px;flex-shrink:0}.wopt-buildable-fallback{font-size:32px}.wopt-buildable-info{flex:1;min-width:0}.wopt-buildable-info b{display:block;font-size:13px;line-height:1.3}.wopt-buildable-info small{display:block;color:var(--muted);font-size:11px;line-height:1.35;margin-top:4px}.wopt-buildable-chevron{font-size:20px;color:var(--muted)}.wopt-buildable-deck[open] .wopt-buildable-chevron{transform:rotate(180deg)}.wopt-buildable-content{border-top:1px solid var(--line);padding:10px;font-size:12px}.wopt-buildable-content>a{display:inline-block;margin-top:10px;color:var(--accent)}.wopt-buildable-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,175px),1fr));gap:3px 10px;margin-top:9px}.wopt-buildable-cards>div{padding:5px 0;border-bottom:1px solid var(--line)}.wopt-buildable-cards small{display:block;color:var(--muted)}.wopt-more-decks{margin-top:5px}.wopt-already-owned{margin:15px 0}.wopt-already-owned>summary{font-weight:700;cursor:pointer}@media(max-width:590px){.wopt-buildable-grid{grid-template-columns:1fr}}";
+style.textContent+=".wopt-purchase-photo{flex:0 0 58px;width:58px;min-width:58px;padding:0;border:0;background:none;cursor:pointer}.wopt-purchase-art{width:58px;height:80px;object-fit:contain;border-radius:6px;display:block}.wopt-purchase-photo:focus-visible{outline:2px solid var(--accent);outline-offset:2px}.wopt-buildable-section{margin:15px 0}.wopt-buildable-section h4{font-size:15px;margin:0 0 5px}.wopt-buildable-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,290px),1fr));gap:8px;margin:10px 0}.wopt-buildable-deck{border:1px solid var(--line);border-radius:11px;background:var(--panel2);min-width:0;overflow:hidden}.wopt-buildable-heading{display:flex;align-items:center;gap:9px;padding:9px;cursor:pointer;list-style:none}.wopt-buildable-heading::-webkit-details-marker{display:none}.wopt-buildable-leader{width:55px;height:77px;object-fit:contain;border-radius:5px;flex-shrink:0}.wopt-buildable-fallback{font-size:32px}.wopt-buildable-info{flex:1;min-width:0}.wopt-buildable-info b{display:block;font-size:13px;line-height:1.3}.wopt-buildable-info small{display:block;color:var(--muted);font-size:11px;line-height:1.35;margin-top:4px}.wopt-buildable-chevron{font-size:20px;color:var(--muted)}.wopt-buildable-deck[open] .wopt-buildable-chevron{transform:rotate(180deg)}.wopt-buildable-content{border-top:1px solid var(--line);padding:10px;font-size:12px}.wopt-buildable-content>a{display:inline-block;margin-top:10px;color:var(--accent)}.wopt-buildable-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,175px),1fr));gap:3px 10px;margin-top:9px}.wopt-buildable-cards>div{padding:5px 0;border-bottom:1px solid var(--line)}.wopt-buildable-cards small{display:block;color:var(--muted)}.wopt-more-decks{margin-top:5px}.wopt-already-owned{margin:15px 0}.wopt-already-owned>summary{font-weight:700;cursor:pointer}@media(max-width:590px){.wopt-buildable-grid{grid-template-columns:1fr}}";
 document.head.appendChild(style);
 })();
