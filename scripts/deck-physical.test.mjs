@@ -246,3 +246,72 @@ test("physical date sanitization ignores invalid per-deck data",()=>{
  assert.deepEqual(Object.keys(clean),[sabo]);
  assert.equal(clean[sabo],"2026-10-10T09:00:00.000Z");
 });
+
+test("outdated copies go to the most complete incomplete decks before the album",async()=>{
+ const {api,state,saboDeck,koalaDeck,allocations}=setup(8);
+ const buffy="44444444-4444-4444-8444-444444444444";
+ state.decks.push({id:buffy,name:"Buffy",leader:"",cards:{"OP11-011":4}});
+ state.owned["OP11-011_p1"]=4;
+ saboDeck.cards={};
+ allocations[koala]={"OP11-011_p1":3};
+ allocations[buffy]={"OP11-011_p1":1};
+ await api.load();
+ const result=api._testing.plan(saboDeck);
+ assert.equal(result.changes.length,2);
+ assert.equal(result.changes[0].from,sabo);
+ assert.equal(result.changes[0].to,koala,"Koala with 3/4 is the first recipient");
+ assert.equal(result.changes[0].quantity,1);
+ assert.equal(result.changes[1].to,buffy);
+ assert.equal(result.changes[1].quantity,3);
+ assert.equal(result.changes.some(change=>change.to===null),false);
+ assert.equal(api._testing.stats(koalaDeck,result.next).status,"montado");
+ assert.equal(api._testing.stats(state.decks[2],result.next).status,"montado");
+ assert.equal(result.next[sabo],undefined);
+ assert.equal(allocations[sabo]["OP11-011"],4,"preview must not mutate saved placement");
+});
+test("unused physical prints go to the album only after incomplete recipients are filled",async()=>{
+ const {api,state,saboDeck,koalaDeck,allocations}=setup(6);
+ saboDeck.cards={};
+ allocations[koala]={"OP11-011_p1":2};
+ await api.load();
+ const result=api._testing.plan(saboDeck);
+ assert.equal(result.changes.length,2);
+ assert.equal(result.changes[0].to,koala);
+ assert.equal(result.changes[0].quantity,2);
+ assert.equal(result.changes[1].to,null);
+ assert.equal(result.changes[1].quantity,2);
+ assert.equal(result.next[koala]["OP11-011"],2);
+ assert.equal(api._testing.orderedMovements(result.changes,sabo)[0].to,koala);
+ assert.equal(api._testing.orderedMovements(result.changes,sabo)[1].to,null);
+});
+test("never auto-assign surplus prints to deliberately disassembled decks",async()=>{
+ const {api,saboDeck,allocations}=setup(4);
+ saboDeck.cards={};
+ await api.load();
+ const result=api._testing.plan(saboDeck);
+ assert.equal(result.changes.length,1);
+ assert.equal(result.changes[0].to,null);
+ assert.equal(result.changes[0].quantity,4);
+ assert.equal(result.next[koala],undefined);
+});
+test("sorting a saved deck by cost keeps characters before events before stages in both directions",()=>{
+ const source=fs.readFileSync(new URL("../index.html",import.meta.url),"utf8");
+ const start=source.indexOf("function deckCompositionGroups(d){");
+ const end=source.indexOf("// Keep collection and Wants controls together",start);
+ assert.ok(start>=0&&end>start);
+ const cards={
+  "C2":{id:"C2",category:"Character",cost:2,name:"Character two"},
+  "C5":{id:"C5",category:"Character",cost:5,name:"Character five"},
+  "E3":{id:"E3",category:"Event",cost:3,name:"Event three"},
+  "S0":{id:"S0",category:"Stage",cost:0,name:"Stage zero"}
+ };
+ const state={deckCompositionSort:"cost",deckCompositionDir:"asc"};
+ const context={state,card:id=>cards[id],deckPrintedCode:id=>id,
+   numericCardValue:value=>value===undefined||value===null?null:Number(value),
+   priceOf:()=>null};
+ const groups=vm.runInNewContext(source.slice(start,end)+"\ndeckCompositionGroups;",context);
+ const deck={cards:{"S0":1,"E3":1,"C5":1,"C2":1}};
+ assert.deepEqual(Array.from(groups(deck),g=>g.code),["C2","C5","E3","S0"]);
+ state.deckCompositionDir="desc";
+ assert.deepEqual(Array.from(groups(deck),g=>g.code),["C5","C2","E3","S0"]);
+});
