@@ -102,6 +102,16 @@ test("missing quantities add up across incomplete decks without using mounted co
  assert.equal(pending[0].missing,5);
  assert.equal(pending[0].decks.length,2);
 });
+test("deck library does not expose the optional pending cards menu",()=>{
+ const source=fs.readFileSync(new URL("../index.html",import.meta.url),"utf8");
+ const start=source.indexOf("function deckLibraryView(){");
+ const end=source.indexOf("function decksView(){",start);
+ assert.ok(start>=0&&end>start);
+ const library=source.slice(start,end);
+ assert.doesNotMatch(library,/pendingButton|data-physical-pending|Cartas pendientes/);
+ assert.match(library,/data-physical-open/,"physical copies manager remains available");
+ assert.match(library,/activeTrackingButton/,"tracking switch remains available");
+});
 test("pending and deactivate buttons appear only when tracking is active",async()=>{
  const {api,state}=setup(7);
  assert.equal(api.pendingButton(),"");
