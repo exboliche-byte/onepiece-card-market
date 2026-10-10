@@ -6,17 +6,19 @@ import fs from "node:fs";
 const sabo="11111111-1111-4111-8111-111111111111";
 const koala="22222222-2222-4222-8222-222222222222";
 const userId="33333333-3333-4333-8333-333333333333";
-function setup(amount=7){
+function setup(amount=7,deckModifiedAt={}){
   const saboDeck={id:sabo,name:"Sabo",leader:"",cards:{"OP11-011":4}};
   const koalaDeck={id:koala,name:"Koala",leader:"",cards:{"OP11-011":4}};
   const allocations={[sabo]:{"OP11-011":4}};
   const state={user:{id:userId},collectionReady:true,owned:{"OP11-011":4,"OP11-011_p1":amount-4},
-    decks:[saboDeck,koalaDeck],sb:{from:()=>({select:()=>({eq:()=>({maybeSingle:async()=>({data:{enabled:true,allocations,revision:1}})})})})},tab:"catalog",cards:[]};
+    decks:[saboDeck,koalaDeck],sb:{from:()=>({select:()=>({eq:()=>({maybeSingle:async()=>({data:{enabled:true,allocations,deck_modified_at:deckModifiedAt,revision:1}})})})})},tab:"catalog",cards:[]};
   const window={addEventListener(){}};
-  const ctx={state,window,document:{},renderShell(){},notify(){},esc:x=>String(x),
-    card:id=>({id,name:"Nico Robin"}),deckPrintedCode:id=>String(id).replace(/_p\d+$/i,"")};
+  const document={};
+  const ctx={state,window,document,renderShell(){},notify(){},esc:x=>String(x),
+    card:id=>({id,name:"Nico Robin"}),cardImg:c=>'<img src="'+c.id+'">',
+    deckPrintedCode:id=>String(id).replace(/_p\d+$/i,"")};
   vm.runInNewContext(fs.readFileSync(new URL("../deck-physical.js",import.meta.url),"utf8"),ctx);
-  return {api:window.DeckPhysical,state,saboDeck,koalaDeck,allocations};
+  return {api:window.DeckPhysical,state,saboDeck,koalaDeck,allocations,document};
 }
 test("a partially assembled deck borrows only one copy after using three from album",async()=>{
  const {api,saboDeck,koalaDeck,allocations}=setup(7);
@@ -186,4 +188,61 @@ test("two full partial donors beat a fragmented transfer across three boxes",asy
  assert.equal(planned.changes.reduce((sum,x)=>sum+x.quantity,0),4);
  assert.equal(planned.changes.some(x=>x.from===luffy),false,"avoid touching a third box with only one copy");
  assert.equal(planned.next[luffy]["OP11-011_p2"],1);
+});
+
+test("both deck list changes and physical changes influence most-recent-first ordering",async()=>{
+ const physicalDates={[sabo]:"2026-10-10T13:00:00.000Z"};
+ const {api,state,saboDeck,koalaDeck}=setup(7,physicalDates);
+ saboDeck.updatedAt="2026-10-08T10:00:00.000Z";
+ koalaDeck.updatedAt="2026-10-10T12:00:00.000Z";
+ assert.deepEqual(api.sortDecks(state.decks).map(d=>d.id),[koala,sabo],
+  "before loading locations, sort by saved list edit dates");
+ await api.load();
+ assert.deepEqual(api.sortDecks(state.decks).map(d=>d.id),[sabo,koala],
+  "physical edit newer than list edit wins");
+ assert.equal(state.decks[0],saboDeck,"sorting must not mutate saved array");
+ koalaDeck.updatedAt="2026-10-10T14:00:00.000Z";
+ assert.deepEqual(api.sortDecks(state.decks).map(d=>d.id),[koala,sabo],
+  "a new list edit moves the deck back to the top");
+});
+test("moving physical copies updates the recipient and every donor, not list timestamps",async()=>{
+ const {api,state,document,saboDeck,koalaDeck}=setup(7);
+ saboDeck.updatedAt="2026-10-08T10:00:00.000Z";
+ koalaDeck.updatedAt="2026-10-09T10:00:00.000Z";
+ await api.load();
+ const listeners=new Map();
+ const modal={innerHTML:"",className:"",addEventListener(){},remove(){},
+   querySelector:selector=>({addEventListener:(_event,listener)=>listeners.set(selector,listener)}),
+   querySelectorAll:()=>[]};
+ document.createElement=()=>modal;
+ document.body={appendChild(){}};
+ const writes=[];
+ state.sb={from:()=>({
+   update(payload){writes.push(payload);return this},
+   eq(){return this},select(){return this},
+   maybeSingle:async()=>({data:{revision:2},error:null})
+ })};
+ await api.open(koala);
+ listeners.get("[data-physical-plan]")();
+ await listeners.get("[data-physical-apply]")();
+ assert.equal(writes.length,1);
+ const modified=writes[0].deck_modified_at;
+ assert.ok(modified[sabo],"source deck changed");
+ assert.ok(modified[koala],"recipient deck changed");
+ assert.equal(modified[sabo],modified[koala],"one movement saves a shared timestamp");
+ assert.ok(Number.isFinite(Date.parse(modified[sabo])));
+ assert.equal(saboDeck.updatedAt,"2026-10-08T10:00:00.000Z");
+ assert.equal(koalaDeck.updatedAt,"2026-10-09T10:00:00.000Z");
+ assert.deepEqual(api.sortDecks(state.decks).map(d=>d.id),[koala,sabo],
+  "the latest physical changes sort above the old list timestamps");
+});
+test("physical date sanitization ignores invalid per-deck data",()=>{
+ const {api}=setup();
+ const clean=api._testing.sanitizeDeckDates({
+  [sabo]:"2026-10-10T09:00:00.000Z",
+  invalid:"2026-10-10T09:00:00.000Z",
+  [koala]:"not a date"
+ });
+ assert.deepEqual(Object.keys(clean),[sabo]);
+ assert.equal(clean[sabo],"2026-10-10T09:00:00.000Z");
 });
