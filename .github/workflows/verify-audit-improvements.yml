@@ -4,9 +4,16 @@ on:
     branches:
       - main
       - audit-implementation-2026-10-09
+      - fix/technical-audit-2026-10-10
     paths:
       - "index.html"
       - "scanner.js"
+      - "tools-hub.js"
+      - "api/**"
+      - "data/**"
+      - "deck-*.js"
+      - "collection-*.js"
+      - ".github/workflows/full-website-audit.yml"
       - "modal-accessibility.js"
       - "sw.js"
       - "scripts/**"

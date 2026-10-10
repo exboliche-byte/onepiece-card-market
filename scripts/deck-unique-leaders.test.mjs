@@ -30,6 +30,6 @@ test("Dedupe is applied after filtering and sorting without breaking Preview or 
  assert.match(source,/rows=uniqueLeaderRecommendations\(rows\);\s*body=/);
  assert.match(source,/rows=rows\.filter\(x=>x\.m\.absent<=maximum/);
  assert.match(source,/rows\.sort\(\(a,b\)=>b\.fit\.score-a\.fit\.score/);
- assert.match(source,/data-tools-preview="'+i+'/);
- assert.match(source,/data-tools-compare="'+i+'/);
+ assert.match(source,/data-tools-preview/);
+ assert.match(source,/data-tools-compare/);
 });

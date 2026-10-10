@@ -89,7 +89,7 @@ test("Personal recommendations use unified Wilson-confidence meta and deduplicat
  const a=deckFit({leaderId:"OP05-001"},{owned:0,total:51,cost:50,unknown:0});
  const b=deckFit({leaderId:"OP05-002"},{owned:51,total:51,cost:0,unknown:0});
  assert.ok(a.score>b.score,"trusted meta must outweigh owning a weak deck");
- assert.match(toolsCode,/const leaderMap=new Map/);
+ assert.match(toolsCode,/rows=uniqueLeaderRecommendations\(rows\)/);
  assert.match(toolsCode,/\/api\/meta-unified\?days=90/);
  assert.match(toolsCode,/toolsPreference/);
  assert.match(toolsCode,/data-tools-compare/);

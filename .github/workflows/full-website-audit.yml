@@ -1,25 +1,48 @@
 name: Full website browser audit
 on:
   push:
+    branches: [main, fix/technical-audit-2026-10-10]
     paths:
+      - "index.html"
+      - "tools-hub.js"
+      - "collection-*.js"
+      - "deck-*.js"
+      - "deck-*.css"
+      - "uiux.css"
+      - "api/**"
+      - "data/**"
+      - "scripts/**"
+      - "supabase/migrations/**"
       - ".github/workflows/full-website-audit.yml"
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 permissions:
   contents: read
 jobs:
   browser-audit:
     runs-on: ubuntu-latest
-    timeout-minutes: 18
+    timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: "24"
       - name: Install Chromium and Playwright
         run: |
           npm install --no-save playwright@1.59.1
           npx playwright install --with-deps chromium
-      - name: Smoke-test public pages on production
-        env:
-          BASE_URL: https://onepiece-card-market.vercel.app
-        run: node scripts/browser-smoke.mjs
+      - name: Build the current commit and run all Node tests
+        run: sh scripts/vercel-build.sh
+      - name: Smoke test local build (never production or a deployed preview)
+        run: |
+          python3 -m http.server 4173 --directory public >/tmp/mialbum-http.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" || true' EXIT
+          for i in $(seq 1 30); do
+            if curl --silent --fail http://127.0.0.1:4173/ >/dev/null; then break; fi
+            sleep 1
+          done
+          BASE_URL=http://127.0.0.1:4173 node scripts/browser-smoke.mjs
