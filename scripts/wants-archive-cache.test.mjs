@@ -11,7 +11,7 @@ function setup(){
 }
 test("reuses historical deck results after a new page load, without any user collection data",async()=>{
  const a=setup(),cards={"OP17-001":4},input={decks:[{leaderId:"OP17-099",cards,id:"deck1",name:"Public",source:"Limitless",player:"Private",record:{wins:12},sourceUrl:"https://example.com"}],notes:["Limitless: 2 páginas"],progress:{Limitless:{nextPage:3,done:false}},complete:false};
- const saved=await a.api.save(input);
+ const saved=await a.api.save({...input,budget:35});
  assert.ok(saved?.savedAt>0);
  assert.equal(saved.decks[0].player,undefined);
  assert.equal(saved.decks[0].record,undefined);
@@ -22,6 +22,7 @@ test("reuses historical deck results after a new page load, without any user col
  assert.equal(loaded.notes[0],"Limitless: 2 páginas");
  assert.equal(loaded.progress.Limitless.nextPage,3);
  assert.equal(loaded.complete,false);
+ assert.equal(loaded.budget,35);
 });
 test("an unavailable cache never prevents the UI from calculating new results",async()=>{
  const a=setup();

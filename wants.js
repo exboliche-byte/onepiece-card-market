@@ -211,6 +211,7 @@ async function restoreOptimizerArchive(){
   const saved=await window.WantsArchiveCache?.load?.();
   if(!saved||!Array.isArray(saved.decks)||!saved.decks.length||state.user?.id!==owner||opt.busy||opt.loaded)return;
   opt.owner=owner;opt.decks=saved.decks;opt.savedAt=saved.savedAt||0;opt.progress=saved.progress||{};
+  if(Number.isFinite(Number(saved.budget)))opt.budget=String(Math.max(0,Math.min(10000,Number(saved.budget))));
   opt.complete=!!saved.complete;opt.notes=saved.notes||[];opt.prepared=null;opt.lastBudget=null;opt.loaded=true;
   await window.OnePieceLegality?.load?.();
   refreshOptimizer();
@@ -220,7 +221,7 @@ async function restoreOptimizerArchive(){
 async function cacheOptimizerArchive(decks){
  opt.decks=[...decks.values()];
  opt.prepared=null;opt.lastBudget=null;
- const stored=await window.WantsArchiveCache?.save?.({decks:opt.decks,progress:opt.progress,notes:opt.notes,complete:opt.complete});
+ const stored=await window.WantsArchiveCache?.save?.({decks:opt.decks,progress:opt.progress,notes:opt.notes,complete:opt.complete,budget:opt.budget});
  if(stored?.savedAt)opt.savedAt=stored.savedAt;
 }
 async function loadOptimizerArchive(){
@@ -277,6 +278,11 @@ async function loadOptimizerArchive(){
     }
     // Retain successful progress even when a later page failed.
     await cacheOptimizerArchive(deckMap);
+    // First useful recommendations appear immediately; later pages keep adding lists.
+    if(!opt.loaded&&deckMap.size&&state.user?.id===owner){
+     opt.loaded=true;opt.owned="";refreshOptimizer();
+     if(state.tab==="wants")renderShell();
+    }
     if(failed||stop)break;
     page=progress.nextPage;
    }
@@ -299,7 +305,9 @@ async function loadOptimizerArchive(){
 function updateOptimizerBudget(){
  const field=document.querySelector("#woptBudget");
  opt.budget=String(Math.min(10000,Math.max(0,Number(field?.value)||0)));
- refreshOptimizer();renderShell();
+ refreshOptimizer();
+ if(opt.decks.length)void window.WantsArchiveCache?.save?.({decks:opt.decks,progress:opt.progress,notes:opt.notes,complete:opt.complete,budget:opt.budget});
+ renderShell();
 }
 async function addOptimizedToWants(){
  if(!needLogin()||opt.busy)return;
