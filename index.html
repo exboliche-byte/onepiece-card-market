@@ -226,6 +226,21 @@ button:focus-visible,a:focus-visible,summary:focus-visible,input:focus-visible,s
 
 /* Collection is for owned cards; Wants has its own navigation destination. */
 .collection-tools{grid-template-columns:repeat(3,minmax(0,1fr))}
+/* Catalog only: compact, text-first cards with the full image in card details. */
+.catalog-compact-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,240px),1fr));gap:9px;align-items:stretch}
+.catalog-compact-card{display:flex;flex-direction:column;justify-content:space-between;min-width:0;border:1px solid var(--line);border-radius:12px;background:var(--panel);overflow:hidden}
+.catalog-compact-open{display:grid;gap:9px;width:100%;min-width:0;padding:13px 12px 8px;background:transparent;border:0;color:var(--text);text-align:left;cursor:pointer}
+.catalog-compact-open:hover .catalog-compact-name{color:var(--accent)}
+.catalog-compact-name{font-size:14px;font-weight:800;line-height:1.25;overflow-wrap:anywhere}
+.catalog-compact-info{display:flex;align-items:center;justify-content:space-between;gap:6px;font-size:12px;color:var(--muted)}
+.catalog-compact-info strong{color:var(--text);white-space:nowrap;font-weight:800}
+.catalog-compact-actions{display:grid;grid-template-columns:44px minmax(0,1fr);align-items:center;gap:8px;padding:4px 12px 12px}
+.catalog-compact-want{width:44px;min-height:36px;padding:5px;font-size:17px}
+.catalog-compact-quick{display:grid;grid-template-columns:38px minmax(32px,1fr) 38px;gap:5px;align-items:center}
+.catalog-compact-quick button{min-height:36px;border-radius:9px}
+.catalog-compact-quick button:disabled{opacity:.4;cursor:not-allowed}
+.catalog-compact-count{display:grid;place-items:center;min-height:36px;border:1px solid var(--line);background:var(--panel2);border-radius:9px;font-size:13px;font-weight:800}
+@media(max-width:570px){.catalog-compact-grid{grid-template-columns:1fr;gap:6px}.catalog-compact-open{padding:11px 12px 6px}.catalog-compact-actions{padding:2px 12px 10px}}
 </style>
 <link rel="stylesheet" href="/uiux.css">
 </head>
@@ -987,7 +1002,22 @@ function cardmarketUrl(c){
   if(id)return "https://www.cardmarket.com/es/OnePiece/Products?idProduct="+encodeURIComponent(id);
   return "";
 }
+// Minimal catalog list; the existing detail modal holds the picture, versions and full information.
+function compactCatalogTile(c){
+  const count=qty(c.id),p=priceOf(c),id=esc(c.id),name=esc(c.name||c.id),set=esc(cardExpansionCode(c)||"—");
+  const disabled=(!state.user||!state.collectionReady)?' disabled title="Inicia sesión para gestionar tu colección"':'';
+  return '<article class="catalog-compact-card">'+
+   '<button type="button" class="catalog-compact-open" data-detail="'+id+'" aria-label="Ver ficha de '+name+'">'+
+   '<span class="catalog-compact-name">'+name+'</span>'+
+   '<span class="catalog-compact-info"><span>'+set+'</span><strong>'+(p===null?'Precio —':money(p))+'</strong></span></button>'+
+   '<div class="catalog-compact-actions">'+
+   '<button type="button" class="secondary btn catalog-compact-want" data-want="'+id+'" data-want-count="1" aria-label="Añadir '+name+' a Wants" title="Añadir a Wants">💛</button>'+
+   '<div class="catalog-compact-quick"><button type="button" class="secondary" data-qty="'+id+'" data-d="-1" aria-label="Quitar una copia de '+name+'"'+disabled+'>−</button>'+
+   '<span class="catalog-compact-count" aria-label="'+count+' copias">'+count+'</span>'+
+   '<button type="button" class="primary" data-qty="'+id+'" data-d="1" aria-label="Añadir una copia de '+name+'"'+disabled+'>+</button></div></div></article>';
+}
 function cardTile(c,extra=""){
+  if(state.tab==="catalog")return compactCatalogTile(c);
   const q=qty(c.id),p=collectionPriceOf(c),target=playsetTarget(c);
   return '<article class="card">'+
     '<span class="tag">×'+q+'</span>'+
@@ -1044,7 +1074,8 @@ function albumCoverCard(g){
   })[0];
 }
 function groupedTile(g){
-  const c=state.tab==="catalog"?catalogCoverCard(g):state.tab==="album"?albumCoverCard(g):g.card,q=logicalQty(c);
+  if(state.tab==="catalog")return compactCatalogTile(catalogCoverCard(g));
+  const c=state.tab==="album"?albumCoverCard(g):g.card,q=logicalQty(g.card);
   const albumMissing=state.tab==="album"&&!q;
   const priceStats=groupPriceStats(g),minPrice=priceStats.min,maxPrice=priceStats.max;
   const useCoverPrice=state.tab==="catalog"||state.tab==="album";
@@ -1151,10 +1182,9 @@ async function renderCatalogResults(){
   if(needsPrices){try{await ensurePrices();}catch(e){console.warn("catalog prices",e)}}
   const data=groupFiltered(),pages=Math.max(1,Math.ceil(data.length/PAGE));state.catalog.page=Math.min(state.catalog.page,pages);
   const visible=data.slice(0,state.catalog.page*PAGE);
-  visible.slice(0,12).forEach(g=>preloadCardImage(catalogCoverCard(g)));
   state.catalog.grouped=true;
   const mode="versiones agrupadas",active=catalogActiveFilterCount();
-  host.innerHTML=data.length?'<div class="grid">'+visible.map(g=>state.catalog.grouped?groupedTile(g):cardTile(g.card)).join("")+'</div>'+pagination(data.length,state.catalog.page,"catalog"):'<div class="section center"><h2>Sin resultados</h2><p class="muted">Prueba otra búsqueda o elimina los filtros activos.</p><button class="secondary btn" id="resetCatalogResults" type="button">Mostrar todo el catálogo</button></div>';
+  host.innerHTML=data.length?'<div class="grid catalog-compact-grid">'+visible.map(g=>state.catalog.grouped?groupedTile(g):cardTile(g.card)).join("")+'</div>'+pagination(data.length,state.catalog.page,"catalog"):'<div class="section center"><h2>Sin resultados</h2><p class="muted">Prueba otra búsqueda o elimina los filtros activos.</p><button class="secondary btn" id="resetCatalogResults" type="button">Mostrar todo el catálogo</button></div>';
   $("#resetCatalogResults")?.addEventListener("click",()=>{Object.assign(state.catalog,{query:"",set:"Todas",category:"Todos",color:"Todos",rarity:"Todos",type:"Todos",attribute:"Todos",ownership:"Todas",minCost:"",maxCost:"",minPower:"",maxPower:"",minPrice:"",page:1});renderShell()});
   bindResultEvents(host);
   if(state.catalog.sort!=="price"){
