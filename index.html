@@ -1760,7 +1760,6 @@ function deckLibraryView(){
     deckSyncStatusView()+
     '<div class="sectionhead deck-library-heading"><h2>Mis mazos</h2><div class="deck-library-heading-actions">'+
     '<button type="button" class="secondary btn" data-physical-open="">📍 Copias</button>'+
-    (window.DeckPhysical?.pendingButton?.()||'')+
     (window.DeckPhysical?.activeTrackingButton?.()||'')+
      (savedDecks.length?'<button type="button" class="secondary btn" id="compareLibraryDecks">⇄ Comparar</button>':'')+
     '<span class="small">'+savedDecks.length+' guardado(s)</span></div></div>'+
