@@ -13,6 +13,8 @@ page.on("pageerror",e=>errors.push({page:page.url(),error:String(e.message||e)})
 await step("Homepage and real catalog rendered",async()=>{
  const response=await page.goto(target,{waitUntil:"domcontentloaded",timeout:45000});
  if(!response||response.status()>=400)throw Error("HTTP "+response?.status());
+ await page.locator(".ui-home h1").first().waitFor({timeout:65000});
+ await page.locator('.desktop-side [data-tab="catalog"]').first().click();
  await page.locator("#catalogResults article.card").first().waitFor({timeout:65000});
  const count=await page.locator("#catalogResults article.card").count();
  if(count<10)throw Error("Too few catalog cards: "+count);
@@ -76,19 +78,32 @@ await step("Account view is available",async()=>{
  if(!/Cuenta|Iniciar sesión/i.test(txt))throw Error("No account content");
  return {visible:true}
 });
-await step("Mobile navigation exposes Tournaments, scanner and More expansions",async()=>{
+await step("Mobile navigation has five visible tabs and scanner/decks in More",async()=>{
  await page.setViewportSize({width:390,height:844});
  await page.waitForTimeout(450);
  const mobile=page.locator(".mobile-nav");
  if(!await mobile.isVisible())throw Error("Mobile navigation invisible");
- const tourn=mobile.locator('button[data-tab="tournaments"]');
- if(!await tourn.isVisible())throw Error("Tournaments missing from bottom bar");
- const scan=mobile.locator('button[data-scan-open]');
- if(!await scan.isVisible())throw Error("Scanner missing from bottom bar");
+ const main=mobile.locator(':scope > button');
+ if(await main.count()!==5)throw Error("Mobile bottom bar must have 5 buttons: "+await main.count());
+ for(const tab of ["home","collection","catalog","tournaments"]){
+  if(!await mobile.locator(':scope > button[data-tab="'+tab+'"]').isVisible())throw Error(tab+" missing from bottom bar");
+ }
+ if(await mobile.locator(':scope > button[data-scan-open]').count())throw Error("Scanner belongs in More");
  await mobile.locator("#mobileMoreToggle").click();
- const sets=mobile.locator('#mobileMorePanel button[data-tab="album"]');
- if(!await sets.isVisible())throw Error("Expansions missing under More");
- return {ok:true}
+ const panel=mobile.locator("#mobileMorePanel");
+ for(const tab of ["decks","album"]){
+  if(!await panel.locator('button[data-tab="'+tab+'"]').isVisible())throw Error(tab+" missing from More");
+ }
+ if(!await panel.locator('button[data-scan-open]').isVisible())throw Error("Scanner missing from More");
+ await panel.locator('button[data-tab="decks"]').click();
+ const deckActions=page.locator(".deck-actions .deck-action");
+ await deckActions.first().waitFor({timeout:10000});
+ if(await deckActions.count()!==3)throw Error("Expected Create/Search/Discover");
+ const boxes=await Promise.all([0,1,2].map(async i=>await deckActions.nth(i).boundingBox()));
+ if(boxes.some(b=>!b))throw Error("Deck action absent");
+ if(boxes.some(b=>Math.abs(b.y-boxes[0].y)>2||Math.abs(b.width-boxes[0].width)>2))
+  throw Error("Discover must be in same row and same width as other deck actions: "+JSON.stringify(boxes));
+ return {tabs:5,actions:3}
 });
 await browser.close();
 const fatal=errors.filter(e=>!/ResizeObserver loop|Loading chunk/.test(e.error));
