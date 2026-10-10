@@ -112,15 +112,45 @@ function bindSearchAdd(){
  });
 }
 
-const opt={owner:"",busy:false,loaded:false,decks:[],partial:false,notes:[],budget:"20",prepared:null,result:null,error:"",status:""};
+const opt={owner:"",busy:false,cancelled:false,controller:null,loaded:false,decks:[],partial:false,notes:[],budget:"20",prepared:null,result:null,error:"",status:""};
+// Build one legality index for the full archive. Checking every card by repeatedly
+// scanning the complete catalog would freeze mobile devices on large histories.
+let legalityCache=null;
 function optimizerLegal(deck){
- if(!standardCompetitiveDeckPlayable(deck.leaderId,deck.cards))return false;
- const leader=resolveDeckImportCard(deck.leaderId);
+ const rules=window.OnePieceLegality,engine=window.WantsDeckOptimizer;
+ if(!rules||!engine)return false;
+ const marker=rules.info?.().updatedAt||"",hour=Math.floor(Date.now()/3600000);
+ if(!legalityCache||legalityCache.cardsRef!==state.cards||legalityCache.size!==state.cards.length||legalityCache.marker!==marker||legalityCache.hour!==hour){
+  const byCode=new Map();
+  for(const c of state.cards){
+   if(!c?.id||isJapaneseCatalogCard(c))continue;
+   const code=engine.printed(c.id);if(!code)continue;
+   const prev=byCode.get(code);
+   if(!prev||c.id===code)byCode.set(code,c);
+  }
+  legalityCache={cardsRef:state.cards,size:state.cards.length,marker,hour,byCode,
+   index:rules.buildPlayableIndex(state.cards),statuses:new Map(),
+   pairs:rules.bannedPairs(),restricted:new Set(rules.restrictedIds())};
+ }
+ const cache=legalityCache;
+ const info=code=>{
+  const card=cache.byCode.get(code);if(!card)return null;
+  if(!cache.statuses.has(code))cache.statuses.set(code,rules.status(card,cache.index));
+  return cache.statuses.get(code)===null?card:null;
+ };
+ const leaderCode=engine.printed(deck.leaderId),leader=info(leaderCode);
  if(!leader||leader.category!=="Leader")return false;
- return Object.keys(deck.cards).every(id=>{
-  const c=resolveDeckImportCard(id);
-  return c&&c.category!=="Leader"&&deckCardAllowedByLeader(c,leader);
- });
+ const colors=new Set((leader.colors||[]).map(norm).filter(Boolean)),included=new Set([leaderCode]),copies=new Map();
+ for(const [id,raw] of Object.entries(deck.cards||{})){
+  const code=engine.printed(id),card=info(code),q=Number(raw);
+  if(!code||!card||card.category==="Leader"||!Number.isInteger(q)||q<=0)return false;
+  const cardColors=(card.colors||[]).map(norm).filter(Boolean);
+  if(!cardColors.length||!cardColors.every(c=>colors.has(c)))return false;
+  const count=(copies.get(code)||0)+q;
+  if(count>(cache.restricted.has(code)?1:4))return false;
+  copies.set(code,count);included.add(code);
+ }
+ return !cache.pairs.some(pair=>pair.every(id=>included.has(id)));
 }
 function refreshOptimizer(){
  if(!opt.loaded||!window.WantsDeckOptimizer)return;
@@ -165,7 +195,7 @@ function optimizerHtml(){
  return '<section class="wants-panel wants-optimizer"><div class="wants-heading"><h3>🧠 Compra inteligente</h3></div>'+
   '<p class="small">Compara tu colección con las listas históricas publicadas de Limitless y Yonko que siguen siendo legales en Standard europeo. Las distintas impresiones de una carta cuentan juntas y las compras sirven para varios mazos.</p>'+
   '<div class="wopt-filters"><label>Presupuesto en euros<input class="field" type="number" id="woptBudget" min="0" max="10000" step="1" value="'+h(opt.budget)+'"></label>'+
-  '<button class="primary btn" id="woptAnalyze" type="button" '+(opt.busy?'disabled':'')+'>'+ (opt.busy?'Consultando archivo…':ready?'↻ Actualizar archivo':'Analizar mazos legales')+'</button>'+
+  '<button class="primary btn" id="woptAnalyze" type="button" '+(opt.busy?'disabled':'')+'>'+ (opt.busy?'Consultando archivo…':ready?'↻ Actualizar archivo':'Analizar mazos legales')+'</button>'+(opt.busy?'<button type="button" id="woptCancel" class="secondary btn">Cancelar</button>':"")+
   (ready?'<button class="secondary btn" id="woptRecalc" type="button">Recalcular</button>':'')+'</div>'+
   (opt.busy?'<p class="notice" role="status">'+h(opt.status||"Consultando las fuentes públicas…")+'</p>':"")+
   (opt.error?'<p class="notice">'+h(opt.error)+'</p>':"")+
@@ -176,7 +206,7 @@ function optimizerHtml(){
 async function loadOptimizerArchive(){
  if(!needLogin()||opt.busy)return;
  const owner=state.user.id;
- opt.owner=owner;opt.busy=true;opt.error="";opt.notes=[];opt.partial=false;opt.status="Actualizando la legalidad…";
+ opt.owner=owner;opt.busy=true;opt.cancelled=false;opt.controller=new AbortController();opt.error="";opt.notes=[];opt.partial=false;opt.status="Actualizando la legalidad…";
  renderShell();
  const deckMap=new Map(),sources=[
   {name:"Limitless",max:25,url:page=>"/api/competitive-decks?archive=1&leader=all&minPlayers=4&page="+page},
@@ -185,13 +215,15 @@ async function loadOptimizerArchive(){
  try{
   await window.OnePieceLegality?.load?.();
   for(const source of sources){
+   if(opt.cancelled)break;
    let count=0,finished=false;
    for(let page=1;page<=source.max;page++){
+    if(opt.cancelled)break;
     if(state.user?.id!==owner)throw Error("La cuenta ha cambiado durante el análisis.");
     opt.status=source.name+": revisando página "+page+" · "+deckMap.size+" listas recuperadas";
     if(state.tab==="wants")document.querySelector(".wants-optimizer [role=status]")?.replaceChildren(document.createTextNode(opt.status));
     try{
-     const response=await fetch(source.url(page),{headers:{accept:"application/json"}});
+     const response=await fetch(source.url(page),{headers:{accept:"application/json"},signal:opt.controller.signal});
      const result=await response.json();
      if(!response.ok)throw Error(result.error||"HTTP "+response.status);
      for(const d of Array.isArray(result.results)?result.results:[]){
@@ -204,7 +236,7 @@ async function loadOptimizerArchive(){
      if(result.partial||result.rateLimited||result.indexMayBeIncomplete||result.indexLimit===500&&page===source.max)opt.partial=true;
      if(result.rateLimited){opt.notes.push(source.name+": límite de consultas");break}
      if(!result.hasMore){finished=true;break}
-    }catch(error){opt.partial=true;opt.notes.push(source.name+": "+String(error.message||error).slice(0,95));break}
+    }catch(error){opt.partial=true;opt.notes.push(opt.cancelled?"Análisis detenido por el usuario":source.name+": "+String(error.message||error).slice(0,95));break}
    }
    if(!finished)opt.partial=true;
    opt.notes.push(source.name+": "+count+" página(s) consultada(s)");
@@ -214,7 +246,7 @@ async function loadOptimizerArchive(){
   refreshOptimizer();
   if(!opt.decks.length)opt.error="No se han podido recuperar mazos de las fuentes públicas.";
  }catch(error){opt.error=String(error.message||error);opt.partial=true}
- finally{opt.busy=false;opt.status="";if(state.user?.id===owner&&state.tab==="wants")renderShell()}
+ finally{opt.busy=false;opt.controller=null;opt.status="";if(state.user?.id===owner&&state.tab==="wants")renderShell()}
 }
 function updateOptimizerBudget(){
  const field=document.querySelector("#woptBudget");
@@ -362,6 +394,7 @@ async function showAdd(cardId,count=1){
 }
 function bind(){
  document.querySelector("#woptAnalyze")?.addEventListener("click",()=>void loadOptimizerArchive());
+ document.querySelector("#woptCancel")?.addEventListener("click",()=>{opt.cancelled=true;opt.controller?.abort();});
  document.querySelector("#woptRecalc")?.addEventListener("click",updateOptimizerBudget);
  document.querySelector("#woptBudget")?.addEventListener("change",updateOptimizerBudget);
  document.querySelector("#woptAddWants")?.addEventListener("click",()=>void addOptimizedToWants());
