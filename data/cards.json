@@ -388796,7 +388796,8 @@
       "Baroque Works"
     ],
     "image": "https://limitlesstcg.nyc3.cdn.digitaloceanspaces.com/one-piece/OP01/OP01-079_p1_EN.webp",
-    "catalogSource": "Limitless exact English print verified by image filename"
+    "catalogSource": "Limitless exact English print verified by image filename",
+    "syncCarryForward": true
   },
   {
     "id": "OP03-031_p1",
@@ -388885,7 +388886,8 @@
       "Krieg Pirates"
     ],
     "image": "https://limitlesstcg.nyc3.cdn.digitaloceanspaces.com/one-piece/OP03/OP03-031_p1_EN.webp",
-    "catalogSource": "Limitless exact English print verified by image filename"
+    "catalogSource": "Limitless exact English print verified by image filename",
+    "syncCarryForward": true
   },
   {
     "id": "OP12-018_p1",
@@ -388950,7 +388952,8 @@
       "Former Roger Pirates"
     ],
     "image": "https://limitlesstcg.nyc3.cdn.digitaloceanspaces.com/one-piece/OP12/OP12-018_p1_JP.webp",
-    "catalogSource": "Limitless exact English print verified by image filename"
+    "catalogSource": "Limitless exact English print verified by image filename",
+    "syncCarryForward": true
   },
   {
     "id": "OP13-067_p1",
@@ -389021,7 +389024,8 @@
       "Roger Pirates"
     ],
     "image": "https://limitlesstcg.nyc3.cdn.digitaloceanspaces.com/one-piece/OP13/OP13-067_p1_EN.webp",
-    "catalogSource": "Limitless exact English print verified by image filename"
+    "catalogSource": "Limitless exact English print verified by image filename",
+    "syncCarryForward": true
   },
   {
     "id": "OP17-040_p1",
@@ -389067,7 +389071,8 @@
       "Rocks Pirates"
     ],
     "image": "https://limitlesstcg.nyc3.cdn.digitaloceanspaces.com/one-piece/OP17/OP17-040_p1_EN.webp",
-    "catalogSource": "Limitless exact English print verified by image filename"
+    "catalogSource": "Limitless exact English print verified by image filename",
+    "syncCarryForward": true
   },
   {
     "id": "OP02-013_p4",
@@ -389127,7 +389132,8 @@
       "Whitebeard Pirates"
     ],
     "image": "https://limitlesstcg.nyc3.cdn.digitaloceanspaces.com/one-piece/OP02/OP02-013_p4_EN.webp",
-    "catalogSource": "Limitless exact English print verified by image filename"
+    "catalogSource": "Limitless exact English print verified by image filename",
+    "syncCarryForward": true
   },
   {
     "id": "OP04-083_p4",
@@ -389190,7 +389196,8 @@
       "Revolutionary Army"
     ],
     "image": "https://limitlesstcg.nyc3.cdn.digitaloceanspaces.com/one-piece/OP04/OP04-083_p4_EN.webp",
-    "catalogSource": "Limitless exact English print verified by image filename"
+    "catalogSource": "Limitless exact English print verified by image filename",
+    "syncCarryForward": true
   },
   {
     "id": "OP06-118_p3",
@@ -389250,6 +389257,7 @@
       "Straw Hat Crew"
     ],
     "image": "https://limitlesstcg.nyc3.cdn.digitaloceanspaces.com/one-piece/OP06/OP06-118_p3_EN.webp",
-    "catalogSource": "Limitless exact English print verified by image filename"
+    "catalogSource": "Limitless exact English print verified by image filename",
+    "syncCarryForward": true
   }
 ]
