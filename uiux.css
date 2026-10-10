@@ -54,20 +54,18 @@ button:focus-visible,summary:focus-visible,[role="button"]:focus-visible,input:f
 }
 @media(max-width:899px){
   .app{padding-bottom:calc(100px + env(safe-area-inset-bottom,0px))}
-  .nav.mobile-nav{grid-template-columns:repeat(6,minmax(0,1fr));padding:7px 3px max(7px,env(safe-area-inset-bottom))}
+  .nav.mobile-nav{grid-template-columns:repeat(5,minmax(0,1fr));padding:7px 5px max(7px,env(safe-area-inset-bottom))}
   .mobile-nav>button{min-width:0;min-height:58px;align-content:center}
   .mobile-nav>button span{font-size:10px;white-space:nowrap;letter-spacing:-.01em}
   .mobile-nav>button svg{width:22px;height:22px}
-  .mobile-nav>button.nav-scan{border-radius:13px;background:var(--accent);color:#16130b;min-height:58px;font-weight:850;box-shadow:0 0 0 2px #ffd44718}
-  .mobile-nav>button.nav-scan span{color:#16130b;font-weight:850}
   .mobile-nav .mobile-more{max-height:min(70dvh,570px);overscroll-behavior:contain}
   .ui-home-actions{grid-template-columns:1fr 1fr}
   .ui-home-actions .btn:first-child{grid-column:1/-1}
-  .deck-actions{grid-template-columns:repeat(2,minmax(0,1fr))}
-  .deck-actions .deck-action{min-height:90px;padding:11px;text-align:left}
-  .deck-actions .deck-action b{font-size:14px}
-  .deck-actions .deck-action span{display:block;font-size:12px}
-  .deck-actions .deck-action:nth-child(3){grid-column:1/-1;min-height:65px}
+  .deck-actions{grid-template-columns:repeat(3,minmax(0,1fr));align-items:stretch;gap:7px}
+  .deck-actions .deck-action{width:100%;min-height:105px;height:100%;padding:10px 7px;text-align:center;align-items:center;justify-content:center}
+  .deck-actions .deck-action b{font-size:12px;line-height:1.25;overflow-wrap:anywhere}
+  .deck-actions .deck-action span{display:block;font-size:10px;line-height:1.2;overflow-wrap:anywhere}
+  .deck-actions .deck-action:nth-child(3){grid-column:auto;min-height:105px}
   .card-action-row{grid-template-columns:minmax(0,2fr) minmax(44px,1fr)}
   .collection-tools{gap:7px}
 }
@@ -77,6 +75,6 @@ button:focus-visible,summary:focus-visible,[role="button"]:focus-visible,input:f
   .card .quick{grid-template-columns:42px minmax(18px,1fr) 42px;gap:2px}
   .card .quick button{min-width:42px}
   .collection-view-tabs .btn{font-size:11px;min-height:42px;overflow-wrap:anywhere;padding:6px 2px}
-  .deck-actions .deck-action{min-height:91px}
+  .deck-actions .deck-action{min-height:90px}
 }
-@media(prefers-reduced-motion:reduce){.mobile-nav>button.nav-scan{transition:none}}
+@media(max-width:380px){.deck-actions .deck-action span{display:none}.deck-actions .deck-action{min-height:72px}.deck-actions .deck-action:nth-child(3){min-height:72px}}
