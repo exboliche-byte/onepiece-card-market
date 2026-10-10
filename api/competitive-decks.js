@@ -163,9 +163,11 @@ export default {
       if(leader!=="all"&&!/^(?:[A-Z]{1,5}\d{0,2}|P)-\d{3}$/.test(leader)){
         return json({error:"Líder no válido",results:[]},400,"no-store");
       }
-      const days=clamp(int(url.searchParams.get("days"))||90,30,365);
+      const archive=url.searchParams.get("archive")==="1";
+      const page=archive?clamp(int(url.searchParams.get("page"))||1,1,100):1;
+      const days=archive?36500:clamp(int(url.searchParams.get("days"))||90,30,365);
       const minPlayers=clamp(int(url.searchParams.get("minPlayers"))||32,4,512);
-      const limit=clamp(int(url.searchParams.get("limit"))||20,1,leader==="all"?120:30);
+      const limit=archive?5000:clamp(int(url.searchParams.get("limit"))||20,1,leader==="all"?120:30);
       const cutoff=Date.now()-days*86400000;
       const [index,rules]=await Promise.all([tournamentIndex(),getLegalityRules()]);
       const events=index
@@ -180,7 +182,7 @@ export default {
           if(playerDiff)return playerDiff;
           return Date.parse(b.date||0)-Date.parse(a.date||0);
         })
-        .slice(0,MAX_EVENTS);
+        .slice(archive?(page-1)*MAX_EVENTS:0,archive?page*MAX_EVENTS:MAX_EVENTS);
 
       const found=[];
       let scanned=0,rateLimited=false;
@@ -201,12 +203,12 @@ export default {
           }
         }
         if(rateLimited)break;
-        if(!cardFilter&&found.length>=limit&&scanned>=12)break;
+        if(!archive&&!cardFilter&&found.length>=limit&&scanned>=12)break;
       }
 
       found.sort((a,b)=>b.score-a.score||a.placing-b.placing||b.players-a.players);
       const perLeader=new Map();
-      const selected=leader==="all"&&!cardFilter?found.filter(r=>{
+      const selected=!archive&&leader==="all"&&!cardFilter?found.filter(r=>{
         const n=perLeader.get(r.leaderId)||0;
         if(n>=3)return false;
         perLeader.set(r.leaderId,n+1);return true;
@@ -219,7 +221,13 @@ export default {
         results,
         scannedEvents:scanned,
         availableMatches:found.length,
-        rateLimited
+        rateLimited,
+        archive,
+        page,
+        hasMore:archive&&events.length===MAX_EVENTS,
+        partial:rateLimited||found.length>limit,
+        indexLimit:archive?INDEX_LIMIT:null,
+        indexMayBeIncomplete:archive&&index.length>=INDEX_LIMIT
       });
     }catch(e){
       return json({
