@@ -302,6 +302,17 @@ function deckFit(r,m){
  const score=100*(weights[0]*metaStrength+weights[1]*affinity+weights[2]*owned+weights[3]*cost);
  return {score,personal,meta,reason:trusted?"Meta fiable: "+Number(meta.confidenceRate).toFixed(1)+"% · "+Number(meta.games).toLocaleString("es-ES")+" partidas":"Meta sin muestra suficiente; recomendación provisional"};
 }
+// Rank by mode before selecting the strongest representative for each leader.
+// Keep each entry's source list index so Preview and Compare open the right deck.
+function uniqueLeaderRecommendations(rows){
+ const seen=new Set();
+ return rows.filter(entry=>{
+  const code=printed(entry.r.leaderId);
+  if(!code||seen.has(code))return false;
+  seen.add(code);
+  return true;
+ });
+}
 function decksView(){
   const personalized=h.mode==="mine";
   let body="";
@@ -312,15 +323,14 @@ function decksView(){
     let rows=h.list.map((r,i)=>({r,i})).filter(({r})=>standardCompetitiveDeckPlayable(r.leaderId,r.cards)).map(({r,i})=>{const m=missing(r,prices);return {r,i,m,fit:deckFit(r,m)}});
     if(personalized){
       rows.sort((a,b)=>b.fit.score-a.fit.score||(Number(b.r.players)||0)-(Number(a.r.players)||0));
-      const leaderMap=new Map();
-      for(const entry of rows){const key=printed(entry.r.leaderId);if(!leaderMap.has(key))leaderMap.set(key,entry)}
-      rows=[...leaderMap.values()]; // one representative list per archetype
+      // Both discovery modes share deduplication after their own ranking.
     }else{
       rows=rows.filter(x=>x.m.absent<=maximum&&(h.maxCost===""||(!x.m.unknown&&x.m.cost<=ceiling)));
       rows.sort((a,b)=>h.sort==="cost"?
         Number(!!a.m.unknown)-Number(!!b.m.unknown)||a.m.cost-b.m.cost||a.m.absent-b.m.absent:
         a.m.absent-b.m.absent||Number(!!a.m.unknown)-Number(!!b.m.unknown)||a.m.cost-b.m.cost);
     }
+    rows=uniqueLeaderRecommendations(rows);
     body=(personalized?'<div class="tools-filters"><label class="control-label">Priorizar<select class="field" id="toolsPreference">'+
       [["competitive","Competitividad"],["balanced","Equilibrio"],["budget","Presupuesto"]].map(([id,label])=>
       '<option value="'+id+'"'+(h.preference===id?" selected":"")+'>'+label+'</option>').join("")+
@@ -333,7 +343,7 @@ function decksView(){
       [["","Sin límite"],["0","0"],["4","4"],["8","8"],["12","12"],["20","20"]].map(([v,l])=>
       '<option value="'+v+'"'+(h.maxMissing===v?" selected":"")+'>'+l+'</option>').join("")+'</select></label>'+
       '<label class="control-label">Presupuesto máximo (€)<input id="toolsMaxCost" class="field" type="number" min="0" step="1" value="'+text(h.maxCost)+'" placeholder="Sin límite"></label></div>')+
-      '<div class="small">'+rows.length+' mazos visibles de '+h.list.length+' listas · '+Number(h.meta.scannedEvents||0)+' torneos consultados'+
+      '<div class="small">'+rows.length+' líderes diferentes de '+h.list.length+' listas · '+Number(h.meta.scannedEvents||0)+' torneos consultados'+
       (h.meta.rateLimited?' · Resultados parciales':"")+'</div>';
     if(personalized&&h.metaError)body+='<div class="notice">Meta no disponible: '+text(h.metaError)+'. Recomendaciones provisionales.</div>';
     if(!rows.length)body+='<div class="notice">Ninguna lista cumple los filtros. Prueba ampliándolos.</div>';
