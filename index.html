@@ -1065,6 +1065,7 @@ function groupedTile(g){
 function pagination(total,page,key){
   const pages=Math.max(1,Math.ceil(total/PAGE));page=Math.min(page,pages);
   if(pages<=1)return "";
+  if(["catalog","collection","album"].includes(key)){const shown=Math.min(total,page*PAGE);return '<div class="pager progressive-pager"><span aria-live="polite">Mostrando '+shown.toLocaleString("es-ES")+' de '+total.toLocaleString("es-ES")+' cartas</span>'+(shown<total?'<button class="secondary btn" data-load-more="'+key+'" type="button">Cargar más cartas ↓</button>':"")+'</div>'}
   return '<div class="pager"><button class="secondary btn" data-page="'+key+'" data-p="-1">‹</button><span>'+page+' / '+pages+' · '+total.toLocaleString("es-ES")+'</span><button class="secondary btn" data-page="'+key+'" data-p="1">›</button></div>';
 }
 function catalogActiveFilterCount(){
@@ -1147,11 +1148,12 @@ async function renderCatalogResults(){
   const needsPrices=state.catalog.sort==="price"||state.catalog.minPrice!==""||state.catalog.maxPrice!=="";
   if(needsPrices){try{await ensurePrices();}catch(e){console.warn("catalog prices",e)}}
   const data=groupFiltered(),pages=Math.max(1,Math.ceil(data.length/PAGE));state.catalog.page=Math.min(state.catalog.page,pages);
-  const start=(state.catalog.page-1)*PAGE,visible=data.slice(start,start+PAGE);
+  const visible=data.slice(0,state.catalog.page*PAGE);
   visible.slice(0,12).forEach(g=>preloadCardImage(catalogCoverCard(g)));
   state.catalog.grouped=true;
   const mode="versiones agrupadas",active=catalogActiveFilterCount();
-  host.innerHTML='<div class="grid">'+visible.map(g=>state.catalog.grouped?groupedTile(g):cardTile(g.card)).join("")+'</div>'+pagination(data.length,state.catalog.page,"catalog");
+  host.innerHTML=data.length?'<div class="grid">'+visible.map(g=>state.catalog.grouped?groupedTile(g):cardTile(g.card)).join("")+'</div>'+pagination(data.length,state.catalog.page,"catalog"):'<div class="section center"><h2>Sin resultados</h2><p class="muted">Prueba otra búsqueda o elimina los filtros activos.</p><button class="secondary btn" id="resetCatalogResults" type="button">Mostrar todo el catálogo</button></div>';
+  $("#resetCatalogResults")?.addEventListener("click",()=>{Object.assign(state.catalog,{query:"",set:"Todas",category:"Todos",color:"Todos",rarity:"Todos",type:"Todos",attribute:"Todos",ownership:"Todas",minCost:"",maxCost:"",minPower:"",maxPower:"",minPrice:"",page:1});renderShell()});
   bindResultEvents(host);
   if(state.catalog.sort!=="price"){
     const hadPrices=Object.keys(state.prices||{}).length>0;
@@ -1220,9 +1222,8 @@ async function renderCollectionResults(){
   const rotated=archived?list.filter(c=>collectionLegalityStatus(c)==="rotated"):[];
   const pages=Math.max(1,Math.ceil((archived?rotated.length:list.length)/PAGE));
   state.collection.page=Math.min(state.collection.page,pages);
-  const start=(state.collection.page-1)*PAGE;
-  const visibleRotated=archived?rotated.slice(start,start+PAGE):[];
-  const visible=archived?[...banned,...visibleRotated]:list.slice(start,start+PAGE);
+  const visibleRotated=archived?rotated.slice(0,state.collection.page*PAGE):[];
+  const visible=archived?[...banned,...visibleRotated]:list.slice(0,state.collection.page*PAGE);
   const haveInView=state.cards.some(c=>qty(c.id)>0&&Boolean(collectionLegalityStatus(c))===archived);
   const empty=list.length===0&&haveInView;
   const noResults=empty?
@@ -1335,7 +1336,7 @@ function albumView(){
 function renderAlbumResults(){
   const host=$("#albumResults");if(!host)return;
   const list=filteredCards("album"),groups=groupCardList(list),pages=Math.max(1,Math.ceil(groups.length/PAGE));state.album.page=Math.min(state.album.page,pages);
-  const start=(state.album.page-1)*PAGE,visible=groups.slice(start,start+PAGE);
+  const visible=groups.slice(0,state.album.page*PAGE);
   const coverSnapshot=visible.map(g=>{const c=albumCoverCard(g);return c?.id+":"+priceOf(c)}).join("|");
   const expansion=state.album.set;
   visible.slice(0,12).forEach(g=>preloadCardImage(albumCoverCard(g)));
@@ -1355,11 +1356,19 @@ function expansionStats(){
   return state.packs.slice().sort(comparePacks).map(p=>{const list=cardsForExpansion(p.code),owned=list.filter(c=>qty(c.id)>0),value=owned.reduce((s,c)=>s+qty(c.id)*(priceOf(c)??0),0),missingCost=list.reduce((s,c)=>s+Math.max(0,playsetTarget(c)-qty(c.id))*(priceOf(c)??0),0);return {...p,total:list.length,owned:owned.length,pct:list.length?owned.length/list.length*100:0,playsets:list.filter(c=>qty(c.id)>=playsetTarget(c)).length,value,missingCost}})
 }
 function homeView(){
-  const s=collectionStats(), ex=expansionStats().slice(0,6);
-  return '<div class="wrap"><div class="hero"><div><h1>MiAlbumOnePiece</h1><p>'+s.distinct.toLocaleString("es-ES")+' / '+s.distinctTotal.toLocaleString("es-ES")+' cartas · '+s.completePct.toFixed(1)+'% completado.</p></div></div>'+
-    '<div class="stats"><div class="stat"><b>'+s.distinct.toLocaleString("es-ES")+'</b><span>Cartas distintas</span></div><div class="stat"><b>'+s.copies.toLocaleString("es-ES")+'</b><span>Copias</span></div><div class="stat"><b>'+s.playsets.toLocaleString("es-ES")+'</b><span>Playsets</span></div><div class="stat"><b>'+money(s.value)+'</b><span>Valor estimado</span></div></div>'+
-    '<div class="section"><div class="sectionhead"><h2>Progreso por expansión</h2><button class="secondary btn" data-tab="album">Abrir álbum</button></div><div class="setgrid">'+ex.map(p=>'<button class="setcard '+(p.pct>=100?"complete":"")+'" data-open-set="'+esc(p.code)+'"><div class="settop"><b>'+esc(p.code)+'</b><span>'+p.owned+'/'+p.total+'</span></div><strong>'+esc(p.name||p.code)+'</strong><div class="progress" style="margin:9px 0"><i style="width:'+p.pct+'%"></i></div><div class="small">'+p.pct.toFixed(1)+'% · '+p.playsets+' playsets · '+money(p.value)+'</div></button>').join("")+'</div></div>'+
-    '<div class="section"><h2>Herramientas</h2><div class="inline-actions"><button class="primary btn" data-tab="catalog">Buscar cartas</button><button class="secondary btn" data-tab="collection">Gestionar colección</button><button class="secondary btn" data-tab="decks">Construir mazo</button></div></div></div>';
+  if(!state.user){
+    return '<div class="wrap ui-home"><div class="hero ui-welcome"><div><span class="ui-eyebrow">ONE PIECE CARD GAME</span><h1>Tu colección, tus mazos, todo en un lugar</h1><p>Consulta cartas y expansiones, descubre mazos competitivos y empieza a organizar tu colección.</p></div></div>'+
+    '<div class="ui-home-actions"><button type="button" class="primary btn" data-tab="catalog">Explorar catálogo</button><button type="button" class="secondary btn" data-scan-open>Escanear carta</button><button type="button" class="secondary btn" data-tab="decks">Buscar mazos</button></div>'+
+    '<div class="section center"><h2>Guarda tu progreso</h2><p class="muted">Crea una cuenta para sincronizar cartas, mazos y torneos entre dispositivos.</p><button type="button" class="secondary btn" data-tab="account">Entrar o crear cuenta</button></div></div>';
+  }
+  const summary=collectionStats(), ex=expansionStats().slice(0,6);
+  const recent=(state.decks||[]).filter(d=>!d.draftCompetitive).slice().sort((a,b)=>(Date.parse(b.updatedAt)||0)-(Date.parse(a.updatedAt)||0)).slice(0,3);
+  return '<div class="wrap ui-home"><div class="hero"><div><span class="ui-eyebrow">TU PANEL</span><h1>Inicio</h1><p>Tienes '+summary.distinct.toLocaleString("es-ES")+' cartas diferentes. Continúa donde lo dejaste.</p></div></div>'+
+    '<div class="stats ui-home-stats"><div class="stat"><b>'+summary.distinct.toLocaleString("es-ES")+'</b><span>Cartas diferentes</span></div><div class="stat"><b>'+summary.copies.toLocaleString("es-ES")+'</b><span>Copias</span></div><div class="stat"><b>'+summary.playsets.toLocaleString("es-ES")+'</b><span>Playsets</span></div><div class="stat"><b>'+money(summary.value)+'</b><span>Valor estimado</span></div></div>'+
+    '<div class="section"><h2>Acciones rápidas</h2><div class="ui-home-actions"><button type="button" class="primary btn" data-scan-open>Escanear carta</button><button type="button" class="secondary btn" data-tab="collection">Mi colección</button><button type="button" class="secondary btn" data-tab="decks">Mis mazos</button></div></div>'+
+    '<div class="section"><div class="sectionhead"><h2>Mazos recientes</h2><button type="button" class="secondary btn" data-tab="decks">Ver todos</button></div>'+
+      (recent.length?'<div class="ui-recent-decks">'+recent.map(d=>'<button type="button" class="ui-recent-deck" data-home-deck="'+esc(d.id)+'"><span>'+esc(d.name)+'</span><span class="small muted">Abrir →</span></button>').join("")+'</div>':'<p class="muted">Aún no has creado mazos. Puedes crearlos o importar listas competitivas.</p>')+'</div>'+
+    '<div class="section"><div class="sectionhead"><h2>Progreso por expansión</h2><button type="button" class="secondary btn" data-tab="album">Ver expansiones</button></div><div class="setgrid">'+ex.map(p=>'<button class="setcard '+(p.pct>=100?"complete":"")+'" data-open-set="'+esc(p.code)+'"><div class="settop"><b>'+esc(p.code)+'</b><span>'+p.owned+'/'+p.total+'</span></div><strong>'+esc(p.name||p.code)+'</strong><div class="progress" style="margin:9px 0"><i style="width:'+p.pct+'%"></i></div><div class="small">'+p.pct.toFixed(1)+'% completado</div></button>').join("")+'</div></div></div>';
 }
 function deckActiveFilterCount(){
   const f=state.deckFilters;let n=0;
@@ -2825,6 +2834,7 @@ function bindResultEvents(root){
   root.querySelectorAll("[data-qty]").forEach(b=>b.onclick=e=>{e.preventDefault();changeQty(b.dataset.qty,Number(b.dataset.d))});
   root.querySelectorAll("[data-want]").forEach(b=>b.onclick=e=>{e.preventDefault();void window.MyWants?.add?.(b.dataset.want,Number(b.dataset.wantCount)||1)});
   root.querySelectorAll("[data-deck-collect]").forEach(b=>b.onclick=()=>addDeckCardToCollection(b.dataset.deckCollect));
+  root.querySelectorAll("[data-load-more]").forEach(b=>b.onclick=()=>{const key=b.dataset.loadMore;if(!["catalog","collection","album"].includes(key))return;state[key].page=Math.max(1,Number(state[key].page)||1)+1;renderVisibleOnly()});
   root.querySelectorAll("[data-page]").forEach(b=>b.onclick=()=>{
     const k=b.dataset.page,delta=Number(b.dataset.p)||0;
     if(k==="deck"){
@@ -2980,6 +2990,7 @@ function bindShell(){
   window.DeckPhysical?.bind?.();
   $("#deckDiscoveryComplete")?.addEventListener("click",()=>window.OnePieceTools?.setDeckMode?.("complete"));
   $("#deckDiscoveryMine")?.addEventListener("click",()=>window.OnePieceTools?.setDeckMode?.("mine"));
+  document.querySelectorAll("[data-home-deck]").forEach(button=>button.addEventListener("click",()=>navigateApp(()=>{state.tab="decks";state.deckLibrary=false;state.deckId=button.dataset.homeDeck;state.deckDiscover=false})));
   $("#deckCompletionBack")?.addEventListener("click",()=>navigateApp(()=>{
     state.tab="decks";state.deckLibrary=true;state.deckId=null;state.deckPreviewOrigin="";state.deckDiscover=false;
   }));
