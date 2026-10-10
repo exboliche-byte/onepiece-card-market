@@ -112,7 +112,7 @@ function bindSearchAdd(){
  });
 }
 
-const opt={owner:"",busy:false,cancelled:false,controller:null,loaded:false,decks:[],complete:false,progress:{},savedAt:0,restoreRequested:false,partial:false,notes:[],budget:"20",prepared:null,result:null,lastBudget:null,error:"",status:""};
+const opt={owner:"",busy:false,cancelled:false,controller:null,loaded:false,decks:[],complete:false,progress:{},savedAt:0,restoreRequested:false,partial:false,notes:[],budget:"20",prepared:null,result:null,lastBudget:null,showBuildable:12,showOwned:6,error:"",status:""};
 // Build one legality index for the full archive. Checking every card by repeatedly
 // scanning the complete catalog would freeze mobile devices on large histories.
 let legalityCache=null;
@@ -163,15 +163,56 @@ function refreshOptimizer(){
  }
  if(!opt.result||opt.lastBudget!==opt.budget){opt.result=app.optimize(opt.prepared,Number(opt.budget));opt.lastBudget=opt.budget}
 }
+
+function optimizerDeckCatalog(){
+ // A single catalog index avoids repeated full-catalog scans for every deck card.
+ if(!opt.deckCatalog||opt.deckCatalogCards!==state.cards||opt.deckCatalogSize!==state.cards.length){
+  const codes=new Map(),printed=window.WantsDeckOptimizer.printed;
+  for(const c of state.cards){
+   if(!c?.id||isJapaneseCatalogCard(c))continue;
+   const code=printed(c.id),previous=codes.get(code);
+   if(code&&(!previous||c.id===code))codes.set(code,c);
+  }
+  opt.deckCatalog=codes;opt.deckCatalogCards=state.cards;opt.deckCatalogSize=state.cards.length;
+ }
+ return opt.deckCatalog;
+}
+function optimizerDeckList(decks,limit){
+ const known=optimizerDeckCatalog();
+ return decks.slice(0,limit).map((d,i)=>{
+  const leader=known.get(window.WantsDeckOptimizer.printed(d.leaderId));
+  const rows=Object.entries(d.cards||{}).sort(([a],[b])=>String(a).localeCompare(String(b),"es",{numeric:true}));
+  const count=rows.reduce((n,[,q])=>n+Number(q||0),0),name=h(d.leaderName||leader?.name||d.leaderId);
+  const when=d.date&&Number.isFinite(Date.parse(d.date))?new Date(d.date).toLocaleDateString("es-ES"):"";
+  const sourceUrl=/^https:\/\/(?:play\.limitlesstcg\.com|www\.pankurecords\.com)\//i.test(String(d.sourceUrl||""))?String(d.sourceUrl):"";
+  return '<details class="wopt-buildable-deck"><summary class="wopt-buildable-heading">'+
+   (leader?cardImg(leader,"wopt-buildable-leader"):'<span class="wopt-buildable-fallback">🃏</span>')+
+   '<span class="wopt-buildable-info"><b>'+name+'</b><small>'+h(d.leaderId)+' · '+h(d.tournament||d.source||"Torneo")+
+   (when?' · '+h(when):"")+'</small><small>'+h(d.quality||"Lista pública")+' · Líder + '+count+'/50 cartas</small></span>'+
+   '<span class="wopt-buildable-chevron" aria-hidden="true">⌄</span></summary>'+
+   '<div class="wopt-buildable-content"><b>Lista completa para montar este mazo</b>'+
+   '<div class="wopt-buildable-cards"><div>1× '+h(leader?.name||d.leaderName||d.leaderId)+' <small>'+h(d.leaderId)+' · Líder</small></div>'+
+   rows.map(([id,q])=>'<div>'+Number(q)+'× '+h(known.get(window.WantsDeckOptimizer.printed(id))?.name||id)+
+   ' <small>'+h(id)+'</small></div>').join("")+'</div>'+
+   (sourceUrl?'<a href="'+h(sourceUrl)+'" target="_blank" rel="noopener noreferrer">Ver mazo original ↗</a>':"")+
+   '</div></details>';
+ }).join("");
+}
+function optimizerDeckSection(decks,owned=false){
+ if(!decks.length)return "";
+ const limit=owned?opt.showOwned:opt.showBuildable;
+ return '<div class="wopt-buildable-section"><h4>'+(owned?'Mazos que ya puedes montar con tu colección':'Mazos que puedes montar con esta compra')+'</h4>'+
+  '<p class="small">'+decks.length+' listas legales concretas · Puedes abrir cada una para ver sus 50 cartas y el líder. Se incluyen distintas construcciones de un mismo líder.</p>'+
+  '<div class="wopt-buildable-grid">'+optimizerDeckList(decks,limit)+'</div>'+
+  (decks.length>limit?'<button type="button" class="secondary btn wopt-more-decks" data-wopt-more="'+(owned?'owned':'buildable')+'">Mostrar más mazos ('+(decks.length-limit)+' restantes)</button>':"")+'</div>';
+}
+
 function optimizerHtml(){
  const ready=opt.loaded&&opt.owner===state.user?.id, r=ready?opt.result:null;
  const stats=ready?opt.prepared?.stats:null;
  let summary="";
  if(ready&&stats){
-  const useful=r?.results||[],different=new Set(),display=useful.filter(d=>{
-   const code=window.WantsDeckOptimizer.printed(d.leaderId);
-   if(different.has(code))return false;different.add(code);return true;
-  }).slice(0,12);
+  const buildable=r?.results||[],ownedDecks=r?.baselineDecks||[];
   summary='<div class="wopt-summary"><b>'+stats.legal+' mazos legales distintos analizados</b>'+
    '<span>'+stats.received+' listas recibidas · '+stats.duplicates+' composiciones repetidas descartadas'+
    ' · '+stats.unpriced+' legales con faltantes sin precio</span></div>'+
@@ -186,11 +227,8 @@ function optimizerHtml(){
     '<small>'+h(p.code)+' · '+h(p.id)+' · '+currency(p.price)+' / copia</small></span>'+
     '<b>'+currency(p.total)+'</b>'+(p.url?'<a href="'+h(p.url)+'" target="_blank" rel="noopener noreferrer">Cardmarket ↗</a>':'')+'</div>').join("")+'</div>':
    '<p class="small">No se ha encontrado una compra completa dentro del presupuesto y con todos los precios conocidos. Puedes aumentarlo o revisar los precios que faltan.</p>')+
-   (display.length?'<h4>Mazos que desbloqueas (un ejemplo por líder)</h4>'+
-   '<div class="wopt-decks">'+display.map(d=>'<div class="wopt-deck"><b>'+h(d.leaderName||d.leaderId)+'</b>'+
-   '<small>'+h(d.tournament||"Torneo")+' · '+h(d.quality||"Lista publicada")+'</small>'+
-   (d.sourceUrl?'<a href="'+h(d.sourceUrl)+'" target="_blank" rel="noopener noreferrer">Ver lista original ↗</a>':'')+'</div>').join("")+'</div>':"")+
-   (r.baseline?'<p class="small">Ya puedes montar '+r.baseline+' listas adicionales sin comprar nada; no se cuentan como desbloqueos nuevos.</p>':"");
+   (buildable.length?optimizerDeckSection(buildable):'<p class="small">Con este presupuesto aún no se desbloquean mazos adicionales.</p>')+
+   (ownedDecks.length?'<details class="wopt-already-owned"><summary>Ya puedes montar '+r.baseline+' mazos sin comprar</summary>'+optimizerDeckSection(ownedDecks,true)+'</details>':"");
  }
  return '<section class="wants-panel wants-optimizer"><div class="wants-heading"><h3>🧠 Compra inteligente</h3></div>'+
   '<p class="small">Compara tu colección con las listas históricas publicadas de Limitless y Yonko que siguen siendo legales en Standard europeo. Las distintas impresiones de una carta cuentan juntas y las compras sirven para varios mazos.</p>'+
@@ -455,6 +493,7 @@ function bind(){
  document.querySelector("#woptRecalc")?.addEventListener("click",updateOptimizerBudget);
  document.querySelector("#woptBudget")?.addEventListener("change",updateOptimizerBudget);
  document.querySelector("#woptAddWants")?.addEventListener("click",()=>void addOptimizedToWants());
+ document.querySelectorAll("[data-wopt-more]").forEach(b=>b.onclick=()=>{if(b.dataset.woptMore==="owned")opt.showOwned+=12;else opt.showBuildable+=12;renderShell()});
  document.querySelector("#woptCardmarket")?.addEventListener("click",()=>void exportOptimizerToCardmarket());
  document.querySelector("#wantsBackToLists")?.addEventListener("click",()=>{overview();renderShell()});
  document.querySelector("#wantsSendCardmarket")?.addEventListener("click",()=>void sendListToCardmarket());
@@ -502,5 +541,6 @@ const style=document.createElement("style");
 style.textContent=".wants-page{max-width:1080px;padding-bottom:110px}.wants-panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:14px}.wants-heading{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;margin-bottom:13px}.wants-heading h3{margin:0}.wants-list-switch{display:flex;flex-wrap:wrap;gap:8px}.wants-list-switch button{border-radius:10px;border:1px solid var(--line);background:var(--panel2);color:var(--text);padding:10px 14px;font-weight:700}.wants-list-switch button.active{border-color:var(--accent);color:var(--accent)}.wants-list-actions{display:flex;gap:7px}.wants-totals{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:12px 0}.wants-totals>div{background:var(--panel2);border:1px solid var(--line);padding:11px;border-radius:11px}.wants-totals b{font-size:clamp(16px,3vw,25px);display:block}.wants-totals small,.wants-card-info small,.wants-search-row small{display:block;color:var(--muted);font-size:11px}.wants-search-label{display:grid;gap:6px;margin-top:13px}.wants-search-grid{max-height:340px;overflow:auto;margin-top:9px}.wants-search-row{display:flex;align-items:center;gap:10px;padding:7px;border-bottom:1px solid var(--line)}.wants-search-row>div{flex:1;min-width:0}.wants-search-art{height:66px;width:46px;object-fit:cover;border-radius:5px;flex:none}.wants-cards{display:grid;gap:8px}.wants-card{display:flex;gap:12px;align-items:center;background:var(--panel2);border:1px solid var(--line);border-radius:11px;padding:10px;min-width:0}.wants-card-art{width:65px;height:91px;border-radius:5px;object-fit:cover;flex:none}.wants-card-info{flex:1;min-width:0}.wants-card-info strong,.wants-card-info span,.wants-card-info a{display:block;margin:3px 0}.wants-card-info a{font-size:12px;color:var(--accent)}.wants-card-controls{display:grid;grid-template-columns:repeat(3,auto);gap:5px;align-items:center;text-align:center}.wants-card-controls .wants-remove{grid-column:1/-1}.wants-add-modal .modal{max-width:430px;display:grid;gap:13px}.wants-add-modal label{display:grid;gap:6px}.wants-modal-card{display:flex;gap:11px;align-items:center}.wants-modal-card small{display:block;color:var(--muted)}@media(max-width:590px){.wants-totals{grid-template-columns:repeat(2,minmax(0,1fr))}.wants-card{flex-wrap:wrap}.wants-card-art{width:52px;height:73px}.wants-card-controls{margin-left:auto}}";
 style.textContent+=".wants-list-directory{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:11px}.wants-list-choice{display:flex;align-items:center;gap:12px;width:100%;border:1px solid var(--line);background:var(--panel2);color:var(--text);border-radius:13px;padding:15px;text-align:left}.wants-list-choice:hover{border-color:var(--accent)}.wants-list-label{flex:1;min-width:0}.wants-list-label strong,.wants-list-label small{display:block}.wants-list-label strong{font-size:16px}.wants-list-label small{font-size:11px;color:var(--muted);margin-top:5px}.wants-list-icon{font-size:26px}.wants-back{margin:0 0 12px}.wants-list-details{margin-top:0}.wants-market-action{margin:10px 0}.wants-market-action button{max-width:100%}";
 style.textContent+=".wopt-filters{display:flex;align-items:end;gap:8px;flex-wrap:wrap;margin:12px 0}.wopt-filters label{display:grid;gap:5px;min-width:135px;max-width:185px;font-size:12px}.wopt-summary{display:grid;gap:4px;margin:12px 0}.wopt-summary span{font-size:12px;color:var(--muted)}.wopt-purchase-heading{display:flex;flex-wrap:wrap;gap:7px;align-items:center;margin:12px 0}.wopt-purchase-heading h4{margin:0 auto 0 0}.wopt-purchases,.wopt-decks{display:grid;gap:6px;margin:10px 0}.wopt-purchase{display:flex;flex-wrap:wrap;gap:8px;justify-content:space-between;align-items:center;border:1px solid var(--line);border-radius:9px;padding:9px;background:var(--panel2)}.wopt-purchase span{min-width:0;flex:1}.wopt-purchase small,.wopt-deck small{display:block;font-size:11px;color:var(--muted);margin-top:3px}.wopt-purchase a,.wopt-deck a{font-size:12px;color:var(--accent)}.wopt-decks{grid-template-columns:repeat(auto-fit,minmax(170px,1fr))}.wopt-deck{border:1px solid var(--line);background:var(--panel2);border-radius:10px;padding:10px}.wopt-deck b{display:block}.wopt-totals{grid-template-columns:repeat(3,minmax(0,1fr))}@media(max-width:590px){.wopt-totals{grid-template-columns:repeat(2,minmax(0,1fr))}.wopt-filters{align-items:stretch}.wopt-filters label{max-width:100%}}";
+style.textContent+=".wopt-buildable-section{margin:15px 0}.wopt-buildable-section h4{font-size:15px;margin:0 0 5px}.wopt-buildable-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,290px),1fr));gap:8px;margin:10px 0}.wopt-buildable-deck{border:1px solid var(--line);border-radius:11px;background:var(--panel2);min-width:0;overflow:hidden}.wopt-buildable-heading{display:flex;align-items:center;gap:9px;padding:9px;cursor:pointer;list-style:none}.wopt-buildable-heading::-webkit-details-marker{display:none}.wopt-buildable-leader{width:55px;height:77px;object-fit:contain;border-radius:5px;flex-shrink:0}.wopt-buildable-fallback{font-size:32px}.wopt-buildable-info{flex:1;min-width:0}.wopt-buildable-info b{display:block;font-size:13px;line-height:1.3}.wopt-buildable-info small{display:block;color:var(--muted);font-size:11px;line-height:1.35;margin-top:4px}.wopt-buildable-chevron{font-size:20px;color:var(--muted)}.wopt-buildable-deck[open] .wopt-buildable-chevron{transform:rotate(180deg)}.wopt-buildable-content{border-top:1px solid var(--line);padding:10px;font-size:12px}.wopt-buildable-content>a{display:inline-block;margin-top:10px;color:var(--accent)}.wopt-buildable-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,175px),1fr));gap:3px 10px;margin-top:9px}.wopt-buildable-cards>div{padding:5px 0;border-bottom:1px solid var(--line)}.wopt-buildable-cards small{display:block;color:var(--muted)}.wopt-more-decks{margin-top:5px}.wopt-already-owned{margin:15px 0}.wopt-already-owned>summary{font-weight:700;cursor:pointer}@media(max-width:590px){.wopt-buildable-grid{grid-template-columns:1fr}}";
 document.head.appendChild(style);
 })();
