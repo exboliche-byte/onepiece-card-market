@@ -195,14 +195,14 @@ test("both deck list changes and physical changes influence most-recent-first or
  const {api,state,saboDeck,koalaDeck}=setup(7,physicalDates);
  saboDeck.updatedAt="2026-10-08T10:00:00.000Z";
  koalaDeck.updatedAt="2026-10-10T12:00:00.000Z";
- assert.deepEqual(api.sortDecks(state.decks).map(d=>d.id),[koala,sabo],
+ assert.deepEqual(Array.from(api.sortDecks(state.decks),d=>d.id),[koala,sabo],
   "before loading locations, sort by saved list edit dates");
  await api.load();
- assert.deepEqual(api.sortDecks(state.decks).map(d=>d.id),[sabo,koala],
+ assert.deepEqual(Array.from(api.sortDecks(state.decks),d=>d.id),[sabo,koala],
   "physical edit newer than list edit wins");
  assert.equal(state.decks[0],saboDeck,"sorting must not mutate saved array");
  koalaDeck.updatedAt="2026-10-10T14:00:00.000Z";
- assert.deepEqual(api.sortDecks(state.decks).map(d=>d.id),[koala,sabo],
+ assert.deepEqual(Array.from(api.sortDecks(state.decks),d=>d.id),[koala,sabo],
   "a new list edit moves the deck back to the top");
 });
 test("moving physical copies updates the recipient and every donor, not list timestamps",async()=>{
@@ -233,7 +233,7 @@ test("moving physical copies updates the recipient and every donor, not list tim
  assert.ok(Number.isFinite(Date.parse(modified[sabo])));
  assert.equal(saboDeck.updatedAt,"2026-10-08T10:00:00.000Z");
  assert.equal(koalaDeck.updatedAt,"2026-10-09T10:00:00.000Z");
- assert.deepEqual(api.sortDecks(state.decks).map(d=>d.id),[koala,sabo],
+ assert.deepEqual(Array.from(api.sortDecks(state.decks),d=>d.id),[koala,sabo],
   "the latest physical changes sort above the old list timestamps");
 });
 test("physical date sanitization ignores invalid per-deck data",()=>{
