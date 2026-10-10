@@ -250,6 +250,24 @@ function preferredIds(row){
   return ax-bx||integer(owned()[b])-integer(owned()[a])||a.localeCompare(b,"es");
  });
 }
+function surplusRecipients(where,sourceDeckId,groupCode){
+ return decks().filter(d=>d.id!==sourceDeckId).map(d=>{
+  const progress=stats(d,where);
+  const required=requirements(d).get(groupCode)?.need||0;
+  const inBox=Object.entries(where[d.id]||{}).reduce((sum,[id,n])=>
+   sum+(code(id)===groupCode?integer(n):0),0);
+  return {deck:d,progress,missing:Math.max(0,required-inBox)};
+ }).filter(item=>item.progress.assigned>0&&item.missing>0)
+  .sort((a,b)=>{
+   // Repartir a la caja que está más cerca de poder jugarse completa.
+   const fraction=a.progress.assigned*b.progress.required-
+    b.progress.assigned*a.progress.required;
+   return -fraction||
+    (a.progress.required-a.progress.assigned)-(b.progress.required-b.progress.assigned)||
+    a.deck.name.localeCompare(b.deck.name,"es")||
+    String(a.deck.id).localeCompare(String(b.deck.id));
+  });
+}
 function plan(deck){
  const next=activeAlloc(clone()),needs=requirements(deck),changes=[],missing=[];
  // A saved list may have been edited since the cards were placed in the box.
@@ -263,10 +281,26 @@ function plan(deck){
   let extra=Math.max(0,count-allowed);
   for(const id of ids.reverse()){
    if(!extra)break;
-   const amount=Math.min(extra,integer(next[deck.id]?.[id]));
-   put(next,deck.id,id,-amount);
-   changes.push({id,from:deck.id,to:null,quantity:amount});
-   extra-=amount;
+   // Antes de devolver cartas al álbum, utilizarlas donde hacen falta.
+   // Los mazos totalmente desmontados no reciben cartas involuntariamente.
+   for(const recipient of surplusRecipients(next,deck.id,groupCode)){
+    if(!extra)break;
+    const amount=Math.min(extra,integer(next[deck.id]?.[id]),recipient.missing);
+    if(!amount)continue;
+    put(next,deck.id,id,-amount);
+    put(next,recipient.deck.id,id,amount);
+    changes.push({id,from:deck.id,to:recipient.deck.id,quantity:amount});
+    extra-=amount;
+   }
+   // Solo las copias que ningún mazo parcialmente montado necesita van al álbum.
+   if(extra){
+    const amount=Math.min(extra,integer(next[deck.id]?.[id]));
+    if(amount){
+     put(next,deck.id,id,-amount);
+     changes.push({id,from:deck.id,to:null,quantity:amount});
+     extra-=amount;
+    }
+   }
   }
  }
  for(const row of needs.values()){
@@ -330,12 +364,15 @@ function plan(deck){
  }
  return {next,changes,missing,current:stats(deck),after:stats(deck,next)};
 }
-function movementGroup(step){
- return step.from===null&&step.to!==null?0:step.from!==null&&step.to!==null?1:2;
+function movementGroup(step,targetId){
+ if(step.from===null&&step.to!==null)return 0;
+ if(step.from!==null&&step.to!==null)
+  return targetId&&step.from===targetId?2:1;
+ return 3;
 }
-function orderedMovements(changes){
- // Primero recoger del álbum, luego de otros mazos y, por último, devolver excedentes.
- return [...changes].sort((a,b)=>movementGroup(a)-movementGroup(b));
+function orderedMovements(changes,targetId){
+ // Álbum → mazo; otros → mazo; sobrantes → otros; devoluciones finales.
+ return [...changes].sort((a,b)=>movementGroup(a,targetId)-movementGroup(b,targetId));
 }
 function cardTitle(id){
  const cd=card(id);
@@ -367,19 +404,19 @@ function draw(){
   html+='<button type="button" class="linkbtn physical-back" data-physical-back>← Todos mis mazos</button>'+
    '<h3>'+escape(selected.name)+'</h3><p>'+statusMark(selected,false)+'</p>'+
    '<p class="small muted">Asignadas '+s.assigned+' de '+s.required+' copias. Las demás permanecen donde están; la lista nunca se borra.</p>'+
-   (s.extra?'<div class="notice physical-warning"><b>Lista modificada: '+s.extra+' '+(s.extra===1?'copia pendiente':'copias pendientes')+' de retirar.</b> Siguen físicamente en este mazo. En «Revisar movimientos» podrás confirmar cuándo las devuelves al álbum.</div>':'');
+   (s.extra?'<div class="notice physical-warning"><b>Lista modificada: '+s.extra+' '+(s.extra===1?'copia pendiente':'copias pendientes')+' de recolocar.</b> En «Revisar movimientos» se asignarán primero a los mazos incompletos que las necesiten; las restantes irán al álbum.</div>':'');
   const result=plan(selected);
   if(p.preview){
    html+='<h3>Movimientos para montar este mazo</h3>';
    if(result.changes.length){
-    const ordered=orderedMovements(result.changes);
+    const ordered=orderedMovements(result.changes,selected.id);
     html+='<div class="physical-movements">'+ordered.map((step,i)=>{
-     const group=movementGroup(step);
-     const heading=i===0||movementGroup(ordered[i-1])!==group
-      ?'<h4 class="physical-source-heading">'+["Desde el álbum","Desde otros mazos","Devolver al álbum"][group]+'</h4>':"";
+     const group=movementGroup(step,selected.id);
+     const heading=i===0||movementGroup(ordered[i-1],selected.id)!==group
+      ?'<h4 class="physical-source-heading">'+["Desde el álbum","Desde otros mazos","Sobrantes hacia otros mazos","Devolver al álbum"][group]+'</h4>':"";
      return heading+'<div class="physical-movement">'+cardPhoto(step.id)+
       '<div class="physical-card-info"><b>'+step.quantity+' × '+cardTitle(step.id)+'</b>'+
-      '<div class="small">'+(step.to?fromTitle(step.from)+' → '+escape(selected.name):escape(selected.name)+' → Álbum')+'</div></div></div>';
+      '<div class="small">'+fromTitle(step.from)+' → '+fromTitle(step.to)+'</div></div></div>';
     }).join("")+'</div>';
    }else html+='<p class="notice">No necesitas mover ninguna copia.</p>';
    if(result.missing.length)html+='<div class="notice physical-warning"><b>No hay copias suficientes. Estas cartas seguirán pendientes:</b></div>'+
@@ -513,5 +550,5 @@ async function clearDeleted(){
 }
 window.addEventListener('keydown',e=>{if(e.key==='Escape'&&p.modal){close();e.stopPropagation()}});
 window.DeckPhysical={bind,open,load,statusMark,pendingButton,activeTrackingButton,sortDecks,forgetDeleted,clearDeleted,
- _testing:{sanitize,sanitizeDeckDates,requirements,stats,plan,orderedMovements,pendingCards,discrepancies,usedByPrinting}};
+ _testing:{sanitize,sanitizeDeckDates,requirements,stats,surplusRecipients,plan,orderedMovements,pendingCards,discrepancies,usedByPrinting}};
 })();
