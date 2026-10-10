@@ -69,7 +69,7 @@ test("optimized shopping unlocks all concrete decklists and separately identifie
  assert.equal(result.results.length,2);
  assert.equal(result.baseline,1);
  assert.equal(result.baselineDecks[0].leaderId,"OP17-097");
- assert.deepEqual(result.results.map(x=>x.leaderId).sort(),["OP17-098","OP17-099"]);
+ assert.deepEqual(Array.from(result.results,x=>x.leaderId).sort(),["OP17-098","OP17-099"]);
 });
 test("Wants lists show leader image, complete deck composition and a load-more control",()=>{
  const src=fs.readFileSync(new URL("../wants.js",import.meta.url),"utf8");

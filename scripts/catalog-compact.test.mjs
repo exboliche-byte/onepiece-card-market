@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import vm from "node:vm";
 import fs from "node:fs";
 const html=fs.readFileSync(new URL("../index.html",import.meta.url),"utf8");
-const start=html.indexOf("function compactCatalogTile(c){");
+const start=html.indexOf("function compactCatalogTile(c,");
 const stop=html.indexOf("function cardTile(c,extra",start);
 const fragment=html.slice(start,stop);
 test("catalog tiles only show name, expansion, price, wants and quantity controls",()=>{
