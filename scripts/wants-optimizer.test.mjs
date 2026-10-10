@@ -58,3 +58,39 @@ test("Wants overview contains a budget optimizer without changing existing accou
  assert.match(html,/Elige una lista/);
  assert.doesNotMatch(html,/Datos públicos de otra cuenta/);
 });
+
+test("optimized shopping unlocks all concrete decklists and separately identifies already buildable decks",()=>{
+ const prices=bestPrices([...Object.keys(filler),"OP17-099","OP17-098","OP17-097"].map(id=>({id,name:id})),()=>1,()=>false,()=>null);
+ const owned={...Object.fromEntries(Object.keys(filler).map(id=>[id,filler[id]])),"OP17-097":1};
+ const all=[d("OP17-099",filler),d("OP17-098",filler),d("OP17-097",filler)];
+ const pre=prepare(all,owned,prices,()=>true);
+ const result=optimize(pre,2);
+ assert.equal(result.unlocked,2);
+ assert.equal(result.results.length,2);
+ assert.equal(result.baseline,1);
+ assert.equal(result.baselineDecks[0].leaderId,"OP17-097");
+ assert.deepEqual(Array.from(result.results,x=>x.leaderId).sort(),["OP17-098","OP17-099"]);
+});
+test("Wants lists show leader image, complete deck composition and a load-more control",()=>{
+ const src=fs.readFileSync(new URL("../wants.js",import.meta.url),"utf8");
+ const from=src.indexOf("function optimizerDeckCatalog(){"),to=src.indexOf("function optimizerHtml(){");
+ assert.ok(from>=0&&to>from);
+ const fragment=src.slice(from,to);
+ const cacheCards=[{id:"OP17-099",name:"Luffy",set:"OP17"},...Object.keys(filler).map(id=>({id,name:"Card "+id,set:"OP17"}))];
+ const state={cards:cacheCards};
+ const opt={showBuildable:1,showOwned:1};
+ const scope={state,opt,window:{WantsDeckOptimizer:{printed}},h:String,
+  cardImg:c=>'<img data-leader="'+c.id+'">',isJapaneseCatalogCard:()=>false,Date};
+ const render=vm.runInNewContext(fragment+";optimizerDeckSection",scope);
+ const cards=[{...d("OP17-099",filler),tournament:"Test event",sourceUrl:"https://play.limitlesstcg.com/tournament/a"},
+              {...d("OP17-099",filler),id:"two",tournament:"Other event"}];
+ const markup=render(cards);
+ assert.match(markup,/Mazos que puedes montar con esta compra/);
+ assert.match(markup,/data-leader="OP17-099"/);
+ assert.match(markup,/1× Luffy/);
+ assert.match(markup,/4× Card OP17-001/);
+ assert.match(markup,/50 cartas/);
+ assert.match(markup,/data-wopt-more="buildable"/);
+ assert.match(markup,/1 restantes/);
+ assert.doesNotMatch(markup,/Other event/);
+});

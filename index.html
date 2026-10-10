@@ -226,21 +226,40 @@ button:focus-visible,a:focus-visible,summary:focus-visible,input:focus-visible,s
 
 /* Collection is for owned cards; Wants has its own navigation destination. */
 .collection-tools{grid-template-columns:repeat(3,minmax(0,1fr))}
-/* Catalog only: compact, text-first cards with the full image in card details. */
-.catalog-compact-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,240px),1fr));gap:9px;align-items:stretch}
-.catalog-compact-card{display:flex;flex-direction:column;justify-content:space-between;min-width:0;border:1px solid var(--line);border-radius:12px;background:var(--panel);overflow:hidden}
-.catalog-compact-open{display:grid;gap:9px;width:100%;min-width:0;padding:13px 12px 8px;background:transparent;border:0;color:var(--text);text-align:left;cursor:pointer}
+/* Catalog cards retain compact actions while previewing the exact images of up to three versions. */
+.catalog-compact-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,205px),1fr));gap:10px;align-items:stretch}
+.catalog-compact-card{display:flex;flex-direction:column;min-width:0;border:1px solid var(--line);border-radius:12px;background:var(--panel);overflow:hidden}
+.catalog-compact-gallery{display:flex;justify-content:center;align-items:center;gap:6px;min-height:184px;padding:10px 9px 3px;position:relative}
+.catalog-compact-image{display:flex;justify-content:center;align-items:center;border:0;background:transparent;padding:0;cursor:pointer;min-width:0;max-width:100%;height:174px;flex:1}
+.catalog-compact-image-main{flex:1.3}
+.catalog-compact-image-alt{flex:.75}
+.catalog-compact-art{width:100%;height:100%;object-fit:contain;border-radius:5px}
+.catalog-compact-image:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:5px}
+.catalog-compact-more{position:absolute;bottom:3px;right:8px;font-size:10px;color:var(--text);background:var(--panel2);padding:3px 5px;border:1px solid var(--line);border-radius:7px;pointer-events:none}
+.catalog-compact-open{display:grid;gap:7px;width:100%;min-width:0;padding:9px 10px 7px;background:transparent;border:0;color:var(--text);text-align:left;cursor:pointer;flex:1;align-content:start}
 .catalog-compact-open:hover .catalog-compact-name{color:var(--accent)}
-.catalog-compact-name{font-size:14px;font-weight:800;line-height:1.25;overflow-wrap:anywhere}
-.catalog-compact-info{display:flex;align-items:center;justify-content:space-between;gap:6px;font-size:12px;color:var(--muted)}
+.catalog-compact-name{font-size:13px;font-weight:800;line-height:1.3;overflow-wrap:anywhere}
+.catalog-compact-info{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:5px;font-size:11px;color:var(--muted)}
 .catalog-compact-info strong{color:var(--text);white-space:nowrap;font-weight:800}
-.catalog-compact-actions{display:grid;grid-template-columns:44px minmax(0,1fr);align-items:center;gap:8px;padding:4px 12px 12px}
-.catalog-compact-want{width:44px;min-height:36px;padding:5px;font-size:17px}
-.catalog-compact-quick{display:grid;grid-template-columns:38px minmax(32px,1fr) 38px;gap:5px;align-items:center}
-.catalog-compact-quick button{min-height:36px;border-radius:9px}
+.catalog-compact-actions{display:grid;grid-template-columns:36px minmax(0,1fr);align-items:center;gap:5px;padding:4px 9px 10px}
+.catalog-compact-want{width:36px;min-height:34px;padding:3px;font-size:16px}
+.catalog-compact-quick{display:grid;grid-template-columns:31px minmax(20px,1fr) 31px;gap:3px;align-items:center}
+.catalog-compact-quick button{min-height:34px;border-radius:8px;padding:1px}
 .catalog-compact-quick button:disabled{opacity:.4;cursor:not-allowed}
-.catalog-compact-count{display:grid;place-items:center;min-height:36px;border:1px solid var(--line);background:var(--panel2);border-radius:9px;font-size:13px;font-weight:800}
-@media(max-width:570px){.catalog-compact-grid{grid-template-columns:1fr;gap:6px}.catalog-compact-open{padding:11px 12px 6px}.catalog-compact-actions{padding:2px 12px 10px}}
+.catalog-compact-count{display:grid;place-items:center;min-height:34px;border:1px solid var(--line);background:var(--panel2);border-radius:8px;font-size:12px;font-weight:800}
+@media(max-width:570px){
+ .catalog-compact-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+ .catalog-compact-gallery{min-height:145px;height:153px;padding:7px 5px 2px;gap:3px}
+ .catalog-compact-image{height:139px}
+ .catalog-compact-more{font-size:9px;right:4px}
+ .catalog-compact-open{padding:8px 7px 6px}
+ .catalog-compact-name{font-size:12px}
+ .catalog-compact-info{font-size:10px}
+ .catalog-compact-actions{grid-template-columns:30px minmax(0,1fr);gap:3px;padding:3px 5px 8px}
+ .catalog-compact-want{width:30px;min-height:32px}
+ .catalog-compact-quick{grid-template-columns:26px minmax(18px,1fr) 26px;gap:2px}
+ .catalog-compact-quick button,.catalog-compact-count{min-height:32px}
+}
 </style>
 <link rel="stylesheet" href="/uiux.css">
 </head>
@@ -1003,10 +1022,21 @@ function cardmarketUrl(c){
   return "";
 }
 // Minimal catalog list; the existing detail modal holds the picture, versions and full information.
-function compactCatalogTile(c){
+// Keep one logical card per catalog tile, with up to three genuine printed-version images.
+// Every image opens that exact printing in the existing full detail modal.
+function compactCatalogTile(c,g=null){
+  if(!c)return "";
   const count=qty(c.id),p=priceOf(c),id=esc(c.id),name=esc(c.name||c.id),set=esc(cardExpansionCode(c)||"—");
   const disabled=(!state.user||!state.collectionReady)?' disabled title="Inicia sesión para gestionar tu colección"':'';
-  return '<article class="catalog-compact-card">'+
+  const all=g?.versions||[c];
+  const variations=all.filter(v=>v?.id&&v.id!==c.id)
+    .sort((a,b)=>(priceOf(a)??Infinity)-(priceOf(b)??Infinity)||String(a.id).localeCompare(String(b.id),"es",{numeric:true}));
+  const shown=[c,...variations.slice(0,2)],remaining=Math.max(0,all.length-shown.length);
+  const gallery='<div class="catalog-compact-gallery">'+shown.map((v,i)=>
+   '<button type="button" class="catalog-compact-image '+(i===0?'catalog-compact-image-main':'catalog-compact-image-alt')+'" data-detail="'+esc(v.id)+'" aria-label="Ver '+esc(v.name||v.id)+' · '+esc(cardExpansionCode(v)||v.id)+'">'+
+   cardImg(v,"catalog-compact-art")+'</button>').join("")+
+   (remaining?'<span class="catalog-compact-more" title="Abre la carta para ver todas las versiones">+'+remaining+' versiones</span>':'')+'</div>';
+  return '<article class="catalog-compact-card">'+gallery+
    '<button type="button" class="catalog-compact-open" data-detail="'+id+'" aria-label="Ver ficha de '+name+'">'+
    '<span class="catalog-compact-name">'+name+'</span>'+
    '<span class="catalog-compact-info"><span>'+set+'</span><strong>'+(p===null?'Precio —':money(p))+'</strong></span></button>'+
@@ -1074,7 +1104,7 @@ function albumCoverCard(g){
   })[0];
 }
 function groupedTile(g){
-  if(state.tab==="catalog")return compactCatalogTile(catalogCoverCard(g));
+  if(state.tab==="catalog")return compactCatalogTile(catalogCoverCard(g),g);
   const c=state.tab==="album"?albumCoverCard(g):g.card,q=logicalQty(g.card);
   const albumMissing=state.tab==="album"&&!q;
   const priceStats=groupPriceStats(g),minPrice=priceStats.min,maxPrice=priceStats.max;

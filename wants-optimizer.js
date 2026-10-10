@@ -121,7 +121,7 @@ function optimize(prepared,budget){
   .sort((a,b)=>b.total-a.total||a.code.localeCompare(b.code));
  const newlyUnlocked=[...currentlyUnlocked].filter(r=>!baseline.includes(r));
  const leaders=new Set(newlyUnlocked.map(r=>r.leader));
- return {budget:cap,spent,purchases,baseline:baseline.length,unlocked:newlyUnlocked.length,
+ return {budget:cap,spent,purchases,baseline:baseline.length,baselineDecks:baseline.map(r=>r.deck),unlocked:newlyUnlocked.length,
   leaders:leaders.size,results:newlyUnlocked.map(r=>r.deck),stillUnpriced:prepared.stats.unpriced,
   totalLegal:rows.length};
 }
