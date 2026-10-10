@@ -84,5 +84,5 @@ test("UI is shipped and refreshed in PWA build",()=>{
  assert.ok(html.includes('<link rel="stylesheet" href="/uiux.css">'));
  assert.ok(build.includes("uiux.css"));
  assert.ok(sw.includes('"/uiux.css"'));
- assert.ok(sw.includes("mialbumonepiece-v28"));
+ assert.ok(sw.includes("mialbumonepiece-v29"));
 });
