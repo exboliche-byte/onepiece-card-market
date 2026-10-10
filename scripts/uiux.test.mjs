@@ -11,22 +11,32 @@ function section(from,to){
   assert.ok(a>=0&&b>a,"Missing UI section: "+from);
   return html.slice(a,b);
 }
-test("Torneos remains in visible mobile bottom bar, scanner stays central",()=>{
+test("Mobile navigation has exactly Inicio, Colección, Catálogo, Torneos and Más",()=>{
  const nav=section("function nav(){","function deckCompletionView(){");
- assert.match(nav,/const mobileMain=\["catalog","collection","scanner","tournaments","decks"\]/);
- assert.match(nav,/mobileScanButton/);
+ assert.match(nav,/const mobileMain=\["home","collection","catalog","tournaments"\]/);
+ assert.ok(!nav.includes("mobileScanButton"),"Scanner must not occupy a visible tab");
  const more=nav.match(/const moreGroups=([^;]+);/)?.[1]||"";
- assert.ok(!more.includes('["JUGAR",["tournaments"]]'),"Tournaments must never be buried in More");
- assert.ok(!more.includes('["proxies","scanner"]'),"Scanner should not be duplicated in More");
- assert.match(css,/grid-template-columns:repeat\(6,minmax\(0,1fr\)\)/);
+ assert.ok(more.includes('["JUGAR",["decks"]]'),"Mazos must be in More");
+ assert.ok(more.includes('["HERRAMIENTAS",["scanner","proxies"]]'),"Scanner must be in More");
+ assert.ok(!more.includes('["INICIO",["home"]]'),"Home should only occupy the first tab");
+ assert.match(css,/grid-template-columns:repeat\(5,minmax\(0,1fr\)\)/);
 });
 test("Home is reachable from brand and navigation and has guest and private dashboard",()=>{
  const nav=section("function nav(){","function deckCompletionView(){");
  assert.ok(nav.includes('["home","Inicio"]'));
+ assert.ok(html.includes('tab:"home",set:"",query:""'),"A new visit must open Inicio");
  assert.ok(html.includes('data-tab="home" aria-label="Ir a Inicio"'));
  const home=section("function homeView(){","function deckActiveFilterCount(){");
  for(const value of ["ui-home-actions","Escanear carta","Mazos recientes","Progreso por expansión","Abrir →"])assert.ok(home.includes(value),value);
  assert.match(html,/data-home-deck/);
+});
+test("Discover is on the same row and width as Create and Search, including mobile",()=>{
+ const decks=section("function deckLibraryView(){","function decksView(){");
+ assert.ok(decks.includes('class="deck-actions"'),"Deck actions missing");
+ for(const id of ["newDeck","findCompetitiveDecks","openDeckCompletion"])assert.ok(decks.includes('id="'+id+'"'),id);
+ assert.match(css,/\.deck-actions\{grid-template-columns:repeat\(3,minmax\(0,1fr\)\);align-items:stretch/);
+ assert.ok(!css.includes("grid-column:1/-1;min-height:65px"),"Discover must not span entire row");
+ assert.ok(css.includes(".deck-actions .deck-action:nth-child(3){grid-column:auto"),"Third action must be normal column");
 });
 test("Grouped cards do not silently modify cheapest print",()=>{
  const tile=section("function groupedTile(g){","function pagination(");
